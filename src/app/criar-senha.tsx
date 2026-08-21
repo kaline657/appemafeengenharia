@@ -1,7 +1,9 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
+    ActivityIndicator,
+    Alert,
     Image,
     SafeAreaView,
     StyleSheet,
@@ -11,9 +13,167 @@ import {
     View,
 } from 'react-native';
 
+import { supabase } from '../lib/supabase';
+
 export default function CriarSenhaScreen() {
+  const params = useLocalSearchParams();
+
+  const preCadastroId = String(params.preCadastroId ?? '');
+  const nome = String(params.nome ?? '');
+  const email = String(params.email ?? '');
+
   const [senha, setSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
+  const [carregando, setCarregando] = useState(false);
+
+  function senhaValida(valor: string) {
+    const temOitoCaracteres = valor.length >= 8;
+    const temMaiuscula = /[A-Z]/.test(valor);
+    const temMinuscula = /[a-z]/.test(valor);
+    const temNumero = /[0-9]/.test(valor);
+
+    return (
+      temOitoCaracteres &&
+      temMaiuscula &&
+      temMinuscula &&
+      temNumero
+    );
+  }
+
+  async function ativarConta() {
+    if (!preCadastroId || !email) {
+      Alert.alert(
+        'Dados inválidos',
+        'Não foi possível identificar seu pré-cadastro. Volte e tente novamente.'
+      );
+      return;
+    }
+
+    if (!senha || !confirmarSenha) {
+      Alert.alert(
+        'Campos obrigatórios',
+        'Preencha a senha e a confirmação da senha.'
+      );
+      return;
+    }
+
+    if (!senhaValida(senha)) {
+      Alert.alert(
+        'Senha inválida',
+        'A senha precisa ter pelo menos 8 caracteres, uma letra maiúscula, uma letra minúscula e um número.'
+      );
+      return;
+    }
+
+    if (senha !== confirmarSenha) {
+      Alert.alert(
+        'Senhas diferentes',
+        'A senha e a confirmação precisam ser iguais.'
+      );
+      return;
+    }
+
+    try {
+      setCarregando(true);
+
+      // Cria o usuário no Supabase Auth
+      const { data: authData, error: authError } =
+        await supabase.auth.signUp({
+          email,
+          password: senha,
+        });
+
+      if (authError) {
+        console.error('Erro ao criar usuário:', authError);
+
+        if (
+          authError.message
+            .toLowerCase()
+            .includes('already registered')
+        ) {
+          Alert.alert(
+            'Conta já existente',
+            'Já existe uma conta cadastrada com este e-mail.'
+          );
+          return;
+        }
+
+        Alert.alert(
+          'Não foi possível criar a conta',
+          authError.message
+        );
+        return;
+      }
+
+      if (!authData.user) {
+        Alert.alert(
+          'Erro',
+          'Não foi possível criar o usuário.'
+        );
+        return;
+      }
+
+      /*
+        Se o Supabase criar uma sessão imediatamente,
+        finalizamos o pré-cadastro.
+      */
+      if (authData.session) {
+        const { error: finalizarError } = await supabase.rpc(
+          'finalizar_primeiro_acesso',
+          {
+            p_pre_cadastro_id: preCadastroId,
+          }
+        );
+
+        if (finalizarError) {
+          console.error(
+            'Erro ao finalizar primeiro acesso:',
+            finalizarError
+          );
+
+          Alert.alert(
+            'Conta criada',
+            'Sua conta foi criada, mas ocorreu um problema ao concluir o cadastro. Entre em contato com a EMAFE.'
+          );
+          return;
+        }
+
+        Alert.alert(
+          'Conta ativada!',
+          `Bem-vindo${nome ? `, ${nome}` : ''}! Seu acesso foi criado com sucesso.`,
+          [
+            {
+              text: 'Entrar',
+              onPress: async () => {
+                await supabase.auth.signOut();
+                router.replace('/login-cliente');
+              },
+            },
+          ]
+        );
+
+        return;
+      }
+
+      /*
+        Se a confirmação de e-mail estiver ativada no Supabase,
+        ele cria o usuário, mas não cria sessão ainda.
+      */
+      Alert.alert(
+        'Confirme seu e-mail',
+        `Enviamos uma confirmação para ${email}. Abra o e-mail para confirmar sua conta antes de entrar.`
+      );
+    } catch (erro) {
+      console.error('Erro inesperado:', erro);
+
+      Alert.alert(
+        'Erro',
+        'Ocorreu um problema ao ativar sua conta. Tente novamente.'
+      );
+    } finally {
+      setCarregando(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -23,6 +183,7 @@ export default function CriarSenhaScreen() {
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
+          disabled={carregando}
         >
           <Text style={styles.backText}>‹ Voltar</Text>
         </TouchableOpacity>
@@ -50,6 +211,7 @@ export default function CriarSenhaScreen() {
             secureTextEntry
             value={senha}
             onChangeText={setSenha}
+            editable={!carregando}
           />
 
           <Text style={styles.label}>Confirmar senha</Text>
@@ -61,10 +223,13 @@ export default function CriarSenhaScreen() {
             secureTextEntry
             value={confirmarSenha}
             onChangeText={setConfirmarSenha}
+            editable={!carregando}
           />
 
           <View style={styles.rulesBox}>
-            <Text style={styles.rulesTitle}>Sua senha deverá ter:</Text>
+            <Text style={styles.rulesTitle}>
+              Sua senha deverá ter:
+            </Text>
 
             <Text style={styles.rule}>• pelo menos 8 caracteres</Text>
             <Text style={styles.rule}>• uma letra maiúscula</Text>
@@ -73,12 +238,21 @@ export default function CriarSenhaScreen() {
           </View>
 
           <TouchableOpacity
-            style={styles.activateButton}
+            style={[
+              styles.activateButton,
+              carregando && styles.activateButtonDisabled,
+            ]}
             activeOpacity={0.85}
+            onPress={ativarConta}
+            disabled={carregando}
           >
-            <Text style={styles.activateButtonText}>
-              Ativar minha conta
-            </Text>
+            {carregando ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.activateButtonText}>
+                Ativar minha conta
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -189,6 +363,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#0B2447',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  activateButtonDisabled: {
+    opacity: 0.65,
   },
 
   activateButtonText: {

@@ -2,6 +2,8 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
+    ActivityIndicator,
+    Alert,
     Image,
     SafeAreaView,
     StyleSheet,
@@ -11,9 +13,74 @@ import {
     View,
 } from 'react-native';
 
+import { supabase } from '../lib/supabase';
+
 export default function PrimeiroAcessoScreen() {
   const [cpfCnpj, setCpfCnpj] = useState('');
   const [email, setEmail] = useState('');
+  const [carregando, setCarregando] = useState(false);
+
+  async function verificarCadastro() {
+    if (!cpfCnpj.trim() || !email.trim()) {
+      Alert.alert(
+        'Campos obrigatórios',
+        'Informe seu CPF/CNPJ e o e-mail cadastrado.'
+      );
+      return;
+    }
+
+    try {
+      setCarregando(true);
+
+      const { data, error } = await supabase.rpc(
+        'verificar_primeiro_acesso',
+        {
+          p_cpf_cnpj: cpfCnpj,
+          p_email: email,
+        }
+      );
+
+      if (error) {
+        console.error(error);
+
+        Alert.alert(
+          'Erro',
+          'Não foi possível consultar seu cadastro. Tente novamente.'
+        );
+
+        return;
+      }
+
+      const resultado = data?.[0];
+
+      if (!resultado?.encontrado) {
+        Alert.alert(
+          'Cadastro não localizado',
+          'Confira o CPF/CNPJ e o e-mail informados. Caso o problema continue, entre em contato com a EMAFE.'
+        );
+
+        return;
+      }
+
+      router.push({
+        pathname: '/criar-senha',
+        params: {
+          preCadastroId: resultado.pre_cadastro_id,
+          nome: resultado.nome_completo,
+          email: email.trim().toLowerCase(),
+        },
+      });
+    } catch (erro) {
+      console.error(erro);
+
+      Alert.alert(
+        'Erro',
+        'Ocorreu um problema ao verificar seu cadastro.'
+      );
+    } finally {
+      setCarregando(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -69,11 +136,19 @@ export default function PrimeiroAcessoScreen() {
           </Text>
 
           <TouchableOpacity
-            style={styles.continueButton}
+            style={[
+              styles.continueButton,
+              carregando && styles.continueButtonDisabled,
+            ]}
             activeOpacity={0.85}
-            onPress={() => router.push('/criar-senha')}
+            onPress={verificarCadastro}
+            disabled={carregando}
           >
-            <Text style={styles.continueButtonText}>Continuar</Text>
+            {carregando ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.continueButtonText}>Continuar</Text>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -171,6 +246,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#0B2447',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  continueButtonDisabled: {
+    opacity: 0.65,
   },
 
   continueButtonText: {
