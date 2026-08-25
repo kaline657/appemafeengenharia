@@ -2,15 +2,14 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 import { supabase } from '../lib/supabase';
@@ -19,11 +18,13 @@ export default function PrimeiroAcessoScreen() {
   const [cpfCnpj, setCpfCnpj] = useState('');
   const [email, setEmail] = useState('');
   const [carregando, setCarregando] = useState(false);
+  const [mensagemErro, setMensagemErro] = useState('');
 
   async function verificarCadastro() {
+    setMensagemErro('');
+
     if (!cpfCnpj.trim() || !email.trim()) {
-      Alert.alert(
-        'Campos obrigatórios',
+      setMensagemErro(
         'Informe seu CPF/CNPJ e o e-mail cadastrado.'
       );
       return;
@@ -32,35 +33,48 @@ export default function PrimeiroAcessoScreen() {
     try {
       setCarregando(true);
 
+      console.log('Consultando primeiro acesso...', {
+        cpfCnpj,
+        email,
+      });
+
       const { data, error } = await supabase.rpc(
         'verificar_primeiro_acesso',
         {
-          p_cpf_cnpj: cpfCnpj,
-          p_email: email,
+          p_cpf_cnpj: cpfCnpj.trim(),
+          p_email: email.trim().toLowerCase(),
         }
       );
 
+      console.log('Resposta do Supabase:', data);
+      console.log('Erro do Supabase:', error);
+
       if (error) {
-        console.error(error);
-
-        Alert.alert(
-          'Erro',
-          'Não foi possível consultar seu cadastro. Tente novamente.'
+        setMensagemErro(
+          `Erro ao consultar cadastro: ${error.message}`
         );
-
         return;
       }
 
       const resultado = data?.[0];
 
-      if (!resultado?.encontrado) {
-        Alert.alert(
-          'Cadastro não localizado',
-          'Confira o CPF/CNPJ e o e-mail informados. Caso o problema continue, entre em contato com a EMAFE.'
-        );
+      console.log('Resultado encontrado:', resultado);
 
+      if (!resultado) {
+        setMensagemErro(
+          'O Supabase não retornou nenhum resultado.'
+        );
         return;
       }
+
+      if (!resultado.encontrado) {
+        setMensagemErro(
+          'Cadastro não localizado. Confira o CPF/CNPJ e o e-mail informados.'
+        );
+        return;
+      }
+
+      console.log('Cadastro encontrado. Indo para criar senha...');
 
       router.push({
         pathname: '/criar-senha',
@@ -70,12 +84,12 @@ export default function PrimeiroAcessoScreen() {
           email: email.trim().toLowerCase(),
         },
       });
-    } catch (erro) {
-      console.error(erro);
+    } catch (erro: any) {
+      console.error('Erro inesperado:', erro);
 
-      Alert.alert(
-        'Erro',
-        'Ocorreu um problema ao verificar seu cadastro.'
+      setMensagemErro(
+        erro?.message ??
+          'Ocorreu um problema ao verificar seu cadastro.'
       );
     } finally {
       setCarregando(false);
@@ -117,6 +131,7 @@ export default function PrimeiroAcessoScreen() {
             keyboardType="numeric"
             value={cpfCnpj}
             onChangeText={setCpfCnpj}
+            editable={!carregando}
           />
 
           <Text style={styles.label}>E-mail cadastrado</Text>
@@ -129,11 +144,18 @@ export default function PrimeiroAcessoScreen() {
             autoCapitalize="none"
             value={email}
             onChangeText={setEmail}
+            editable={!carregando}
           />
 
           <Text style={styles.info}>
             Os dados informados precisam ser os mesmos registrados pela EMAFE.
           </Text>
+
+          {mensagemErro !== '' && (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{mensagemErro}</Text>
+            </View>
+          )}
 
           <TouchableOpacity
             style={[
@@ -147,7 +169,9 @@ export default function PrimeiroAcessoScreen() {
             {carregando ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.continueButtonText}>Continuar</Text>
+              <Text style={styles.continueButtonText}>
+                Continuar
+              </Text>
             )}
           </TouchableOpacity>
         </View>
@@ -237,7 +261,22 @@ const styles = StyleSheet.create({
     color: '#697789',
     fontSize: 12,
     lineHeight: 18,
-    marginBottom: 24,
+    marginBottom: 18,
+  },
+
+  errorBox: {
+    backgroundColor: '#FDECEC',
+    borderWidth: 1,
+    borderColor: '#F3B7B7',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 18,
+  },
+
+  errorText: {
+    color: '#A52828',
+    fontSize: 12,
+    lineHeight: 18,
   },
 
   continueButton: {

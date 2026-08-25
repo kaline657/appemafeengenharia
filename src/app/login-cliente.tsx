@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   SafeAreaView,
   StyleSheet,
@@ -11,9 +12,80 @@ import {
   View,
 } from 'react-native';
 
+import { supabase } from '../lib/supabase';
+
 export default function LoginClienteScreen() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const [carregando, setCarregando] = useState(false);
+  const [mensagemErro, setMensagemErro] = useState('');
+
+  async function entrar() {
+    setMensagemErro('');
+
+    if (!email.trim() || !senha) {
+      setMensagemErro(
+        'Informe seu e-mail e sua senha.'
+      );
+      return;
+    }
+
+    try {
+      setCarregando(true);
+
+      const { data, error } =
+        await supabase.auth.signInWithPassword({
+          email: email.trim().toLowerCase(),
+          password: senha,
+        });
+
+      if (error) {
+        console.error('Erro no login:', error);
+
+        if (
+          error.message
+            .toLowerCase()
+            .includes('invalid login credentials')
+        ) {
+          setMensagemErro(
+            'E-mail ou senha incorretos.'
+          );
+        } else {
+          setMensagemErro(
+            `Não foi possível entrar: ${error.message}`
+          );
+        }
+
+        return;
+      }
+
+      if (!data.user || !data.session) {
+        setMensagemErro(
+          'Não foi possível iniciar sua sessão.'
+        );
+        return;
+      }
+
+      console.log(
+        'Cliente autenticado:',
+        data.user.email
+      );
+
+      router.replace('/dashboard-cliente');
+    } catch (erro: any) {
+      console.error(
+        'Erro inesperado no login:',
+        erro
+      );
+
+      setMensagemErro(
+        erro?.message ??
+          'Ocorreu um problema ao entrar.'
+      );
+    } finally {
+      setCarregando(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -23,8 +95,11 @@ export default function LoginClienteScreen() {
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
+          disabled={carregando}
         >
-          <Text style={styles.backText}>‹ Voltar</Text>
+          <Text style={styles.backText}>
+            ‹ Voltar
+          </Text>
         </TouchableOpacity>
 
         <Image
@@ -33,14 +108,18 @@ export default function LoginClienteScreen() {
           resizeMode="contain"
         />
 
-        <Text style={styles.title}>Área do Cliente</Text>
+        <Text style={styles.title}>
+          Área do Cliente
+        </Text>
 
         <Text style={styles.subtitle}>
           Entre para acompanhar suas solicitações de manutenção.
         </Text>
 
         <View style={styles.form}>
-          <Text style={styles.label}>E-mail</Text>
+          <Text style={styles.label}>
+            E-mail
+          </Text>
 
           <TextInput
             style={styles.input}
@@ -50,9 +129,12 @@ export default function LoginClienteScreen() {
             autoCapitalize="none"
             value={email}
             onChangeText={setEmail}
+            editable={!carregando}
           />
 
-          <Text style={styles.label}>Senha</Text>
+          <Text style={styles.label}>
+            Senha
+          </Text>
 
           <TextInput
             style={styles.input}
@@ -61,6 +143,7 @@ export default function LoginClienteScreen() {
             secureTextEntry
             value={senha}
             onChangeText={setSenha}
+            editable={!carregando}
           />
 
           <View style={styles.accessLinks}>
@@ -71,7 +154,10 @@ export default function LoginClienteScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => router.push('/primeiro-acesso')}
+              onPress={() =>
+                router.push('/primeiro-acesso')
+              }
+              disabled={carregando}
             >
               <Text style={styles.firstAccessText}>
                 Primeiro acesso
@@ -79,8 +165,31 @@ export default function LoginClienteScreen() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.loginButton}>
-            <Text style={styles.loginButtonText}>Entrar</Text>
+          {mensagemErro !== '' && (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>
+                {mensagemErro}
+              </Text>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={[
+              styles.loginButton,
+              carregando &&
+                styles.loginButtonDisabled,
+            ]}
+            onPress={entrar}
+            disabled={carregando}
+            activeOpacity={0.85}
+          >
+            {carregando ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.loginButtonText}>
+                Entrar
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -185,12 +294,31 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+  errorBox: {
+    backgroundColor: '#FDECEC',
+    borderWidth: 1,
+    borderColor: '#F3B7B7',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 18,
+  },
+
+  errorText: {
+    color: '#A52828',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+
   loginButton: {
     height: 58,
     borderRadius: 16,
     backgroundColor: '#0B2447',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  loginButtonDisabled: {
+    opacity: 0.65,
   },
 
   loginButtonText: {

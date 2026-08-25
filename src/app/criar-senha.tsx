@@ -2,15 +2,14 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 import { supabase } from '../lib/supabase';
@@ -20,11 +19,16 @@ export default function CriarSenhaScreen() {
 
   const preCadastroId = String(params.preCadastroId ?? '');
   const nome = String(params.nome ?? '');
-  const email = String(params.email ?? '');
+  const email = String(params.email ?? '')
+    .trim()
+    .toLowerCase();
 
   const [senha, setSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [carregando, setCarregando] = useState(false);
+
+  const [mensagemErro, setMensagemErro] = useState('');
+  const [mensagemSucesso, setMensagemSucesso] = useState('');
 
   function senhaValida(valor: string) {
     const temOitoCaracteres = valor.length >= 8;
@@ -40,34 +44,77 @@ export default function CriarSenhaScreen() {
     );
   }
 
+  async function finalizarCadastro() {
+    const { error } = await supabase.rpc(
+      'finalizar_primeiro_acesso',
+      {
+        p_pre_cadastro_id: preCadastroId,
+      }
+    );
+
+    if (error) {
+      console.error(
+        'Erro ao finalizar primeiro acesso:',
+        error
+      );
+
+      throw new Error(
+        `Não foi possível concluir o cadastro: ${error.message}`
+      );
+    }
+  }
+
+  async function contaAtivadaComSucesso() {
+    setMensagemErro('');
+
+    setMensagemSucesso(
+      `Conta ativada com sucesso${
+        nome ? `, ${nome}` : ''
+      }! Você já pode entrar no aplicativo.`
+    );
+
+    /*
+      Saímos da sessão criada durante o cadastro
+      porque o próximo passo será o login normal.
+    */
+    await supabase.auth.signOut();
+
+    /*
+      Depois de mostrar a mensagem,
+      volta para a tela de login.
+    */
+    setTimeout(() => {
+      router.replace('/login-cliente');
+    }, 1800);
+  }
+
   async function ativarConta() {
+    setMensagemErro('');
+    setMensagemSucesso('');
+
     if (!preCadastroId || !email) {
-      Alert.alert(
-        'Dados inválidos',
-        'Não foi possível identificar seu pré-cadastro. Volte e tente novamente.'
+      setMensagemErro(
+        'Não foi possível identificar seu pré-cadastro. Volte para a tela anterior e tente novamente.'
       );
       return;
     }
 
     if (!senha || !confirmarSenha) {
-      Alert.alert(
-        'Campos obrigatórios',
+      setMensagemErro(
         'Preencha a senha e a confirmação da senha.'
       );
       return;
     }
 
     if (!senhaValida(senha)) {
-      Alert.alert(
-        'Senha inválida',
+      setMensagemErro(
         'A senha precisa ter pelo menos 8 caracteres, uma letra maiúscula, uma letra minúscula e um número.'
       );
       return;
     }
 
     if (senha !== confirmarSenha) {
-      Alert.alert(
-        'Senhas diferentes',
+      setMensagemErro(
         'A senha e a confirmação precisam ser iguais.'
       );
       return;
@@ -76,99 +123,128 @@ export default function CriarSenhaScreen() {
     try {
       setCarregando(true);
 
-      // Cria o usuário no Supabase Auth
-      const { data: authData, error: authError } =
-        await supabase.auth.signUp({
-          email,
-          password: senha,
-        });
+      /*
+        PRIMEIRA TENTATIVA:
+        criar a conta no Supabase Auth.
+      */
+      const {
+        data: authData,
+        error: authError,
+      } = await supabase.auth.signUp({
+        email,
+        password: senha,
+      });
 
+      /*
+        Se o usuário já existir, não precisamos
+        tentar cadastrá-lo novamente.
+
+        Tentamos autenticar com a senha digitada.
+      */
       if (authError) {
-        console.error('Erro ao criar usuário:', authError);
+        const mensagem =
+          authError.message.toLowerCase();
 
-        if (
-          authError.message
-            .toLowerCase()
-            .includes('already registered')
-        ) {
-          Alert.alert(
-            'Conta já existente',
-            'Já existe uma conta cadastrada com este e-mail.'
+        const usuarioJaExiste =
+          mensagem.includes('already registered') ||
+          mensagem.includes('already exists') ||
+          authError.code === 'user_already_exists';
+
+        if (usuarioJaExiste) {
+          console.log(
+            'Usuário já existe. Tentando autenticar...'
           );
+
+          const {
+            data: loginData,
+            error: loginError,
+          } = await supabase.auth.signInWithPassword({
+            email,
+            password: senha,
+          });
+
+          if (loginError) {
+            console.error(
+              'Erro ao autenticar usuário existente:',
+              loginError
+            );
+
+            setMensagemErro(
+              'Já existe uma conta com este e-mail, mas a senha informada não corresponde à conta existente. Use a senha cadastrada ou recupere seu acesso.'
+            );
+
+            return;
+          }
+
+          if (!loginData.session) {
+            setMensagemErro(
+              'Não foi possível iniciar a sessão da conta existente.'
+            );
+            return;
+          }
+
+          /*
+            O usuário existe e conseguimos provar
+            que ele conhece a senha.
+            Agora finalizamos o cadastro EMAFE.
+          */
+          await finalizarCadastro();
+
+          await contaAtivadaComSucesso();
+
           return;
         }
 
-        Alert.alert(
-          'Não foi possível criar a conta',
-          authError.message
+        console.error(
+          'Erro ao criar usuário:',
+          authError
         );
+
+        setMensagemErro(
+          `Erro do Supabase: ${authError.message}`
+        );
+
         return;
       }
 
+      /*
+        Cadastro novo criado.
+      */
       if (!authData.user) {
-        Alert.alert(
-          'Erro',
-          'Não foi possível criar o usuário.'
+        setMensagemErro(
+          'O Supabase não retornou o usuário criado.'
         );
         return;
       }
 
       /*
-        Se o Supabase criar uma sessão imediatamente,
-        finalizamos o pré-cadastro.
+        Com "Confirm email" desligado,
+        o Supabase cria a sessão imediatamente.
       */
       if (authData.session) {
-        const { error: finalizarError } = await supabase.rpc(
-          'finalizar_primeiro_acesso',
-          {
-            p_pre_cadastro_id: preCadastroId,
-          }
-        );
+        await finalizarCadastro();
 
-        if (finalizarError) {
-          console.error(
-            'Erro ao finalizar primeiro acesso:',
-            finalizarError
-          );
-
-          Alert.alert(
-            'Conta criada',
-            'Sua conta foi criada, mas ocorreu um problema ao concluir o cadastro. Entre em contato com a EMAFE.'
-          );
-          return;
-        }
-
-        Alert.alert(
-          'Conta ativada!',
-          `Bem-vindo${nome ? `, ${nome}` : ''}! Seu acesso foi criado com sucesso.`,
-          [
-            {
-              text: 'Entrar',
-              onPress: async () => {
-                await supabase.auth.signOut();
-                router.replace('/login-cliente');
-              },
-            },
-          ]
-        );
+        await contaAtivadaComSucesso();
 
         return;
       }
 
       /*
-        Se a confirmação de e-mail estiver ativada no Supabase,
-        ele cria o usuário, mas não cria sessão ainda.
+        Isso poderá acontecer futuramente
+        se reativarmos a confirmação de e-mail.
       */
-      Alert.alert(
-        'Confirme seu e-mail',
-        `Enviamos uma confirmação para ${email}. Abra o e-mail para confirmar sua conta antes de entrar.`
+      setMensagemSucesso(
+        `Sua conta foi criada. Enviamos uma confirmação para ${email}. Confirme seu e-mail antes de entrar.`
       );
-    } catch (erro) {
-      console.error('Erro inesperado:', erro);
+    } catch (erro: any) {
+      console.error(
+        'Erro inesperado ao ativar conta:',
+        erro
+      );
 
-      Alert.alert(
-        'Erro',
-        'Ocorreu um problema ao ativar sua conta. Tente novamente.'
+      setMensagemErro(
+        erro?.message ??
+          'Ocorreu um problema ao ativar sua conta. Tente novamente.'
       );
     } finally {
       setCarregando(false);
@@ -185,7 +261,9 @@ export default function CriarSenhaScreen() {
           onPress={() => router.back()}
           disabled={carregando}
         >
-          <Text style={styles.backText}>‹ Voltar</Text>
+          <Text style={styles.backText}>
+            ‹ Voltar
+          </Text>
         </TouchableOpacity>
 
         <Image
@@ -194,15 +272,19 @@ export default function CriarSenhaScreen() {
           resizeMode="contain"
         />
 
-        <Text style={styles.title}>Crie sua senha</Text>
+        <Text style={styles.title}>
+          Crie sua senha
+        </Text>
 
         <Text style={styles.subtitle}>
-          Crie uma senha para concluir a ativação do seu acesso ao aplicativo
-          EMAFE.
+          Crie uma senha para concluir a ativação do seu
+          acesso ao aplicativo EMAFE.
         </Text>
 
         <View style={styles.form}>
-          <Text style={styles.label}>Nova senha</Text>
+          <Text style={styles.label}>
+            Nova senha
+          </Text>
 
           <TextInput
             style={styles.input}
@@ -214,7 +296,9 @@ export default function CriarSenhaScreen() {
             editable={!carregando}
           />
 
-          <Text style={styles.label}>Confirmar senha</Text>
+          <Text style={styles.label}>
+            Confirmar senha
+          </Text>
 
           <TextInput
             style={styles.input}
@@ -231,16 +315,44 @@ export default function CriarSenhaScreen() {
               Sua senha deverá ter:
             </Text>
 
-            <Text style={styles.rule}>• pelo menos 8 caracteres</Text>
-            <Text style={styles.rule}>• uma letra maiúscula</Text>
-            <Text style={styles.rule}>• uma letra minúscula</Text>
-            <Text style={styles.rule}>• um número</Text>
+            <Text style={styles.rule}>
+              • pelo menos 8 caracteres
+            </Text>
+
+            <Text style={styles.rule}>
+              • uma letra maiúscula
+            </Text>
+
+            <Text style={styles.rule}>
+              • uma letra minúscula
+            </Text>
+
+            <Text style={styles.rule}>
+              • um número
+            </Text>
           </View>
+
+          {mensagemErro !== '' && (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>
+                {mensagemErro}
+              </Text>
+            </View>
+          )}
+
+          {mensagemSucesso !== '' && (
+            <View style={styles.successBox}>
+              <Text style={styles.successText}>
+                {mensagemSucesso}
+              </Text>
+            </View>
+          )}
 
           <TouchableOpacity
             style={[
               styles.activateButton,
-              carregando && styles.activateButtonDisabled,
+              carregando &&
+                styles.activateButtonDisabled,
             ]}
             activeOpacity={0.85}
             onPress={ativarConta}
@@ -249,7 +361,9 @@ export default function CriarSenhaScreen() {
             {carregando ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.activateButtonText}>
+              <Text
+                style={styles.activateButtonText}
+              >
                 Ativar minha conta
               </Text>
             )}
@@ -355,6 +469,36 @@ const styles = StyleSheet.create({
     color: '#697789',
     fontSize: 12,
     lineHeight: 20,
+  },
+
+  errorBox: {
+    backgroundColor: '#FDECEC',
+    borderWidth: 1,
+    borderColor: '#F3B7B7',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 18,
+  },
+
+  errorText: {
+    color: '#A52828',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+
+  successBox: {
+    backgroundColor: '#EAF7EF',
+    borderWidth: 1,
+    borderColor: '#A8D8B9',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 18,
+  },
+
+  successText: {
+    color: '#22633A',
+    fontSize: 12,
+    lineHeight: 18,
   },
 
   activateButton: {
