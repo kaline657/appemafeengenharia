@@ -4,49 +4,39 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 
 import {
-    ActivityIndicator,
-    Image,
-    Modal,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  Modal,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 import { supabase } from '../lib/supabase';
-
 
 type Solicitacao = {
   solicitacao_id: string;
   protocolo: string;
 
+  cidade?: string | null;
   empreendimento: string;
   unidade: string;
 
-  categoria: string | null;
-  elemento_construtivo: string | null;
-  manifestacao_patologica: string | null;
-
   descricao_problema: string;
 
-  status_garantia: string | null;
-  data_base_garantia: string | null;
-  data_limite_garantia: string | null;
-
-  prazo_quantidade: number | null;
-  prazo_unidade: string | null;
-
-  dias_restantes: number | null;
-  aviso_garantia: string | null;
+  comodo?: string | null;
+  telefone_contato?: string | null;
+  email_contato?: string | null;
+  disponibilidade_visita?: string | null;
 
   status: string;
 
   created_at: string;
   updated_at: string;
 };
-
 
 type FotoSolicitacao = {
   id: string;
@@ -59,31 +49,21 @@ type FotoSolicitacao = {
   url: string;
 };
 
-
 export default function DetalhesSolicitacaoScreen() {
-  const params =
-    useLocalSearchParams();
+  const params = useLocalSearchParams();
 
-  const solicitacaoId =
-    String(
-      params.solicitacaoId ?? ''
-    );
-
+  const solicitacaoId = String(
+    params.solicitacaoId ?? ''
+  );
 
   const [solicitacao, setSolicitacao] =
-    useState<Solicitacao | null>(
-      null
-    );
+    useState<Solicitacao | null>(null);
 
   const [fotos, setFotos] =
-    useState<FotoSolicitacao[]>(
-      []
-    );
+    useState<FotoSolicitacao[]>([]);
 
   const [fotoSelecionada, setFotoSelecionada] =
-    useState<FotoSolicitacao | null>(
-      null
-    );
+    useState<FotoSolicitacao | null>(null);
 
   const [carregando, setCarregando] =
     useState(true);
@@ -99,7 +79,6 @@ export default function DetalhesSolicitacaoScreen() {
   const [erroFotos, setErroFotos] =
     useState('');
 
-
   useEffect(() => {
     if (!solicitacaoId) {
       setErro(
@@ -112,16 +91,12 @@ export default function DetalhesSolicitacaoScreen() {
     }
 
     carregarDados();
-
   }, [solicitacaoId]);
-
 
   async function carregarDados() {
     await carregarSolicitacao();
-
     await carregarFotos();
   }
-
 
   async function carregarSolicitacao() {
     try {
@@ -130,13 +105,12 @@ export default function DetalhesSolicitacaoScreen() {
 
       const { data, error } =
         await supabase.rpc(
-          'buscar_minha_solicitacao',
+          'buscar_minha_solicitacao_cliente',
           {
             p_solicitacao_id:
               solicitacaoId,
           }
         );
-
 
       if (error) {
         console.error(
@@ -151,12 +125,10 @@ export default function DetalhesSolicitacaoScreen() {
         return;
       }
 
-
       const resultado =
         data?.[0] as
           | Solicitacao
           | undefined;
-
 
       if (!resultado) {
         setErro(
@@ -166,38 +138,26 @@ export default function DetalhesSolicitacaoScreen() {
         return;
       }
 
-
-      setSolicitacao(
-        resultado
-      );
-
+      setSolicitacao(resultado);
     } catch (error) {
       console.error(error);
 
       setErro(
         'Ocorreu um erro ao carregar a solicitação.'
       );
-
     } finally {
       setCarregando(false);
     }
   }
 
-
   async function carregarFotos() {
     try {
       setCarregandoFotos(true);
-
       setErroFotos('');
 
-      const {
-        data,
-        error,
-      } =
+      const { data, error } =
         await supabase
-          .from(
-            'solicitacao_fotos'
-          )
+          .from('solicitacao_fotos')
           .select(`
             id,
             solicitacao_id,
@@ -217,7 +177,6 @@ export default function DetalhesSolicitacaoScreen() {
             }
           );
 
-
       if (error) {
         console.error(
           'Erro ao buscar fotos:',
@@ -231,18 +190,13 @@ export default function DetalhesSolicitacaoScreen() {
         return;
       }
 
-
       const registros =
         data ?? [];
-
 
       const fotosComUrl:
         FotoSolicitacao[] = [];
 
-
-      for (
-        const foto of registros
-      ) {
+      for (const foto of registros) {
         const {
           data: signedData,
           error: signedError,
@@ -256,7 +210,6 @@ export default function DetalhesSolicitacaoScreen() {
               60 * 60
             );
 
-
         if (signedError) {
           console.error(
             'Erro ao criar URL da foto:',
@@ -266,20 +219,13 @@ export default function DetalhesSolicitacaoScreen() {
           continue;
         }
 
-
         fotosComUrl.push({
           ...foto,
-
-          url:
-            signedData.signedUrl,
+          url: signedData.signedUrl,
         });
       }
 
-
-      setFotos(
-        fotosComUrl
-      );
-
+      setFotos(fotosComUrl);
     } catch (error) {
       console.error(
         'Erro ao carregar fotos:',
@@ -289,32 +235,10 @@ export default function DetalhesSolicitacaoScreen() {
       setErroFotos(
         'Ocorreu um erro ao carregar as fotos.'
       );
-
     } finally {
       setCarregandoFotos(false);
     }
   }
-
-
-  function formatarData(
-    data: string | null
-  ) {
-    if (!data) {
-      return '-';
-    }
-
-    const partes =
-      data.split('-');
-
-    if (
-      partes.length !== 3
-    ) {
-      return data;
-    }
-
-    return `${partes[2]}/${partes[1]}/${partes[0]}`;
-  }
-
 
   function formatarDataHora(
     dataIso: string
@@ -337,7 +261,6 @@ export default function DetalhesSolicitacaoScreen() {
       }
     );
   }
-
 
   function textoStatus(
     status: string
@@ -375,41 +298,6 @@ export default function DetalhesSolicitacaoScreen() {
     }
   }
 
-
-  function textoGarantia(
-    status: string | null
-  ) {
-    switch (status) {
-      case 'dentro_da_garantia':
-        return 'Dentro da garantia';
-
-      case 'fora_da_garantia':
-        return 'Fora da garantia';
-
-      case 'dados_insuficientes':
-        return 'Dados insuficientes';
-
-      case 'ato_da_entrega':
-        return 'Garantia no ato da entrega';
-
-      case 'nao_se_aplica':
-        return 'Não se aplica';
-
-      default:
-        return 'Não informado';
-    }
-  }
-
-
-  function garantiaPositiva() {
-    return (
-      solicitacao
-        ?.status_garantia ===
-      'dentro_da_garantia'
-    );
-  }
-
-
   if (carregando) {
     return (
       <SafeAreaView
@@ -439,13 +327,11 @@ export default function DetalhesSolicitacaoScreen() {
     );
   }
 
-
   return (
     <SafeAreaView
       style={styles.container}
     >
       <StatusBar style="dark" />
-
 
       {/* MODAL DA FOTO */}
 
@@ -456,24 +342,16 @@ export default function DetalhesSolicitacaoScreen() {
         transparent
         animationType="fade"
         onRequestClose={() =>
-          setFotoSelecionada(
-            null
-          )
+          setFotoSelecionada(null)
         }
       >
         <View
-          style={
-            styles.modalOverlay
-          }
+          style={styles.modalOverlay}
         >
           <TouchableOpacity
-            style={
-              styles.modalClose
-            }
+            style={styles.modalClose}
             onPress={() =>
-              setFotoSelecionada(
-                null
-              )
+              setFotoSelecionada(null)
             }
           >
             <Ionicons
@@ -483,13 +361,11 @@ export default function DetalhesSolicitacaoScreen() {
             />
           </TouchableOpacity>
 
-
           {fotoSelecionada ? (
             <Image
               source={{
                 uri:
-                  fotoSelecionada
-                    .url,
+                  fotoSelecionada.url,
               }}
               style={
                 styles.modalImage
@@ -497,7 +373,6 @@ export default function DetalhesSolicitacaoScreen() {
               resizeMode="contain"
             />
           ) : null}
-
 
           {fotoSelecionada ? (
             <Text
@@ -507,14 +382,12 @@ export default function DetalhesSolicitacaoScreen() {
             >
               Foto{' '}
               {
-                fotoSelecionada
-                  .ordem
+                fotoSelecionada.ordem
               }
             </Text>
           ) : null}
         </View>
       </Modal>
-
 
       <ScrollView
         contentContainerStyle={
@@ -524,26 +397,25 @@ export default function DetalhesSolicitacaoScreen() {
           false
         }
       >
-        <View
-          style={styles.content}
-        >
+        <View style={styles.content}>
+          {/* VOLTAR */}
+
           <TouchableOpacity
-            style={
-              styles.backButton
-            }
+            style={styles.backButton}
             onPress={() =>
-              router.back()
+              router.replace(
+                '/dashboard-cliente'
+              )
             }
           >
             <Text
-              style={
-                styles.backText
-              }
+              style={styles.backText}
             >
               ‹ Voltar
             </Text>
           </TouchableOpacity>
 
+          {/* LOGO */}
 
           <Image
             source={require('../../assets/emafe/logo-horizontal-transparente.png')}
@@ -551,20 +423,22 @@ export default function DetalhesSolicitacaoScreen() {
             resizeMode="contain"
           />
 
-
-          <Text
-            style={styles.title}
-          >
+          <Text style={styles.title}>
             Acompanhar solicitação
           </Text>
 
+          {/* ERRO */}
 
           {erro ? (
             <View
-              style={
-                styles.errorBox
-              }
+              style={styles.errorBox}
             >
+              <Ionicons
+                name="alert-circle-outline"
+                size={19}
+                color="#9A3232"
+              />
+
               <Text
                 style={
                   styles.errorText
@@ -574,7 +448,6 @@ export default function DetalhesSolicitacaoScreen() {
               </Text>
             </View>
           ) : null}
-
 
           {solicitacao ? (
             <>
@@ -620,7 +493,6 @@ export default function DetalhesSolicitacaoScreen() {
                 </View>
               </View>
 
-
               {/* IMÓVEL */}
 
               <Text
@@ -640,8 +512,7 @@ export default function DetalhesSolicitacaoScreen() {
                   }
                 >
                   {
-                    solicitacao
-                      .empreendimento
+                    solicitacao.empreendimento
                   }
                 </Text>
 
@@ -652,69 +523,71 @@ export default function DetalhesSolicitacaoScreen() {
                 >
                   Unidade{' '}
                   {
-                    solicitacao
-                      .unidade
+                    solicitacao.unidade
                   }
                 </Text>
+
+                {solicitacao.cidade ? (
+                  <Text
+                    style={
+                      styles.cardText
+                    }
+                  >
+                    {
+                      solicitacao.cidade
+                    }
+                  </Text>
+                ) : null}
               </View>
 
+              {/* LOCAL DO PROBLEMA */}
 
-              {/* PROBLEMA */}
+              {solicitacao.comodo ? (
+                <>
+                  <Text
+                    style={
+                      styles.sectionTitle
+                    }
+                  >
+                    Local do problema
+                  </Text>
+
+                  <View
+                    style={styles.card}
+                  >
+                    <View
+                      style={
+                        styles.infoRow
+                      }
+                    >
+                      <Ionicons
+                        name="location-outline"
+                        size={20}
+                        color="#0B2447"
+                      />
+
+                      <Text
+                        style={
+                          styles.infoRowText
+                        }
+                      >
+                        {
+                          solicitacao.comodo
+                        }
+                      </Text>
+                    </View>
+                  </View>
+                </>
+              ) : null}
+
+              {/* PROBLEMA RELATADO */}
 
               <Text
                 style={
                   styles.sectionTitle
                 }
               >
-                Problema informado
-              </Text>
-
-              <View
-                style={styles.card}
-              >
-                <Text
-                  style={
-                    styles.category
-                  }
-                >
-                  {
-                    solicitacao
-                      .categoria
-                  }
-                </Text>
-
-                <Text
-                  style={
-                    styles.cardTitle
-                  }
-                >
-                  {
-                    solicitacao
-                      .elemento_construtivo
-                  }
-                </Text>
-
-                <Text
-                  style={
-                    styles.cardText
-                  }
-                >
-                  {
-                    solicitacao
-                      .manifestacao_patologica
-                  }
-                </Text>
-              </View>
-
-
-              {/* DESCRIÇÃO */}
-
-              <Text
-                style={
-                  styles.sectionTitle
-                }
-              >
-                Sua descrição
+                Problema relatado
               </Text>
 
               <View
@@ -731,7 +604,6 @@ export default function DetalhesSolicitacaoScreen() {
                   }
                 </Text>
               </View>
-
 
               {/* FOTOS */}
 
@@ -755,16 +627,13 @@ export default function DetalhesSolicitacaoScreen() {
                       styles.photoCount
                     }
                   >
-                    {
-                      fotos.length
-                    }{' '}
+                    {fotos.length}{' '}
                     {fotos.length === 1
                       ? 'foto'
                       : 'fotos'}
                   </Text>
                 ) : null}
               </View>
-
 
               {carregandoFotos ? (
                 <View
@@ -785,7 +654,6 @@ export default function DetalhesSolicitacaoScreen() {
                   </Text>
                 </View>
               ) : null}
-
 
               {erroFotos ? (
                 <View
@@ -808,7 +676,6 @@ export default function DetalhesSolicitacaoScreen() {
                   </Text>
                 </View>
               ) : null}
-
 
               {!carregandoFotos &&
               !erroFotos &&
@@ -836,7 +703,6 @@ export default function DetalhesSolicitacaoScreen() {
                 </View>
               ) : null}
 
-
               {fotos.length > 0 ? (
                 <View
                   style={
@@ -849,9 +715,7 @@ export default function DetalhesSolicitacaoScreen() {
                       indice
                     ) => (
                       <TouchableOpacity
-                        key={
-                          foto.id
-                        }
+                        key={foto.id}
                         style={
                           styles.photoContainer
                         }
@@ -889,8 +753,7 @@ export default function DetalhesSolicitacaoScreen() {
                                 styles.photoNumberText
                               }
                             >
-                              {indice +
-                                1}
+                              {indice + 1}
                             </Text>
                           </View>
 
@@ -906,118 +769,147 @@ export default function DetalhesSolicitacaoScreen() {
                 </View>
               ) : null}
 
+              {/* DADOS PARA CONTATO */}
 
-              {/* GARANTIA */}
-
-              <Text
-                style={
-                  styles.sectionTitle
-                }
-              >
-                Garantia
-              </Text>
-
-              <View
-                style={[
-                  styles.warrantyCard,
-
-                  garantiaPositiva()
-                    ? styles.warrantyCardSuccess
-                    : styles.warrantyCardDanger,
-                ]}
-              >
-                <View
-                  style={
-                    styles.warrantyHeader
-                  }
-                >
-                  <Ionicons
-                    name={
-                      garantiaPositiva()
-                        ? 'shield-checkmark-outline'
-                        : 'alert-circle-outline'
-                    }
-                    size={22}
-                    color={
-                      garantiaPositiva()
-                        ? '#357A4F'
-                        : '#A52828'
-                    }
-                  />
-
+              {(solicitacao.telefone_contato ||
+                solicitacao.email_contato) ? (
+                <>
                   <Text
                     style={
-                      styles.warrantyTitle
+                      styles.sectionTitle
                     }
                   >
-                    {textoGarantia(
-                      solicitacao
-                        .status_garantia
-                    )}
+                    Dados para contato
                   </Text>
-                </View>
 
+                  <View
+                    style={styles.card}
+                  >
+                    {solicitacao.telefone_contato ? (
+                      <View
+                        style={
+                          styles.contactRow
+                        }
+                      >
+                        <Ionicons
+                          name="call-outline"
+                          size={19}
+                          color="#697789"
+                        />
 
-                <Text
-                  style={
-                    styles.warrantyText
-                  }
-                >
-                  Data-base:{' '}
-                  {formatarData(
-                    solicitacao
-                      .data_base_garantia
-                  )}
-                </Text>
+                        <View
+                          style={
+                            styles.contactContent
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.contactLabel
+                            }
+                          >
+                            Telefone
+                          </Text>
 
-                {solicitacao
-                  .prazo_quantidade &&
-                solicitacao
-                  .prazo_unidade ? (
+                          <Text
+                            style={
+                              styles.contactValue
+                            }
+                          >
+                            {
+                              solicitacao
+                                .telefone_contato
+                            }
+                          </Text>
+                        </View>
+                      </View>
+                    ) : null}
+
+                    {solicitacao.email_contato ? (
+                      <View
+                        style={[
+                          styles.contactRow,
+
+                          solicitacao.telefone_contato
+                            ? styles.contactRowSpacing
+                            : null,
+                        ]}
+                      >
+                        <Ionicons
+                          name="mail-outline"
+                          size={19}
+                          color="#697789"
+                        />
+
+                        <View
+                          style={
+                            styles.contactContent
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.contactLabel
+                            }
+                          >
+                            E-mail
+                          </Text>
+
+                          <Text
+                            style={
+                              styles.contactValue
+                            }
+                          >
+                            {
+                              solicitacao
+                                .email_contato
+                            }
+                          </Text>
+                        </View>
+                      </View>
+                    ) : null}
+                  </View>
+                </>
+              ) : null}
+
+              {/* DISPONIBILIDADE */}
+
+              {solicitacao.disponibilidade_visita ? (
+                <>
                   <Text
                     style={
-                      styles.warrantyText
+                      styles.sectionTitle
                     }
                   >
-                    Prazo:{' '}
-                    {
-                      solicitacao
-                        .prazo_quantidade
-                    }{' '}
-                    {
-                      solicitacao
-                        .prazo_unidade
-                    }
+                    Disponibilidade para visita
                   </Text>
-                ) : null}
 
-                <Text
-                  style={
-                    styles.warrantyText
-                  }
-                >
-                  Limite:{' '}
-                  {formatarData(
-                    solicitacao
-                      .data_limite_garantia
-                  )}
-                </Text>
-
-                {solicitacao
-                  .aviso_garantia ? (
-                  <Text
-                    style={
-                      styles.warningText
-                    }
+                  <View
+                    style={styles.card}
                   >
-                    {
-                      solicitacao
-                        .aviso_garantia
-                    }
-                  </Text>
-                ) : null}
-              </View>
+                    <View
+                      style={
+                        styles.infoRow
+                      }
+                    >
+                      <Ionicons
+                        name="calendar-outline"
+                        size={20}
+                        color="#0B2447"
+                      />
 
+                      <Text
+                        style={
+                          styles.infoRowText
+                        }
+                      >
+                        {
+                          solicitacao
+                            .disponibilidade_visita
+                        }
+                      </Text>
+                    </View>
+                  </View>
+                </>
+              ) : null}
 
               {/* ANDAMENTO */}
 
@@ -1077,7 +969,6 @@ export default function DetalhesSolicitacaoScreen() {
                   </View>
                 </View>
 
-
                 {solicitacao.status !==
                 'aberta' ? (
                   <View
@@ -1128,7 +1019,6 @@ export default function DetalhesSolicitacaoScreen() {
                 ) : null}
               </View>
 
-
               {/* PRÓXIMAS ETAPAS */}
 
               <View
@@ -1159,22 +1049,19 @@ export default function DetalhesSolicitacaoScreen() {
                     styles.infoText
                   }
                 >
-                  A equipe de Assistência
-                  Técnica da EMAFE analisará
-                  sua solicitação. As
-                  atualizações aparecerão
+                  A equipe da EMAFE analisará
+                  sua solicitação de manutenção.
+                  As atualizações aparecerão
                   nesta tela.
                 </Text>
               </View>
             </>
           ) : null}
 
-
           <Text
             style={styles.footer}
           >
-            EMAFE Engenharia •
-            Assistência Técnica
+            EMAFE Engenharia • Manutenção
           </Text>
         </View>
       </ScrollView>
@@ -1182,13 +1069,11 @@ export default function DetalhesSolicitacaoScreen() {
   );
 }
 
-
 const styles =
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor:
-        '#F5F7FA',
+      backgroundColor: '#F5F7FA',
     },
 
     scrollContent: {
@@ -1232,11 +1117,9 @@ const styles =
     },
 
     protocolCard: {
-      backgroundColor:
-        '#FFFFFF',
+      backgroundColor: '#FFFFFF',
       borderWidth: 1,
-      borderColor:
-        '#D8DEE7',
+      borderColor: '#D8DEE7',
       borderRadius: 16,
       padding: 20,
       alignItems: 'center',
@@ -1256,8 +1139,7 @@ const styles =
     },
 
     statusBadge: {
-      backgroundColor:
-        '#E9F1FA',
+      backgroundColor: '#E9F1FA',
       borderRadius: 20,
       paddingHorizontal: 14,
       paddingVertical: 7,
@@ -1299,11 +1181,9 @@ const styles =
     },
 
     card: {
-      backgroundColor:
-        '#FFFFFF',
+      backgroundColor: '#FFFFFF',
       borderWidth: 1,
-      borderColor:
-        '#D8DEE7',
+      borderColor: '#D8DEE7',
       borderRadius: 14,
       padding: 16,
     },
@@ -1321,17 +1201,54 @@ const styles =
       marginTop: 5,
     },
 
-    category: {
-      color: '#0B5EA8',
-      fontSize: 11,
-      fontWeight: '700',
-      marginBottom: 5,
-    },
-
     descriptionText: {
       color: '#42566D',
       fontSize: 13,
       lineHeight: 20,
+    },
+
+    infoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+
+    infoRowText: {
+      flex: 1,
+      color: '#24364B',
+      fontSize: 13,
+      fontWeight: '600',
+      lineHeight: 20,
+    },
+
+    contactRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+    contactRowSpacing: {
+      marginTop: 16,
+      paddingTop: 16,
+      borderTopWidth: 1,
+      borderTopColor: '#EEF1F5',
+    },
+
+    contactContent: {
+      flex: 1,
+      marginLeft: 11,
+    },
+
+    contactLabel: {
+      color: '#8995A5',
+      fontSize: 10,
+      fontWeight: '600',
+    },
+
+    contactValue: {
+      color: '#24364B',
+      fontSize: 13,
+      fontWeight: '600',
+      marginTop: 3,
     },
 
     photoGrid: {
@@ -1345,8 +1262,7 @@ const styles =
       height: 145,
       borderRadius: 14,
       overflow: 'hidden',
-      backgroundColor:
-        '#E9EEF4',
+      backgroundColor: '#E9EEF4',
     },
 
     photo: {
@@ -1373,11 +1289,9 @@ const styles =
       width: 22,
       height: 22,
       borderRadius: 11,
-      backgroundColor:
-        '#FFFFFF',
+      backgroundColor: '#FFFFFF',
       alignItems: 'center',
-      justifyContent:
-        'center',
+      justifyContent: 'center',
     },
 
     photoNumberText: {
@@ -1389,14 +1303,11 @@ const styles =
     photosLoading: {
       minHeight: 100,
       borderRadius: 14,
-      backgroundColor:
-        '#FFFFFF',
+      backgroundColor: '#FFFFFF',
       borderWidth: 1,
-      borderColor:
-        '#D8DEE7',
+      borderColor: '#D8DEE7',
       alignItems: 'center',
-      justifyContent:
-        'center',
+      justifyContent: 'center',
     },
 
     photosLoadingText: {
@@ -1408,11 +1319,9 @@ const styles =
     noPhotosCard: {
       borderRadius: 14,
       padding: 20,
-      backgroundColor:
-        '#FFFFFF',
+      backgroundColor: '#FFFFFF',
       borderWidth: 1,
-      borderColor:
-        '#D8DEE7',
+      borderColor: '#D8DEE7',
       alignItems: 'center',
     },
 
@@ -1424,11 +1333,9 @@ const styles =
     },
 
     photoErrorBox: {
-      backgroundColor:
-        '#FCEEEE',
+      backgroundColor: '#FCEEEE',
       borderWidth: 1,
-      borderColor:
-        '#D29A9A',
+      borderColor: '#D29A9A',
       borderRadius: 12,
       padding: 12,
       flexDirection: 'row',
@@ -1442,60 +1349,12 @@ const styles =
       fontSize: 11,
     },
 
-    warrantyCard: {
-      borderRadius: 14,
-      padding: 16,
-      borderWidth: 1,
-    },
-
-    warrantyCardSuccess: {
-      backgroundColor:
-        '#EAF6EE',
-      borderColor:
-        '#76AA87',
-    },
-
-    warrantyCardDanger: {
-      backgroundColor:
-        '#FCEEEE',
-      borderColor:
-        '#D29A9A',
-    },
-
-    warrantyHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      marginBottom: 10,
-    },
-
-    warrantyTitle: {
-      color: '#0B2447',
-      fontSize: 16,
-      fontWeight: '800',
-    },
-
-    warrantyText: {
-      color: '#607286',
-      fontSize: 12,
-      lineHeight: 20,
-    },
-
-    warningText: {
-      color: '#8B671D',
-      fontSize: 11,
-      lineHeight: 17,
-      marginTop: 8,
-    },
-
     timeline: {
-      backgroundColor:
-        '#FFFFFF',
+      backgroundColor: '#FFFFFF',
       borderRadius: 14,
       padding: 16,
       borderWidth: 1,
-      borderColor:
-        '#D8DEE7',
+      borderColor: '#D8DEE7',
     },
 
     timelineItem: {
@@ -1508,11 +1367,9 @@ const styles =
       width: 26,
       height: 26,
       borderRadius: 13,
-      backgroundColor:
-        '#0B2447',
+      backgroundColor: '#0B2447',
       alignItems: 'center',
-      justifyContent:
-        'center',
+      justifyContent: 'center',
     },
 
     timelineContent: {
@@ -1533,8 +1390,7 @@ const styles =
     },
 
     infoBox: {
-      backgroundColor:
-        '#EAF0F6',
+      backgroundColor: '#EAF0F6',
       borderRadius: 14,
       padding: 16,
       marginTop: 25,
@@ -1562,8 +1418,7 @@ const styles =
     loadingContainer: {
       flex: 1,
       alignItems: 'center',
-      justifyContent:
-        'center',
+      justifyContent: 'center',
     },
 
     loadingText: {
@@ -1573,16 +1428,18 @@ const styles =
     },
 
     errorBox: {
-      backgroundColor:
-        '#FCEEEE',
+      backgroundColor: '#FCEEEE',
       borderRadius: 12,
       padding: 14,
       borderWidth: 1,
-      borderColor:
-        '#D29A9A',
+      borderColor: '#D29A9A',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
     },
 
     errorText: {
+      flex: 1,
       color: '#9A3232',
       fontSize: 12,
     },
@@ -1599,8 +1456,7 @@ const styles =
       backgroundColor:
         'rgba(0,0,0,0.92)',
       alignItems: 'center',
-      justifyContent:
-        'center',
+      justifyContent: 'center',
       padding: 20,
     },
 
@@ -1614,8 +1470,7 @@ const styles =
       backgroundColor:
         'rgba(255,255,255,0.15)',
       alignItems: 'center',
-      justifyContent:
-        'center',
+      justifyContent: 'center',
       zIndex: 5,
     },
 

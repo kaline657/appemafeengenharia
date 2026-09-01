@@ -5,16 +5,16 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
-    ActivityIndicator,
-    Image,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 import { supabase } from '../lib/supabase';
@@ -22,136 +22,164 @@ import { supabase } from '../lib/supabase';
 const MINIMO_FOTOS = 3;
 const MAXIMO_FOTOS = 10;
 
+const CIDADES = [
+  'São Luís',
+  'Bacabal',
+];
+
+const COMODOS = [
+  'Sala',
+  'Cozinha',
+  'Quarto',
+  'Banheiro',
+  'Área de serviço',
+  'Varanda',
+  'Área externa',
+  'Garagem',
+  'Outro',
+];
+
 type Unidade = {
   unidade_id: string;
+  cidade: string | null;
   empreendimento: string;
   unidade: string;
-
-  modelo_garantia_id: string | null;
-  modelo_garantia: string | null;
-
-  data_habite_se: string | null;
-  data_entrega_chaves: string | null;
-  data_entrega_obra: string | null;
-  data_assinatura_contrato: string | null;
-};
-
-type ItemGarantia = {
-  item_garantia_id: string;
-  categoria: string;
-  elemento_construtivo: string;
-  manifestacao_patologica: string;
-
-  prazo_quantidade: number | null;
-  prazo_unidade: string | null;
-  regra_data_base: string | null;
-};
-
-type ResultadoGarantia = {
-  unidade_id: string;
-  empreendimento: string;
-  unidade: string;
-
-  item_garantia_id: string;
-  categoria: string;
-  elemento_construtivo: string;
-  manifestacao_patologica: string;
-
-  regra_data_base: string | null;
-  data_base: string | null;
-
-  prazo_quantidade: number | null;
-  prazo_unidade: string | null;
-
-  data_limite_garantia: string | null;
-
-  status_garantia: string;
-
-  dias_restantes: number | null;
-
-  aviso: string | null;
 };
 
 type SolicitacaoCriada = {
   solicitacao_id: string;
   protocolo: string;
   status: string;
-  status_garantia: string;
-  data_limite_garantia: string | null;
 };
 
 export default function NovaSolicitacaoScreen() {
-  const [unidades, setUnidades] =
-    useState<Unidade[]>([]);
+  const [
+    unidades,
+    setUnidades,
+  ] = useState<Unidade[]>([]);
 
-  const [unidadeSelecionada, setUnidadeSelecionada] =
-    useState<Unidade | null>(null);
+  const [
+    cidadeSelecionada,
+    setCidadeSelecionada,
+  ] = useState('');
 
-  const [itens, setItens] =
-    useState<ItemGarantia[]>([]);
+  const [
+    unidadeSelecionada,
+    setUnidadeSelecionada,
+  ] = useState<Unidade | null>(
+    null
+  );
 
-  const [categoriaSelecionada, setCategoriaSelecionada] =
-    useState('');
+  const [
+    comodoSelecionado,
+    setComodoSelecionado,
+  ] = useState('');
 
-  const [elementoSelecionado, setElementoSelecionado] =
-    useState('');
+  const [
+    outroComodo,
+    setOutroComodo,
+  ] = useState('');
 
-  const [itemSelecionado, setItemSelecionado] =
-    useState<ItemGarantia | null>(null);
+  const [
+    descricaoProblema,
+    setDescricaoProblema,
+  ] = useState('');
 
-  const [resultado, setResultado] =
-    useState<ResultadoGarantia | null>(null);
+  const [
+    fotos,
+    setFotos,
+  ] =
+    useState<
+      ImagePicker.ImagePickerAsset[]
+    >([]);
 
-  const [descricaoProblema, setDescricaoProblema] =
-    useState('');
+  const [
+    telefoneContato,
+    setTelefoneContato,
+  ] = useState('');
 
-  const [fotos, setFotos] =
-    useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [
+    emailContato,
+    setEmailContato,
+  ] = useState('');
 
-  const [solicitacaoCriada, setSolicitacaoCriada] =
-    useState<SolicitacaoCriada | null>(null);
+  const [
+    disponibilidadeVisita,
+    setDisponibilidadeVisita,
+  ] = useState('');
+
+  const [
+    solicitacaoCriada,
+    setSolicitacaoCriada,
+  ] =
+    useState<SolicitacaoCriada | null>(
+      null
+    );
 
   const [
     quantidadeFotosEnviadas,
     setQuantidadeFotosEnviadas,
   ] = useState(0);
 
-  const [avisoFotos, setAvisoFotos] =
-    useState('');
+  const [
+    notificacaoEmailEnviada,
+    setNotificacaoEmailEnviada,
+  ] = useState(false);
 
-  const [carregando, setCarregando] =
-    useState(true);
+  const [
+    avisoFotos,
+    setAvisoFotos,
+  ] = useState('');
 
-  const [carregandoItens, setCarregandoItens] =
-    useState(false);
+  const [
+    avisoNotificacao,
+    setAvisoNotificacao,
+  ] = useState('');
 
-  const [calculando, setCalculando] =
-    useState(false);
+  const [
+    carregando,
+    setCarregando,
+  ] = useState(true);
 
-  const [enviando, setEnviando] =
-    useState(false);
+  const [
+    enviando,
+    setEnviando,
+  ] = useState(false);
 
-  const [erro, setErro] =
-    useState('');
+  const [
+    erro,
+    setErro,
+  ] = useState('');
 
   useEffect(() => {
-    carregarUnidades();
+    carregarDadosIniciais();
   }, []);
 
-  async function carregarUnidades() {
+  // ==========================================================
+  // CARREGAMENTO INICIAL
+  // ==========================================================
+
+  async function carregarDadosIniciais() {
     try {
       setCarregando(true);
       setErro('');
 
-      const { data, error } =
+      // ------------------------------------------------------
+      // IMÓVEIS VINCULADOS AO CLIENTE
+      // ------------------------------------------------------
+
+      const {
+        data: unidadesData,
+        error: unidadesError,
+      } =
         await supabase.rpc(
-          'listar_minhas_unidades'
+          'listar_minhas_unidades_cliente'
         );
 
-      if (error) {
+      if (unidadesError) {
         console.error(
-          'Erro ao carregar unidades:',
-          error
+          'Erro ao carregar imóveis:',
+          unidadesError
         );
 
         setErro(
@@ -162,303 +190,180 @@ export default function NovaSolicitacaoScreen() {
       }
 
       setUnidades(
-        (data ?? []) as Unidade[]
+        (unidadesData ?? []) as Unidade[]
       );
+
+      // ------------------------------------------------------
+      // USUÁRIO LOGADO
+      // ------------------------------------------------------
+
+      const {
+        data: usuarioData,
+        error: usuarioError,
+      } =
+        await supabase.auth.getUser();
+
+      if (
+        !usuarioError &&
+        usuarioData.user
+      ) {
+        const usuario =
+          usuarioData.user;
+
+        if (usuario.email) {
+          setEmailContato(
+            usuario.email
+          );
+        }
+
+        // ----------------------------------------------------
+        // TENTA PREENCHER O TELEFONE AUTOMATICAMENTE
+        // ----------------------------------------------------
+
+        const {
+          data: perfilData,
+          error: perfilError,
+        } =
+          await supabase
+            .from('profiles')
+            .select('telefone')
+            .eq(
+              'id',
+              usuario.id
+            )
+            .maybeSingle();
+
+        if (!perfilError) {
+          if (
+            perfilData?.telefone
+          ) {
+            setTelefoneContato(
+              perfilData.telefone
+            );
+          }
+        } else {
+          console.log(
+            'Telefone não carregado automaticamente:',
+            perfilError
+          );
+        }
+      }
     } catch (error) {
       console.error(error);
 
       setErro(
-        'Ocorreu um erro ao carregar seus imóveis.'
+        'Ocorreu um erro ao carregar os dados.'
       );
     } finally {
       setCarregando(false);
     }
   }
 
-  async function selecionarUnidade(
-    unidade: Unidade
+  // ==========================================================
+  // IMÓVEIS POR CIDADE
+  // ==========================================================
+
+  const unidadesDaCidade =
+    useMemo(() => {
+      if (!cidadeSelecionada) {
+        return [];
+      }
+
+      return unidades.filter(
+        (unidade) =>
+          unidade.cidade ===
+          cidadeSelecionada
+      );
+    }, [
+      unidades,
+      cidadeSelecionada,
+    ]);
+
+  function selecionarCidade(
+    cidade: string
   ) {
-    setUnidadeSelecionada(unidade);
+    setCidadeSelecionada(
+      cidade
+    );
 
-    setCategoriaSelecionada('');
-    setElementoSelecionado('');
-    setItemSelecionado(null);
+    setUnidadeSelecionada(
+      null
+    );
 
-    setResultado(null);
-    setDescricaoProblema('');
-    setFotos([]);
-
-    setSolicitacaoCriada(null);
-
-    setItens([]);
     setErro('');
-
-    if (!unidade.modelo_garantia_id) {
-      return;
-    }
-
-    try {
-      setCarregandoItens(true);
-
-      const { data, error } =
-        await supabase.rpc(
-          'listar_itens_garantia_unidade',
-          {
-            p_unidade_id:
-              unidade.unidade_id,
-          }
-        );
-
-      if (error) {
-        console.error(
-          'Erro ao carregar garantias:',
-          error
-        );
-
-        setErro(
-          'Não foi possível carregar as garantias deste imóvel.'
-        );
-
-        return;
-      }
-
-      setItens(
-        (data ?? []) as ItemGarantia[]
-      );
-    } catch (error) {
-      console.error(error);
-
-      setErro(
-        'Ocorreu um erro ao carregar as garantias.'
-      );
-    } finally {
-      setCarregandoItens(false);
-    }
   }
 
-  const categorias = useMemo(() => {
-    return Array.from(
-      new Set(
-        itens.map(
-          (item) => item.categoria
-        )
-      )
+  // ==========================================================
+  // CÔMODO
+  // ==========================================================
+
+  function selecionarComodo(
+    comodo: string
+  ) {
+    setComodoSelecionado(
+      comodo
     );
-  }, [itens]);
 
-  const elementos = useMemo(() => {
-    if (!categoriaSelecionada) {
-      return [];
-    }
-
-    return Array.from(
-      new Set(
-        itens
-          .filter(
-            (item) =>
-              item.categoria ===
-              categoriaSelecionada
-          )
-          .map(
-            (item) =>
-              item.elemento_construtivo
-          )
-      )
-    );
-  }, [
-    itens,
-    categoriaSelecionada,
-  ]);
-
-  const problemas = useMemo(() => {
     if (
-      !categoriaSelecionada ||
-      !elementoSelecionado
+      comodo !== 'Outro'
     ) {
-      return [];
+      setOutroComodo('');
     }
 
-    return itens.filter(
-      (item) =>
-        item.categoria ===
-          categoriaSelecionada &&
-        item.elemento_construtivo ===
-          elementoSelecionado
-    );
-  }, [
-    itens,
-    categoriaSelecionada,
-    elementoSelecionado,
-  ]);
-
-  function selecionarCategoria(
-    categoria: string
-  ) {
-    setCategoriaSelecionada(
-      categoria
-    );
-
-    setElementoSelecionado('');
-    setItemSelecionado(null);
-
-    setResultado(null);
-    setDescricaoProblema('');
-    setFotos([]);
+    setErro('');
   }
 
-  function selecionarElemento(
-    elemento: string
-  ) {
-    setElementoSelecionado(
-      elemento
-    );
-
-    setItemSelecionado(null);
-
-    setResultado(null);
-    setDescricaoProblema('');
-    setFotos([]);
-  }
-
-  function selecionarProblema(
-    item: ItemGarantia
-  ) {
-    setItemSelecionado(item);
-
-    setResultado(null);
-    setDescricaoProblema('');
-    setFotos([]);
-  }
-
-  async function verificarGarantia() {
-    if (
-      !unidadeSelecionada ||
-      !itemSelecionado
-    ) {
-      return;
-    }
-
-    try {
-      setCalculando(true);
-
-      setErro('');
-      setResultado(null);
-
-      const dataAtual =
-        new Date();
-
-      const ano =
-        dataAtual.getFullYear();
-
-      const mes =
-        String(
-          dataAtual.getMonth() + 1
-        ).padStart(2, '0');
-
-      const dia =
-        String(
-          dataAtual.getDate()
-        ).padStart(2, '0');
-
-      const dataHoje =
-        `${ano}-${mes}-${dia}`;
-
-      const { data, error } =
-        await supabase.rpc(
-          'calcular_minha_garantia',
-          {
-            p_unidade_id:
-              unidadeSelecionada.unidade_id,
-
-            p_item_garantia_id:
-              itemSelecionado.item_garantia_id,
-
-            p_data_referencia:
-              dataHoje,
-          }
-        );
-
-      if (error) {
-        console.error(
-          'Erro ao calcular garantia:',
-          error
-        );
-
-        setErro(
-          'Não foi possível verificar a garantia.'
-        );
-
-        return;
-      }
-
-      const resultadoCalculado =
-        data?.[0] as
-          | ResultadoGarantia
-          | undefined;
-
-      if (!resultadoCalculado) {
-        setErro(
-          'Não foi possível calcular a garantia.'
-        );
-
-        return;
-      }
-
-      setResultado(
-        resultadoCalculado
-      );
-    } catch (error) {
-      console.error(error);
-
-      setErro(
-        'Ocorreu um erro ao verificar a garantia.'
-      );
-    } finally {
-      setCalculando(false);
-    }
-  }
+  const comodoFinal =
+    comodoSelecionado === 'Outro'
+      ? outroComodo.trim()
+      : comodoSelecionado;
 
   // ==========================================================
   // FOTOS
   // ==========================================================
 
   function adicionarFotos(
-    novasFotos: ImagePicker.ImagePickerAsset[]
+    novasFotos:
+      ImagePicker.ImagePickerAsset[]
   ) {
-    setFotos((fotosAtuais) => {
-      const disponivel =
-        MAXIMO_FOTOS -
-        fotosAtuais.length;
+    setFotos(
+      (fotosAtuais) => {
+        const quantidadeDisponivel =
+          MAXIMO_FOTOS -
+          fotosAtuais.length;
 
-      if (disponivel <= 0) {
-        setErro(
-          `Você pode anexar no máximo ${MAXIMO_FOTOS} fotos.`
-        );
+        if (
+          quantidadeDisponivel <= 0
+        ) {
+          setErro(
+            `Você pode anexar no máximo ${MAXIMO_FOTOS} fotos.`
+          );
 
-        return fotosAtuais;
+          return fotosAtuais;
+        }
+
+        const semDuplicadas =
+          novasFotos.filter(
+            (novaFoto) =>
+              !fotosAtuais.some(
+                (fotoAtual) =>
+                  fotoAtual.uri ===
+                  novaFoto.uri
+              )
+          );
+
+        const permitidas =
+          semDuplicadas.slice(
+            0,
+            quantidadeDisponivel
+          );
+
+        return [
+          ...fotosAtuais,
+          ...permitidas,
+        ];
       }
-
-      const semDuplicadas =
-        novasFotos.filter(
-          (novaFoto) =>
-            !fotosAtuais.some(
-              (fotoAtual) =>
-                fotoAtual.uri ===
-                novaFoto.uri
-            )
-        );
-
-      const fotosPermitidas =
-        semDuplicadas.slice(
-          0,
-          disponivel
-        );
-
-      return [
-        ...fotosAtuais,
-        ...fotosPermitidas,
-      ];
-    });
+    );
   }
 
   async function tirarFoto() {
@@ -476,12 +381,16 @@ export default function NovaSolicitacaoScreen() {
         return;
       }
 
-      if (Platform.OS !== 'web') {
+      if (
+        Platform.OS !== 'web'
+      ) {
         const permissao =
           await ImagePicker
             .requestCameraPermissionsAsync();
 
-        if (!permissao.granted) {
+        if (
+          !permissao.granted
+        ) {
           setErro(
             'Precisamos da permissão da câmera para tirar a foto.'
           );
@@ -490,7 +399,7 @@ export default function NovaSolicitacaoScreen() {
         }
       }
 
-      const resultadoFoto =
+      const resultado =
         await ImagePicker
           .launchCameraAsync({
             mediaTypes:
@@ -498,17 +407,19 @@ export default function NovaSolicitacaoScreen() {
                 .MediaTypeOptions
                 .Images,
 
-            allowsEditing: false,
+            allowsEditing:
+              false,
 
             quality: 0.75,
           });
 
       if (
-        !resultadoFoto.canceled &&
-        resultadoFoto.assets?.length
+        !resultado.canceled &&
+        resultado.assets
+          ?.length
       ) {
         adicionarFotos(
-          resultadoFoto.assets
+          resultado.assets
         );
       }
     } catch (error) {
@@ -538,12 +449,16 @@ export default function NovaSolicitacaoScreen() {
         return;
       }
 
-      if (Platform.OS !== 'web') {
+      if (
+        Platform.OS !== 'web'
+      ) {
         const permissao =
           await ImagePicker
             .requestMediaLibraryPermissionsAsync();
 
-        if (!permissao.granted) {
+        if (
+          !permissao.granted
+        ) {
           setErro(
             'Precisamos da permissão para acessar suas fotos.'
           );
@@ -556,7 +471,7 @@ export default function NovaSolicitacaoScreen() {
         MAXIMO_FOTOS -
         fotos.length;
 
-      const resultadoGaleria =
+      const resultado =
         await ImagePicker
           .launchImageLibraryAsync({
             mediaTypes:
@@ -574,11 +489,12 @@ export default function NovaSolicitacaoScreen() {
           });
 
       if (
-        !resultadoGaleria.canceled &&
-        resultadoGaleria.assets?.length
+        !resultado.canceled &&
+        resultado.assets
+          ?.length
       ) {
         adicionarFotos(
-          resultadoGaleria.assets
+          resultado.assets
         );
       }
     } catch (error) {
@@ -596,25 +512,32 @@ export default function NovaSolicitacaoScreen() {
   function removerFoto(
     indice: number
   ) {
-    setFotos((fotosAtuais) =>
-      fotosAtuais.filter(
-        (_, index) =>
-          index !== indice
-      )
+    setFotos(
+      (fotosAtuais) =>
+        fotosAtuais.filter(
+          (_, index) =>
+            index !== indice
+        )
     );
   }
 
   function extensaoDaFoto(
-    foto: ImagePicker.ImagePickerAsset
+    foto:
+      ImagePicker.ImagePickerAsset
   ) {
     if (foto.fileName) {
       const partes =
         foto.fileName.split('.');
 
-      if (partes.length > 1) {
-        return partes
-          .pop()
-          ?.toLowerCase() || 'jpg';
+      if (
+        partes.length > 1
+      ) {
+        return (
+          partes
+            .pop()
+            ?.toLowerCase() ||
+          'jpg'
+        );
       }
     }
 
@@ -637,7 +560,8 @@ export default function NovaSolicitacaoScreen() {
   }
 
   function mimeDaFoto(
-    foto: ImagePicker.ImagePickerAsset
+    foto:
+      ImagePicker.ImagePickerAsset
   ) {
     if (foto.mimeType) {
       return foto.mimeType;
@@ -646,27 +570,40 @@ export default function NovaSolicitacaoScreen() {
     const extensao =
       extensaoDaFoto(foto);
 
-    if (extensao === 'png') {
+    if (
+      extensao === 'png'
+    ) {
       return 'image/png';
     }
 
-    if (extensao === 'webp') {
+    if (
+      extensao === 'webp'
+    ) {
       return 'image/webp';
     }
 
-    if (extensao === 'heic') {
+    if (
+      extensao === 'heic'
+    ) {
       return 'image/heic';
     }
 
-    if (extensao === 'heif') {
+    if (
+      extensao === 'heif'
+    ) {
       return 'image/heif';
     }
 
     return 'image/jpeg';
   }
 
+  // ==========================================================
+  // ENVIO DE UMA FOTO
+  // ==========================================================
+
   async function enviarFoto(
-    foto: ImagePicker.ImagePickerAsset,
+    foto:
+      ImagePicker.ImagePickerAsset,
     indice: number,
     solicitacaoId: string,
     clienteId: string
@@ -677,8 +614,13 @@ export default function NovaSolicitacaoScreen() {
     const mime =
       mimeDaFoto(foto);
 
+    const identificador =
+      `${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
+
     const nomeArquivo =
-      `foto-${indice + 1}-${Date.now()}.${extensao}`;
+      `foto-${indice + 1}-${identificador}.${extensao}`;
 
     const caminhoStorage =
       `${clienteId}/${solicitacaoId}/${nomeArquivo}`;
@@ -699,13 +641,18 @@ export default function NovaSolicitacaoScreen() {
       error: uploadError,
     } =
       await supabase.storage
-        .from('solicitacoes-fotos')
+        .from(
+          'solicitacoes-fotos'
+        )
         .upload(
           caminhoStorage,
           arquivo,
           {
-            contentType: mime,
-            upsert: false,
+            contentType:
+              mime,
+
+            upsert:
+              false,
           }
         );
 
@@ -737,9 +684,13 @@ export default function NovaSolicitacaoScreen() {
         }
       );
 
-    if (registroError) {
+    if (
+      registroError
+    ) {
       await supabase.storage
-        .from('solicitacoes-fotos')
+        .from(
+          'solicitacoes-fotos'
+        )
         .remove([
           caminhoStorage,
         ]);
@@ -748,21 +699,162 @@ export default function NovaSolicitacaoScreen() {
     }
   }
 
+  // ==========================================================
+  // E-MAIL AUTOMÁTICO PARA EMAFE
+  // ==========================================================
+
+  async function notificarEmpresa(
+    solicitacaoId: string
+  ) {
+    try {
+      setAvisoNotificacao('');
+
+      const {
+        data,
+        error,
+      } =
+        await supabase.functions
+          .invoke(
+            'notificar-nova-solicitacao',
+            {
+              body: {
+                solicitacao_id:
+                  solicitacaoId,
+              },
+            }
+          );
+
+      if (error) {
+        console.error(
+          'Erro ao chamar função de notificação:',
+          error
+        );
+
+        setNotificacaoEmailEnviada(
+          false
+        );
+
+        setAvisoNotificacao(
+          'A solicitação foi registrada, mas não foi possível enviar a notificação automática para a equipe. O protocolo continua válido.'
+        );
+
+        return false;
+      }
+
+      if (
+        data?.sucesso === false
+      ) {
+        console.error(
+          'A função retornou erro:',
+          data
+        );
+
+        setNotificacaoEmailEnviada(
+          false
+        );
+
+        setAvisoNotificacao(
+          'A solicitação foi registrada, mas a notificação automática não pôde ser enviada. O protocolo continua válido.'
+        );
+
+        return false;
+      }
+
+      console.log(
+        'Notificação enviada:',
+        data
+      );
+
+      setNotificacaoEmailEnviada(
+        true
+      );
+
+      return true;
+    } catch (error) {
+      console.error(
+        'Erro ao notificar EMAFE:',
+        error
+      );
+
+      setNotificacaoEmailEnviada(
+        false
+      );
+
+      setAvisoNotificacao(
+        'A solicitação foi registrada, mas ocorreu um erro ao notificar automaticamente a equipe.'
+      );
+
+      return false;
+    }
+  }
+
+  // ==========================================================
+  // VALIDAÇÕES
+  // ==========================================================
+
+  function emailValido(
+    email: string
+  ) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      email.trim()
+    );
+  }
+
+  const quantidadeFaltando =
+    Math.max(
+      0,
+      MINIMO_FOTOS -
+        fotos.length
+    );
+
+  const podeEnviar =
+    !!cidadeSelecionada &&
+    !!unidadeSelecionada &&
+    !!comodoFinal &&
+    descricaoProblema
+      .trim()
+      .length > 0 &&
+    fotos.length >=
+      MINIMO_FOTOS &&
+    telefoneContato
+      .trim()
+      .length > 0 &&
+    emailValido(
+      emailContato
+    ) &&
+    disponibilidadeVisita
+      .trim()
+      .length > 0 &&
+    !enviando;
+
+  // ==========================================================
+  // ENVIO DA SOLICITAÇÃO
+  // ==========================================================
+
   async function enviarSolicitacao() {
     if (
-      !unidadeSelecionada ||
-      !itemSelecionado
+      !cidadeSelecionada
     ) {
       setErro(
-        'Selecione o imóvel e o problema.'
+        'Selecione a cidade do imóvel.'
       );
 
       return;
     }
 
-    if (!resultado) {
+    if (
+      !unidadeSelecionada
+    ) {
       setErro(
-        'Verifique a garantia antes de enviar a solicitação.'
+        'Selecione o imóvel.'
+      );
+
+      return;
+    }
+
+    if (!comodoFinal) {
+      setErro(
+        'Informe onde está o problema.'
       );
 
       return;
@@ -772,7 +864,7 @@ export default function NovaSolicitacaoScreen() {
       !descricaoProblema.trim()
     ) {
       setErro(
-        'Descreva o problema encontrado no imóvel.'
+        'Descreva o problema encontrado.'
       );
 
       return;
@@ -783,7 +875,39 @@ export default function NovaSolicitacaoScreen() {
       MINIMO_FOTOS
     ) {
       setErro(
-        `Adicione pelo menos ${MINIMO_FOTOS} fotos do problema antes de enviar.`
+        `Adicione pelo menos ${MINIMO_FOTOS} fotos do problema.`
+      );
+
+      return;
+    }
+
+    if (
+      !telefoneContato.trim()
+    ) {
+      setErro(
+        'Informe um telefone para contato.'
+      );
+
+      return;
+    }
+
+    if (
+      !emailValido(
+        emailContato
+      )
+    ) {
+      setErro(
+        'Informe um e-mail válido.'
+      );
+
+      return;
+    }
+
+    if (
+      !disponibilidadeVisita.trim()
+    ) {
+      setErro(
+        'Informe sua disponibilidade para receber a equipe.'
       );
 
       return;
@@ -794,27 +918,50 @@ export default function NovaSolicitacaoScreen() {
 
       setErro('');
       setAvisoFotos('');
-      setQuantidadeFotosEnviadas(0);
+      setAvisoNotificacao('');
 
-      // ======================================================
-      // 1. CRIA SOLICITAÇÃO
-      // ======================================================
+      setQuantidadeFotosEnviadas(
+        0
+      );
+
+      setNotificacaoEmailEnviada(
+        false
+      );
+
+      // ------------------------------------------------------
+      // 1. CRIA A SOLICITAÇÃO
+      // ------------------------------------------------------
 
       const {
         data,
         error,
       } =
         await supabase.rpc(
-          'abrir_solicitacao',
+          'abrir_solicitacao_cliente',
           {
             p_unidade_id:
-              unidadeSelecionada.unidade_id,
+              unidadeSelecionada
+                .unidade_id,
 
-            p_item_garantia_id:
-              itemSelecionado.item_garantia_id,
+            p_comodo:
+              comodoFinal,
 
             p_descricao_problema:
-              descricaoProblema.trim(),
+              descricaoProblema
+                .trim(),
+
+            p_telefone_contato:
+              telefoneContato
+                .trim(),
+
+            p_email_contato:
+              emailContato
+                .trim()
+                .toLowerCase(),
+
+            p_disponibilidade_visita:
+              disponibilidadeVisita
+                .trim(),
           }
         );
 
@@ -826,7 +973,7 @@ export default function NovaSolicitacaoScreen() {
 
         setErro(
           error.message ||
-          'Não foi possível enviar a solicitação.'
+            'Não foi possível enviar a solicitação.'
         );
 
         return;
@@ -837,28 +984,30 @@ export default function NovaSolicitacaoScreen() {
           | SolicitacaoCriada
           | undefined;
 
-      if (!novaSolicitacao) {
+      if (
+        !novaSolicitacao
+      ) {
         setErro(
-          'A solicitação não pôde ser registrada.'
+          'Não foi possível registrar a solicitação.'
         );
 
         return;
       }
 
-      // ======================================================
-      // 2. BUSCA USUÁRIO
-      // ======================================================
+      // ------------------------------------------------------
+      // 2. IDENTIFICA O CLIENTE
+      // ------------------------------------------------------
 
       const {
-        data: userData,
-        error: userError,
+        data: usuarioData,
+        error: usuarioError,
       } =
         await supabase.auth
           .getUser();
 
       if (
-        userError ||
-        !userData.user
+        usuarioError ||
+        !usuarioData.user
       ) {
         setSolicitacaoCriada(
           novaSolicitacao
@@ -872,16 +1021,16 @@ export default function NovaSolicitacaoScreen() {
       }
 
       const clienteId =
-        userData.user.id;
+        usuarioData.user.id;
 
-      // ======================================================
-      // 3. ENVIA FOTOS
-      // ======================================================
+      // ------------------------------------------------------
+      // 3. ENVIA AS FOTOS
+      // ------------------------------------------------------
 
       let enviadas = 0;
 
-      const errosFotos: string[] =
-        [];
+      const errosFotos:
+        number[] = [];
 
       for (
         let indice = 0;
@@ -904,14 +1053,12 @@ export default function NovaSolicitacaoScreen() {
           );
         } catch (error) {
           console.error(
-            `Erro na foto ${
-              indice + 1
-            }:`,
+            `Erro na foto ${indice + 1}:`,
             error
           );
 
           errosFotos.push(
-            `Foto ${indice + 1}`
+            indice + 1
           );
         }
       }
@@ -920,20 +1067,48 @@ export default function NovaSolicitacaoScreen() {
         enviadas
       );
 
+      // ------------------------------------------------------
+      // 4. VERIFICA SE TEM AS 3 FOTOS OBRIGATÓRIAS
+      // ------------------------------------------------------
+
       if (
         enviadas <
         MINIMO_FOTOS
       ) {
         setAvisoFotos(
-          `A solicitação foi registrada, mas apenas ${enviadas} foto(s) foram enviadas. Guarde o protocolo e não crie outro chamado para o mesmo problema.`
+          `O protocolo foi criado, mas apenas ${enviadas} foto(s) foram enviadas. A notificação automática ainda não foi enviada porque o chamado precisa de pelo menos ${MINIMO_FOTOS} fotos.`
         );
-      } else if (
+
+        setSolicitacaoCriada(
+          novaSolicitacao
+        );
+
+        return;
+      }
+
+      if (
         errosFotos.length > 0
       ) {
         setAvisoFotos(
-          `A solicitação foi registrada e ${enviadas} foto(s) foram enviadas. Algumas imagens não puderam ser anexadas.`
+          `${enviadas} foto(s) foram enviadas. Algumas imagens não puderam ser anexadas.`
         );
       }
+
+      // ------------------------------------------------------
+      // 5. NOTIFICA AUTOMATICAMENTE A EMAFE
+      //
+      // Só chegamos aqui se pelo menos 3 fotos
+      // foram registradas.
+      // ------------------------------------------------------
+
+      await notificarEmpresa(
+        novaSolicitacao
+          .solicitacao_id
+      );
+
+      // ------------------------------------------------------
+      // 6. MOSTRA SUCESSO PARA O CLIENTE
+      // ------------------------------------------------------
 
       setSolicitacaoCriada(
         novaSolicitacao
@@ -949,125 +1124,68 @@ export default function NovaSolicitacaoScreen() {
     }
   }
 
-  function novaSolicitacao() {
-    setUnidadeSelecionada(null);
+  // ==========================================================
+  // LIMPAR FORMULÁRIO
+  // ==========================================================
 
-    setItens([]);
+  function limparFormulario() {
+    setCidadeSelecionada(
+      ''
+    );
 
-    setCategoriaSelecionada('');
-    setElementoSelecionado('');
+    setUnidadeSelecionada(
+      null
+    );
 
-    setItemSelecionado(null);
+    setComodoSelecionado(
+      ''
+    );
 
-    setResultado(null);
+    setOutroComodo('');
 
-    setDescricaoProblema('');
+    setDescricaoProblema(
+      ''
+    );
 
     setFotos([]);
 
-    setSolicitacaoCriada(null);
+    setDisponibilidadeVisita(
+      ''
+    );
 
-    setQuantidadeFotosEnviadas(0);
+    setSolicitacaoCriada(
+      null
+    );
+
+    setQuantidadeFotosEnviadas(
+      0
+    );
+
+    setNotificacaoEmailEnviada(
+      false
+    );
 
     setAvisoFotos('');
+
+    setAvisoNotificacao('');
 
     setErro('');
   }
 
-  function formatarData(
-    data: string | null
-  ) {
-    if (!data) {
-      return '-';
-    }
-
-    const partes =
-      data.split('-');
-
-    if (
-      partes.length !== 3
-    ) {
-      return data;
-    }
-
-    return `${partes[2]}/${partes[1]}/${partes[0]}`;
-  }
-
-  function textoStatus() {
-    if (!resultado) {
-      return '';
-    }
-
-    switch (
-      resultado.status_garantia
-    ) {
-      case 'dentro_da_garantia':
-        return 'Dentro da garantia';
-
-      case 'fora_da_garantia':
-        return 'Fora da garantia';
-
-      case 'dados_insuficientes':
-        return 'Não foi possível calcular';
-
-      case 'ato_da_entrega':
-        return 'Garantia no ato da entrega';
-
-      case 'nao_se_aplica':
-        return 'Garantia não aplicável';
-
-      default:
-        return resultado.status_garantia;
-    }
-  }
-
-  function estiloResultado() {
-    if (!resultado) {
-      return styles.resultNeutral;
-    }
-
-    if (
-      resultado.status_garantia ===
-      'dentro_da_garantia'
-    ) {
-      return styles.resultSuccess;
-    }
-
-    if (
-      resultado.status_garantia ===
-      'fora_da_garantia'
-    ) {
-      return styles.resultDanger;
-    }
-
-    return styles.resultWarningBox;
-  }
-
-  const quantidadeFaltando =
-    Math.max(
-      0,
-      MINIMO_FOTOS -
-        fotos.length
-    );
-
-  const podeEnviar =
-    !!resultado &&
-    descricaoProblema.trim()
-      .length > 0 &&
-    fotos.length >=
-      MINIMO_FOTOS &&
-    !enviando;
-
   // ==========================================================
-  // CARREGANDO
+  // CARREGAMENTO
   // ==========================================================
 
   if (carregando) {
     return (
       <SafeAreaView
-        style={styles.container}
+        style={
+          styles.container
+        }
       >
-        <StatusBar style="dark" />
+        <StatusBar
+          style="dark"
+        />
 
         <View
           style={
@@ -1080,9 +1198,11 @@ export default function NovaSolicitacaoScreen() {
           />
 
           <Text
-            style={styles.loadingText}
+            style={
+              styles.loadingText
+            }
           >
-            Carregando seus imóveis...
+            Carregando seus dados...
           </Text>
         </View>
       </SafeAreaView>
@@ -1093,12 +1213,18 @@ export default function NovaSolicitacaoScreen() {
   // SUCESSO
   // ==========================================================
 
-  if (solicitacaoCriada) {
+  if (
+    solicitacaoCriada
+  ) {
     return (
       <SafeAreaView
-        style={styles.container}
+        style={
+          styles.container
+        }
       >
-        <StatusBar style="dark" />
+        <StatusBar
+          style="dark"
+        />
 
         <ScrollView
           contentContainerStyle={
@@ -1112,7 +1238,9 @@ export default function NovaSolicitacaoScreen() {
           >
             <Image
               source={require('../../assets/emafe/logo-horizontal-transparente.png')}
-              style={styles.logo}
+              style={
+                styles.logo
+              }
               resizeMode="contain"
             />
 
@@ -1141,9 +1269,10 @@ export default function NovaSolicitacaoScreen() {
                 styles.successSubtitle
               }
             >
-              Sua solicitação foi
-              registrada com sucesso.
+              Recebemos sua solicitação de manutenção.
             </Text>
+
+            {/* PROTOCOLO */}
 
             <View
               style={
@@ -1169,36 +1298,68 @@ export default function NovaSolicitacaoScreen() {
                 }
               </Text>
 
-              <Text
+              <View
                 style={
-                  styles.protocolStatus
+                  styles.statusBadge
                 }
               >
-                Status: Aberta
+                <Text
+                  style={
+                    styles.statusBadgeText
+                  }
+                >
+                  Aguardando análise
+                </Text>
+              </View>
+            </View>
+
+            {/* PRÓXIMA ETAPA */}
+
+            <View
+              style={
+                styles.analysisInfoBox
+              }
+            >
+              <Ionicons
+                name="information-circle-outline"
+                size={22}
+                color="#0B5EA8"
+              />
+
+              <Text
+                style={
+                  styles.analysisInfoText
+                }
+              >
+                A equipe da EMAFE analisará
+                as informações enviadas.
+                As atualizações aparecerão
+                na área de acompanhamento
+                da solicitação.
               </Text>
             </View>
+
+            {/* FOTOS */}
 
             <View
               style={
                 styles.photoSuccessCard
               }
             >
-              <View
-                style={
-                  styles.photoSuccessIcon
-                }
-              >
-                <Ionicons
-                  name="images-outline"
-                  size={22}
-                  color="#357A4F"
-                />
-              </View>
+              <Ionicons
+                name="images-outline"
+                size={23}
+                color="#357A4F"
+              />
 
-              <View>
+              <View
+                style={{
+                  marginLeft: 10,
+                }}
+              >
                 <Text
                   style={
-                    styles.photoSuccessTitle
+                    styles.photoSuccessLabel
                   }
                 >
                   Fotos anexadas
@@ -1206,7 +1367,7 @@ export default function NovaSolicitacaoScreen() {
 
                 <Text
                   style={
-                    styles.photoSuccessNumber
+                    styles.photoSuccessText
                   }
                 >
                   {
@@ -1217,18 +1378,88 @@ export default function NovaSolicitacaoScreen() {
               </View>
             </View>
 
+            {/* NOTIFICAÇÃO EMAFE */}
+
+            {notificacaoEmailEnviada ? (
+              <View
+                style={
+                  styles.notificationSuccessBox
+                }
+              >
+                <Ionicons
+                  name="mail-outline"
+                  size={21}
+                  color="#357A4F"
+                />
+
+                <View
+                  style={
+                    styles.notificationTextArea
+                  }
+                >
+                  <Text
+                    style={
+                      styles.notificationSuccessTitle
+                    }
+                  >
+                    Equipe notificada
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.notificationSuccessText
+                    }
+                  >
+                    A EMAFE recebeu uma notificação automática sobre este chamado.
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+
+            {/* AVISO DE FOTOS */}
+
             {avisoFotos ? (
               <View
                 style={
-                  styles.photoWarningBox
+                  styles.warningBox
                 }
               >
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={20}
+                  color="#7B5A12"
+                />
+
                 <Text
                   style={
-                    styles.photoWarningText
+                    styles.warningText
                   }
                 >
                   {avisoFotos}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* AVISO DE NOTIFICAÇÃO */}
+
+            {avisoNotificacao ? (
+              <View
+                style={
+                  styles.warningBox
+                }
+              >
+                <Ionicons
+                  name="mail-unread-outline"
+                  size={20}
+                  color="#7B5A12"
+                />
+
+                <Text
+                  style={
+                    styles.warningText
+                  }
+                >
+                  {avisoNotificacao}
                 </Text>
               </View>
             ) : null}
@@ -1238,13 +1469,15 @@ export default function NovaSolicitacaoScreen() {
                 styles.protocolInfo
               }
             >
-              Guarde este número para
-              acompanhar sua solicitação.
+              Guarde este número para acompanhar sua solicitação.
             </Text>
 
             <TouchableOpacity
               style={
                 styles.primaryButton
+              }
+              activeOpacity={
+                0.85
               }
               onPress={() =>
                 router.replace(
@@ -1266,7 +1499,7 @@ export default function NovaSolicitacaoScreen() {
                 styles.secondaryButton
               }
               onPress={
-                novaSolicitacao
+                limparFormulario
               }
             >
               <Text
@@ -1283,11 +1516,19 @@ export default function NovaSolicitacaoScreen() {
     );
   }
 
+  // ==========================================================
+  // FORMULÁRIO
+  // ==========================================================
+
   return (
     <SafeAreaView
-      style={styles.container}
+      style={
+        styles.container
+      }
     >
-      <StatusBar style="dark" />
+      <StatusBar
+        style="dark"
+      />
 
       <ScrollView
         contentContainerStyle={
@@ -1297,258 +1538,309 @@ export default function NovaSolicitacaoScreen() {
           false
         }
       >
-        <View style={styles.content}>
+        <View
+          style={
+            styles.content
+          }
+        >
+          {/* VOLTAR */}
+
           <TouchableOpacity
-            style={styles.backButton}
+            style={
+              styles.backButton
+            }
             onPress={() =>
-              router.back()
+              router.replace(
+                '/dashboard-cliente'
+              )
             }
           >
             <Text
-              style={styles.backText}
+              style={
+                styles.backText
+              }
             >
               ‹ Voltar
             </Text>
           </TouchableOpacity>
 
+          {/* LOGO */}
+
           <Image
             source={require('../../assets/emafe/logo-horizontal-transparente.png')}
-            style={styles.logo}
+            style={
+              styles.logo
+            }
             resizeMode="contain"
           />
 
-          <Text style={styles.title}>
+          <Text
+            style={
+              styles.title
+            }
+          >
             Nova solicitação
           </Text>
 
           <Text
-            style={styles.subtitle}
+            style={
+              styles.subtitle
+            }
           >
-            Selecione o imóvel e
-            informe o problema
-            encontrado.
+            Informe os dados abaixo para solicitar uma manutenção.
           </Text>
+
+          {/* ERRO */}
 
           {erro ? (
             <View
-              style={styles.errorBox}
+              style={
+                styles.errorBox
+              }
             >
+              <Ionicons
+                name="alert-circle-outline"
+                size={19}
+                color="#9A3232"
+              />
+
               <Text
-                style={styles.errorText}
+                style={
+                  styles.errorText
+                }
               >
                 {erro}
               </Text>
             </View>
           ) : null}
 
-          {/* 1. IMÓVEL */}
+          {/* ==================================================
+              1. CIDADE
+          ================================================== */}
 
           <Text
-            style={styles.sectionTitle}
+            style={
+              styles.sectionTitle
+            }
           >
-            1. Selecione o imóvel
+            1. Onde fica o seu imóvel?
           </Text>
 
-          {unidades.length === 0 ? (
-            <View
-              style={styles.emptyBox}
-            >
-              <Text
-                style={styles.emptyText}
-              >
-                Nenhum imóvel está
-                vinculado à sua conta.
-              </Text>
-            </View>
-          ) : (
-            unidades.map(
-              (unidade) => {
+          <Text
+            style={
+              styles.helperText
+            }
+          >
+            Selecione a cidade do empreendimento.
+          </Text>
+
+          <View
+            style={
+              styles.cityContainer
+            }
+          >
+            {CIDADES.map(
+              (cidade) => {
                 const selecionada =
-                  unidadeSelecionada
-                    ?.unidade_id ===
-                  unidade.unidade_id;
+                  cidadeSelecionada ===
+                  cidade;
 
                 return (
                   <TouchableOpacity
-                    key={
-                      unidade.unidade_id
-                    }
+                    key={cidade}
                     style={[
-                      styles.optionCard,
+                      styles.cityCard,
 
                       selecionada &&
-                        styles.optionCardSelected,
+                        styles.cityCardSelected,
                     ]}
+                    activeOpacity={
+                      0.85
+                    }
                     onPress={() =>
-                      selecionarUnidade(
-                        unidade
+                      selecionarCidade(
+                        cidade
                       )
                     }
                   >
-                    <Text
+                    <View
                       style={[
-                        styles.optionTitle,
+                        styles.cityIcon,
 
                         selecionada &&
-                          styles.optionTitleSelected,
+                          styles.cityIconSelected,
                       ]}
                     >
-                      {
-                        unidade.empreendimento
-                      }
-                    </Text>
+                      <Ionicons
+                        name="location-outline"
+                        size={23}
+                        color={
+                          selecionada
+                            ? '#FFFFFF'
+                            : '#0B2447'
+                        }
+                      />
+                    </View>
 
                     <Text
                       style={[
-                        styles.optionSubtitle,
+                        styles.cityText,
 
                         selecionada &&
-                          styles.optionSubtitleSelected,
+                          styles.cityTextSelected,
                       ]}
                     >
-                      Unidade{' '}
-                      {unidade.unidade}
+                      {cidade}
                     </Text>
-
-                    {unidade.modelo_garantia ? (
-                      <Text
-                        style={[
-                          styles.modelText,
-
-                          selecionada &&
-                            styles.optionSubtitleSelected,
-                        ]}
-                      >
-                        {
-                          unidade.modelo_garantia
-                        }
-                      </Text>
-                    ) : (
-                      <Text
-                        style={
-                          styles.noWarrantyText
-                        }
-                      >
-                        Garantia ainda não
-                        configurada
-                      </Text>
-                    )}
                   </TouchableOpacity>
                 );
               }
-            )
-          )}
+            )}
+          </View>
 
-          {unidadeSelecionada &&
-          !unidadeSelecionada
-            .modelo_garantia_id ? (
-            <View
-              style={
-                styles.warningBox
-              }
-            >
-              <Text
-                style={
-                  styles.warningTitle
-                }
-              >
-                Garantia não configurada
-              </Text>
+          {/* ==================================================
+              2. IMÓVEL
+          ================================================== */}
 
-              <Text
-                style={
-                  styles.warningText
-                }
-              >
-                Este imóvel ainda não
-                possui um modelo de
-                garantia cadastrado.
-              </Text>
-            </View>
-          ) : null}
-
-          {carregandoItens ? (
-            <View
-              style={
-                styles.inlineLoading
-              }
-            >
-              <ActivityIndicator
-                color="#0B2447"
-              />
-
-              <Text
-                style={
-                  styles.loadingText
-                }
-              >
-                Carregando garantias...
-              </Text>
-            </View>
-          ) : null}
-
-          {/* 2. CATEGORIA */}
-
-          {unidadeSelecionada &&
-          unidadeSelecionada
-            .modelo_garantia_id &&
-          !carregandoItens ? (
+          {cidadeSelecionada ? (
             <>
               <Text
                 style={
                   styles.sectionTitle
                 }
               >
-                2. Categoria
+                2. Selecione o imóvel
               </Text>
 
-              <View
+              <Text
                 style={
-                  styles.optionsContainer
+                  styles.helperText
                 }
               >
-                {categorias.map(
-                  (categoria) => {
+                Mostramos apenas os imóveis vinculados à sua conta em{' '}
+                {cidadeSelecionada}.
+              </Text>
+
+              {unidadesDaCidade
+                .length === 0 ? (
+                <View
+                  style={
+                    styles.emptyBox
+                  }
+                >
+                  <Ionicons
+                    name="home-outline"
+                    size={26}
+                    color="#8995A5"
+                  />
+
+                  <Text
+                    style={
+                      styles.emptyTitle
+                    }
+                  >
+                    Nenhum imóvel encontrado
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.emptyText
+                    }
+                  >
+                    Não encontramos nenhum imóvel vinculado à sua conta nesta cidade.
+                  </Text>
+                </View>
+              ) : (
+                unidadesDaCidade.map(
+                  (unidade) => {
                     const selecionada =
-                      categoriaSelecionada ===
-                      categoria;
+                      unidadeSelecionada
+                        ?.unidade_id ===
+                      unidade.unidade_id;
 
                     return (
                       <TouchableOpacity
-                        key={categoria}
+                        key={
+                          unidade.unidade_id
+                        }
                         style={[
-                          styles.smallOption,
+                          styles.propertyCard,
 
                           selecionada &&
-                            styles.smallOptionSelected,
+                            styles.propertyCardSelected,
                         ]}
-                        onPress={() =>
-                          selecionarCategoria(
-                            categoria
-                          )
+                        activeOpacity={
+                          0.85
                         }
-                      >
-                        <Text
-                          style={[
-                            styles.smallOptionText,
+                        onPress={() => {
+                          setUnidadeSelecionada(
+                            unidade
+                          );
 
-                            selecionada &&
-                              styles.smallOptionTextSelected,
-                          ]}
+                          setErro('');
+                        }}
+                      >
+                        <View
+                          style={
+                            styles.propertyHeader
+                          }
                         >
-                          {categoria}
-                        </Text>
+                          <View>
+                            <Text
+                              style={[
+                                styles.propertyTitle,
+
+                                selecionada &&
+                                  styles.propertyTitleSelected,
+                              ]}
+                            >
+                              {
+                                unidade.empreendimento
+                              }
+                            </Text>
+
+                            <Text
+                              style={[
+                                styles.propertySubtitle,
+
+                                selecionada &&
+                                  styles.propertySubtitleSelected,
+                              ]}
+                            >
+                              Unidade{' '}
+                              {
+                                unidade.unidade
+                              }
+                            </Text>
+                          </View>
+
+                          {selecionada ? (
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={25}
+                              color="#FFFFFF"
+                            />
+                          ) : (
+                            <Ionicons
+                              name="chevron-forward"
+                              size={20}
+                              color="#8995A5"
+                            />
+                          )}
+                        </View>
                       </TouchableOpacity>
                     );
                   }
-                )}
-              </View>
+                )
+              )}
             </>
           ) : null}
 
-          {/* 3. ELEMENTO */}
+          {/* ==================================================
+              3. CÔMODO
+          ================================================== */}
 
-          {categoriaSelecionada ? (
+          {unidadeSelecionada ? (
             <>
               <Text
                 style={
@@ -1558,248 +1850,93 @@ export default function NovaSolicitacaoScreen() {
                 3. Onde está o problema?
               </Text>
 
-              <View
+              <Text
                 style={
-                  styles.optionsContainer
+                  styles.helperText
                 }
               >
-                {elementos.map(
-                  (elemento) => {
+                Selecione o cômodo ou área do imóvel.
+              </Text>
+
+              <View
+                style={
+                  styles.roomGrid
+                }
+              >
+                {COMODOS.map(
+                  (comodo) => {
                     const selecionado =
-                      elementoSelecionado ===
-                      elemento;
+                      comodoSelecionado ===
+                      comodo;
 
                     return (
                       <TouchableOpacity
-                        key={elemento}
+                        key={comodo}
                         style={[
-                          styles.smallOption,
+                          styles.roomButton,
 
                           selecionado &&
-                            styles.smallOptionSelected,
+                            styles.roomButtonSelected,
                         ]}
+                        activeOpacity={
+                          0.85
+                        }
                         onPress={() =>
-                          selecionarElemento(
-                            elemento
+                          selecionarComodo(
+                            comodo
                           )
                         }
                       >
                         <Text
                           style={[
-                            styles.smallOptionText,
+                            styles.roomButtonText,
 
                             selecionado &&
-                              styles.smallOptionTextSelected,
+                              styles.roomButtonTextSelected,
                           ]}
                         >
-                          {elemento}
+                          {comodo}
                         </Text>
                       </TouchableOpacity>
                     );
                   }
                 )}
               </View>
-            </>
-          ) : null}
 
-          {/* 4. PROBLEMA */}
-
-          {elementoSelecionado ? (
-            <>
-              <Text
-                style={
-                  styles.sectionTitle
-                }
-              >
-                4. Selecione o problema
-              </Text>
-
-              {problemas.map(
-                (item) => {
-                  const selecionado =
-                    itemSelecionado
-                      ?.item_garantia_id ===
-                    item.item_garantia_id;
-
-                  return (
-                    <TouchableOpacity
-                      key={
-                        item.item_garantia_id
-                      }
-                      style={[
-                        styles.problemCard,
-
-                        selecionado &&
-                          styles.problemCardSelected,
-                      ]}
-                      onPress={() =>
-                        selecionarProblema(
-                          item
-                        )
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.problemText,
-
-                          selecionado &&
-                            styles.problemTextSelected,
-                        ]}
-                      >
-                        {
-                          item.manifestacao_patologica
-                        }
-                      </Text>
-
-                      {item.prazo_quantidade &&
-                      item.prazo_unidade ? (
-                        <Text
-                          style={[
-                            styles.deadlineText,
-
-                            selecionado &&
-                              styles.problemTextSelected,
-                          ]}
-                        >
-                          Prazo de referência:{' '}
-                          {
-                            item.prazo_quantidade
-                          }{' '}
-                          {
-                            item.prazo_unidade
-                          }
-                        </Text>
-                      ) : null}
-                    </TouchableOpacity>
-                  );
-                }
-              )}
-            </>
-          ) : null}
-
-          {/* VERIFICAR GARANTIA */}
-
-          {itemSelecionado &&
-          !resultado ? (
-            <TouchableOpacity
-              style={[
-                styles.checkButton,
-
-                calculando &&
-                  styles.buttonDisabled,
-              ]}
-              onPress={
-                verificarGarantia
-              }
-              disabled={calculando}
-            >
-              {calculando ? (
-                <ActivityIndicator
-                  color="#FFFFFF"
+              {comodoSelecionado ===
+              'Outro' ? (
+                <TextInput
+                  style={
+                    styles.input
+                  }
+                  placeholder="Digite onde está o problema"
+                  placeholderTextColor="#8995A5"
+                  value={
+                    outroComodo
+                  }
+                  onChangeText={
+                    setOutroComodo
+                  }
+                  maxLength={80}
                 />
-              ) : (
-                <Text
-                  style={
-                    styles.checkButtonText
-                  }
-                >
-                  Verificar garantia
-                </Text>
-              )}
-            </TouchableOpacity>
+              ) : null}
+            </>
           ) : null}
 
-          {/* RESULTADO */}
+          {/* ==================================================
+              A PARTIR DAQUI, SÓ APARECE APÓS ESCOLHER CÔMODO
+          ================================================== */}
 
-          {resultado ? (
+          {comodoSelecionado ? (
             <>
-              <View
-                style={[
-                  styles.resultBox,
-
-                  estiloResultado(),
-                ]}
-              >
-                <Text
-                  style={
-                    styles.resultLabel
-                  }
-                >
-                  Resultado
-                </Text>
-
-                <Text
-                  style={
-                    styles.resultTitle
-                  }
-                >
-                  {textoStatus()}
-                </Text>
-
-                {resultado.data_base ? (
-                  <Text
-                    style={
-                      styles.resultText
-                    }
-                  >
-                    Data-base:{' '}
-                    {formatarData(
-                      resultado.data_base
-                    )}
-                  </Text>
-                ) : null}
-
-                {resultado
-                  .data_limite_garantia ? (
-                  <Text
-                    style={
-                      styles.resultText
-                    }
-                  >
-                    Limite da garantia:{' '}
-                    {formatarData(
-                      resultado
-                        .data_limite_garantia
-                    )}
-                  </Text>
-                ) : null}
-
-                {resultado.dias_restantes !==
-                  null &&
-                resultado.status_garantia ===
-                  'dentro_da_garantia' ? (
-                  <Text
-                    style={
-                      styles.resultText
-                    }
-                  >
-                    Restam aproximadamente{' '}
-                    {
-                      resultado.dias_restantes
-                    }{' '}
-                    dias.
-                  </Text>
-                ) : null}
-
-                {resultado.aviso ? (
-                  <Text
-                    style={
-                      styles.resultWarningText
-                    }
-                  >
-                    {resultado.aviso}
-                  </Text>
-                ) : null}
-              </View>
-
-              {/* 5. DESCRIÇÃO */}
+              {/* DESCRIÇÃO */}
 
               <Text
                 style={
                   styles.sectionTitle
                 }
               >
-                5. Descreva o problema
+                4. Descreva o problema
               </Text>
 
               <Text
@@ -1807,16 +1944,14 @@ export default function NovaSolicitacaoScreen() {
                   styles.helperText
                 }
               >
-                Explique o que está
-                acontecendo e onde você
-                percebeu o problema.
+                Conte de forma simples o que está acontecendo.
               </Text>
 
               <TextInput
                 style={
                   styles.descriptionInput
                 }
-                placeholder="Ex.: Percebi uma infiltração próxima à churrasqueira. A parede fica úmida principalmente após chuva..."
+                placeholder="Ex.: A parede fica molhada quando chove e começou a aparecer uma mancha de umidade."
                 placeholderTextColor="#8995A5"
                 multiline
                 textAlignVertical="top"
@@ -1826,8 +1961,10 @@ export default function NovaSolicitacaoScreen() {
                 onChangeText={
                   setDescricaoProblema
                 }
-                editable={!enviando}
                 maxLength={1500}
+                editable={
+                  !enviando
+                }
               />
 
               <Text
@@ -1836,19 +1973,20 @@ export default function NovaSolicitacaoScreen() {
                 }
               >
                 {
-                  descricaoProblema.length
+                  descricaoProblema
+                    .length
                 }
                 /1500
               </Text>
 
-              {/* 6. FOTOS */}
+              {/* FOTOS */}
 
               <Text
                 style={
                   styles.sectionTitle
                 }
               >
-                6. Fotos do problema
+                5. Fotos do problema
               </Text>
 
               <Text
@@ -1856,9 +1994,7 @@ export default function NovaSolicitacaoScreen() {
                   styles.helperText
                 }
               >
-                Adicione pelo menos 3
-                fotos que mostrem
-                claramente o problema.
+                Adicione pelo menos 3 fotos que mostrem claramente o problema.
               </Text>
 
               <View
@@ -1875,8 +2011,8 @@ export default function NovaSolicitacaoScreen() {
                   }
                 >
                   {fotos.length}/
-                  {MINIMO_FOTOS} fotos
-                  obrigatórias
+                  {MINIMO_FOTOS}{' '}
+                  fotos obrigatórias
                 </Text>
 
                 <Text
@@ -1884,7 +2020,10 @@ export default function NovaSolicitacaoScreen() {
                     styles.photoMaxText
                   }
                 >
-                  máximo {MAXIMO_FOTOS}
+                  máximo{' '}
+                  {
+                    MAXIMO_FOTOS
+                  }
                 </Text>
               </View>
 
@@ -1934,8 +2073,7 @@ export default function NovaSolicitacaoScreen() {
                       styles.photoReadyText
                     }
                   >
-                    Quantidade mínima de
-                    fotos adicionada.
+                    Quantidade mínima de fotos adicionada.
                   </Text>
                 </View>
               )}
@@ -1949,9 +2087,15 @@ export default function NovaSolicitacaoScreen() {
                   style={
                     styles.photoButton
                   }
-                  onPress={tirarFoto}
-                  disabled={enviando}
-                  activeOpacity={0.8}
+                  onPress={
+                    tirarFoto
+                  }
+                  activeOpacity={
+                    0.8
+                  }
+                  disabled={
+                    enviando
+                  }
                 >
                   <View
                     style={
@@ -1995,8 +2139,12 @@ export default function NovaSolicitacaoScreen() {
                   onPress={
                     escolherDaGaleria
                   }
-                  disabled={enviando}
-                  activeOpacity={0.8}
+                  activeOpacity={
+                    0.8
+                  }
+                  disabled={
+                    enviando
+                  }
                 >
                   <View
                     style={
@@ -2034,14 +2182,18 @@ export default function NovaSolicitacaoScreen() {
                 </TouchableOpacity>
               </View>
 
-              {fotos.length > 0 ? (
+              {fotos.length >
+              0 ? (
                 <View
                   style={
                     styles.photoGrid
                   }
                 >
                   {fotos.map(
-                    (foto, indice) => (
+                    (
+                      foto,
+                      indice
+                    ) => (
                       <View
                         key={`${foto.uri}-${indice}`}
                         style={
@@ -2050,7 +2202,8 @@ export default function NovaSolicitacaoScreen() {
                       >
                         <Image
                           source={{
-                            uri: foto.uri,
+                            uri:
+                              foto.uri,
                           }}
                           style={
                             styles.photoPreview
@@ -2067,7 +2220,8 @@ export default function NovaSolicitacaoScreen() {
                               styles.photoNumberText
                             }
                           >
-                            {indice + 1}
+                            {indice +
+                              1}
                           </Text>
                         </View>
 
@@ -2096,7 +2250,134 @@ export default function NovaSolicitacaoScreen() {
                 </View>
               ) : null}
 
-              {/* ENVIO */}
+              {/* TELEFONE */}
+
+              <Text
+                style={
+                  styles.sectionTitle
+                }
+              >
+                6. Telefone para contato
+              </Text>
+
+              <Text
+                style={
+                  styles.helperText
+                }
+              >
+                Informe o número que a EMAFE poderá utilizar para falar com você.
+              </Text>
+
+              <View
+                style={
+                  styles.inputWithIcon
+                }
+              >
+                <Ionicons
+                  name="call-outline"
+                  size={20}
+                  color="#697789"
+                />
+
+                <TextInput
+                  style={
+                    styles.inputInside
+                  }
+                  placeholder="(98) 99999-9999"
+                  placeholderTextColor="#8995A5"
+                  keyboardType="phone-pad"
+                  value={
+                    telefoneContato
+                  }
+                  onChangeText={
+                    setTelefoneContato
+                  }
+                  maxLength={20}
+                />
+              </View>
+
+              {/* E-MAIL */}
+
+              <Text
+                style={
+                  styles.sectionTitle
+                }
+              >
+                7. E-mail
+              </Text>
+
+              <Text
+                style={
+                  styles.helperText
+                }
+              >
+                Confira o e-mail para receber informações sobre sua solicitação.
+              </Text>
+
+              <View
+                style={
+                  styles.inputWithIcon
+                }
+              >
+                <Ionicons
+                  name="mail-outline"
+                  size={20}
+                  color="#697789"
+                />
+
+                <TextInput
+                  style={
+                    styles.inputInside
+                  }
+                  placeholder="seuemail@exemplo.com"
+                  placeholderTextColor="#8995A5"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={
+                    emailContato
+                  }
+                  onChangeText={
+                    setEmailContato
+                  }
+                />
+              </View>
+
+              {/* DISPONIBILIDADE */}
+
+              <Text
+                style={
+                  styles.sectionTitle
+                }
+              >
+                8. Disponibilidade para visita
+              </Text>
+
+              <Text
+                style={
+                  styles.helperText
+                }
+              >
+                Informe os melhores dias e horários para receber a equipe da EMAFE.
+              </Text>
+
+              <TextInput
+                style={
+                  styles.availabilityInput
+                }
+                placeholder="Ex.: Segunda e quarta-feira, das 14h às 17h."
+                placeholderTextColor="#8995A5"
+                multiline
+                textAlignVertical="top"
+                value={
+                  disponibilidadeVisita
+                }
+                onChangeText={
+                  setDisponibilidadeVisita
+                }
+                maxLength={500}
+              />
+
+              {/* ENVIAR */}
 
               <TouchableOpacity
                 style={[
@@ -2110,6 +2391,9 @@ export default function NovaSolicitacaoScreen() {
                 }
                 disabled={
                   !podeEnviar
+                }
+                activeOpacity={
+                  0.85
                 }
               >
                 {enviando ? (
@@ -2127,7 +2411,7 @@ export default function NovaSolicitacaoScreen() {
                         styles.sendButtonText
                       }
                     >
-                      Enviando...
+                      Enviando solicitação...
                     </Text>
                   </View>
                 ) : (
@@ -2141,27 +2425,25 @@ export default function NovaSolicitacaoScreen() {
                 )}
               </TouchableOpacity>
 
-              {resultado.status_garantia ===
-              'fora_da_garantia' ? (
+              {!podeEnviar &&
+              !enviando ? (
                 <Text
                   style={
-                    styles.outWarrantyInfo
+                    styles.requiredInfo
                   }
                 >
-                  Mesmo fora do prazo de
-                  garantia, você pode enviar
-                  a solicitação para análise
-                  da EMAFE.
+                  Preencha todos os campos e adicione pelo menos 3 fotos para liberar o envio.
                 </Text>
               ) : null}
             </>
           ) : null}
 
           <Text
-            style={styles.footer}
+            style={
+              styles.footer
+            }
           >
-            EMAFE Engenharia •
-            Assistência Técnica
+            EMAFE Engenharia • Manutenção
           </Text>
         </View>
       </ScrollView>
@@ -2169,704 +2451,785 @@ export default function NovaSolicitacaoScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F7FA',
-  },
-
-  scrollContent: {
-    flexGrow: 1,
-  },
-
-  content: {
-    width: '100%',
-    maxWidth: 680,
-    alignSelf: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 50,
-  },
-
-  backButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 8,
-  },
-
-  backText: {
-    color: '#0B2447',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-
-  logo: {
-    width: 260,
-    height: 95,
-    alignSelf: 'center',
-    marginTop: 5,
-  },
-
-  title: {
-    color: '#0B2447',
-    fontSize: 28,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginTop: 10,
-  },
-
-  subtitle: {
-    color: '#697789',
-    fontSize: 14,
-    lineHeight: 21,
-    textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 30,
-  },
-
-  sectionTitle: {
-    color: '#24364B',
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 25,
-    marginBottom: 12,
-  },
-
-  helperText: {
-    color: '#697789',
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: -5,
-    marginBottom: 10,
-  },
-
-  optionCard: {
-    borderWidth: 1,
-    borderColor: '#D8DEE7',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 10,
-  },
-
-  optionCardSelected: {
-    backgroundColor: '#0B2447',
-    borderColor: '#0B2447',
-  },
-
-  optionTitle: {
-    color: '#0B2447',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-
-  optionTitleSelected: {
-    color: '#FFFFFF',
-  },
-
-  optionSubtitle: {
-    color: '#697789',
-    fontSize: 13,
-    marginTop: 4,
-  },
-
-  optionSubtitleSelected: {
-    color: '#DCE6F1',
-  },
-
-  modelText: {
-    color: '#58708A',
-    fontSize: 11,
-    marginTop: 8,
-  },
-
-  noWarrantyText: {
-    color: '#A36B00',
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 8,
-  },
-
-  optionsContainer: {
-    gap: 8,
-  },
-
-  smallOption: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D8DEE7',
-    borderRadius: 12,
-    padding: 14,
-  },
-
-  smallOptionSelected: {
-    backgroundColor: '#E6EEF7',
-    borderColor: '#0B2447',
-  },
-
-  smallOptionText: {
-    color: '#24364B',
-    fontSize: 13,
-    lineHeight: 19,
-  },
-
-  smallOptionTextSelected: {
-    color: '#0B2447',
-    fontWeight: '700',
-  },
-
-  problemCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D8DEE7',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 10,
-  },
-
-  problemCardSelected: {
-    backgroundColor: '#0B2447',
-    borderColor: '#0B2447',
-  },
-
-  problemText: {
-    color: '#24364B',
-    fontSize: 13,
-    lineHeight: 19,
-  },
-
-  problemTextSelected: {
-    color: '#FFFFFF',
-  },
-
-  deadlineText: {
-    color: '#7A8796',
-    fontSize: 11,
-    marginTop: 8,
-  },
-
-  checkButton: {
-    height: 58,
-    borderRadius: 16,
-    backgroundColor: '#0B2447',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 25,
-  },
-
-  checkButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-
-  resultBox: {
-    borderRadius: 16,
-    padding: 20,
-    marginTop: 22,
-    borderWidth: 1,
-  },
-
-  resultSuccess: {
-    backgroundColor: '#EAF6EE',
-    borderColor: '#76AA87',
-  },
-
-  resultDanger: {
-    backgroundColor: '#FCEEEE',
-    borderColor: '#D29A9A',
-  },
-
-  resultWarningBox: {
-    backgroundColor: '#FFF7E6',
-    borderColor: '#D6B66B',
-  },
-
-  resultNeutral: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#D8DEE7',
-  },
-
-  resultLabel: {
-    color: '#697789',
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-
-  resultTitle: {
-    color: '#0B2447',
-    fontSize: 20,
-    fontWeight: '800',
-    marginTop: 5,
-    marginBottom: 12,
-  },
-
-  resultText: {
-    color: '#42566D',
-    fontSize: 13,
-    lineHeight: 21,
-  },
-
-  resultWarningText: {
-    color: '#7B5A12',
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 10,
-  },
-
-  descriptionInput: {
-    minHeight: 140,
-    borderWidth: 1,
-    borderColor: '#D8DEE7',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
-    color: '#24364B',
-    fontSize: 14,
-    lineHeight: 21,
-  },
-
-  counterText: {
-    color: '#8995A5',
-    fontSize: 10,
-    textAlign: 'right',
-    marginTop: 5,
-  },
-
-  photoCounterRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-
-  photoCounterPending: {
-    color: '#A36B00',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  photoCounterSuccess: {
-    color: '#357A4F',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  photoMaxText: {
-    color: '#8995A5',
-    fontSize: 10,
-  },
-
-  photoRequirementBox: {
-    backgroundColor: '#FFF7E6',
-    borderWidth: 1,
-    borderColor: '#E5C77F',
-    borderRadius: 11,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    marginBottom: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-
-  photoRequirementText: {
-    color: '#7B5A12',
-    fontSize: 11,
-    flex: 1,
-  },
-
-  photoReadyBox: {
-    backgroundColor: '#EAF6EE',
-    borderWidth: 1,
-    borderColor: '#76AA87',
-    borderRadius: 11,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    marginBottom: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-
-  photoReadyText: {
-    color: '#357A4F',
-    fontSize: 11,
-    fontWeight: '700',
-    flex: 1,
-  },
-
-  // ==========================================================
-  // NOVO LAYOUT DOS BOTÕES DE FOTO
-  // ==========================================================
-
-  photoButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 2,
-    marginBottom: 18,
-  },
-
-  photoButton: {
-    flex: 1,
-    minHeight: 80,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D8DEE7',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  photoIconContainer: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    backgroundColor: '#EAF0F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-
-  photoButtonContent: {
-    flex: 1,
-  },
-
-  photoButtonText: {
-    color: '#0B2447',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-
-  photoButtonSubtext: {
-    color: '#8995A5',
-    fontSize: 10,
-    marginTop: 3,
-  },
-
-  // ==========================================================
-
-  photoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 5,
-  },
-
-  photoPreviewContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 12,
-    overflow: 'hidden',
-    position: 'relative',
-    backgroundColor: '#E9EEF4',
-  },
-
-  photoPreview: {
-    width: '100%',
-    height: '100%',
-  },
-
-  photoNumberBadge: {
-    position: 'absolute',
-    left: 6,
-    bottom: 6,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor:
-      'rgba(11,36,71,0.85)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  photoNumberText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-
-  removePhotoButton: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor:
-      'rgba(165,40,40,0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  sendButton: {
-    height: 60,
-    borderRadius: 16,
-    backgroundColor: '#0B2447',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 25,
-  },
-
-  sendButtonDisabled: {
-    opacity: 0.45,
-  },
-
-  sendButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-
-  sendingContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-
-  buttonDisabled: {
-    opacity: 0.65,
-  },
-
-  outWarrantyInfo: {
-    color: '#697789',
-    fontSize: 11,
-    textAlign: 'center',
-    lineHeight: 17,
-    marginTop: 12,
-  },
-
-  warningBox: {
-    backgroundColor: '#FFF7E6',
-    borderRadius: 14,
-    padding: 16,
-    marginTop: 15,
-    borderWidth: 1,
-    borderColor: '#E5C77F',
-  },
-
-  warningTitle: {
-    color: '#7B5A12',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  warningText: {
-    color: '#856B35',
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 5,
-  },
-
-  errorBox: {
-    backgroundColor: '#FCEEEE',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#D29A9A',
-    marginBottom: 15,
-  },
-
-  errorText: {
-    color: '#9A3232',
-    fontSize: 13,
-  },
-
-  emptyBox: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#D8DEE7',
-  },
-
-  emptyText: {
-    color: '#697789',
-    textAlign: 'center',
-    fontSize: 13,
-  },
-
-  inlineLoading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    marginTop: 25,
-  },
-
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  loadingText: {
-    color: '#697789',
-    fontSize: 13,
-    marginTop: 10,
-  },
-
-  footer: {
-    color: '#8995A5',
-    fontSize: 11,
-    textAlign: 'center',
-    marginTop: 45,
-  },
-
-  successPage: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-
-  successContent: {
-    width: '100%',
-    maxWidth: 480,
-    alignItems: 'center',
-  },
-
-  successIcon: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#EAF6EE',
-    borderWidth: 2,
-    borderColor: '#76AA87',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 25,
-  },
-
-  successTitle: {
-    color: '#0B2447',
-    fontSize: 27,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginTop: 20,
-  },
-
-  successSubtitle: {
-    color: '#697789',
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 8,
-  },
-
-  protocolCard: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D8DEE7',
-    borderRadius: 16,
-    padding: 22,
-    alignItems: 'center',
-    marginTop: 30,
-  },
-
-  protocolLabel: {
-    color: '#8995A5',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-
-  protocolNumber: {
-    color: '#0B2447',
-    fontSize: 22,
-    fontWeight: '800',
-    marginTop: 8,
-  },
-
-  protocolStatus: {
-    color: '#557087',
-    fontSize: 12,
-    marginTop: 10,
-  },
-
-  photoSuccessCard: {
-    width: '100%',
-    backgroundColor: '#EAF6EE',
-    borderRadius: 14,
-    padding: 15,
-    marginTop: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  photoSuccessIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: '#DDF0E3',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-
-  photoSuccessTitle: {
-    color: '#557087',
-    fontSize: 11,
-  },
-
-  photoSuccessNumber: {
-    color: '#357A4F',
-    fontSize: 15,
-    fontWeight: '800',
-    marginTop: 2,
-  },
-
-  photoWarningBox: {
-    width: '100%',
-    backgroundColor: '#FFF7E6',
-    borderWidth: 1,
-    borderColor: '#E5C77F',
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 12,
-  },
-
-  photoWarningText: {
-    color: '#7B5A12',
-    fontSize: 11,
-    lineHeight: 17,
-    textAlign: 'center',
-  },
-
-  protocolInfo: {
-    color: '#697789',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 15,
-    lineHeight: 18,
-  },
-
-  primaryButton: {
-    width: '100%',
-    height: 58,
-    borderRadius: 16,
-    backgroundColor: '#0B2447',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 30,
-  },
-
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
-  secondaryButton: {
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    marginTop: 8,
-  },
-
-  secondaryButtonText: {
-    color: '#0B5EA8',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-});
+// ============================================================
+// ESTILOS
+// ============================================================
+
+const styles =
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor:
+        '#F5F7FA',
+    },
+
+    scrollContent: {
+      flexGrow: 1,
+    },
+
+    content: {
+      width: '100%',
+      maxWidth: 680,
+      alignSelf: 'center',
+      paddingHorizontal: 24,
+      paddingTop: 20,
+      paddingBottom: 55,
+    },
+
+    backButton: {
+      alignSelf: 'flex-start',
+      paddingVertical: 8,
+    },
+
+    backText: {
+      color: '#0B2447',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+
+    logo: {
+      width: 260,
+      height: 95,
+      alignSelf: 'center',
+      marginTop: 5,
+    },
+
+    title: {
+      color: '#0B2447',
+      fontSize: 29,
+      fontWeight: '800',
+      textAlign: 'center',
+      marginTop: 10,
+    },
+
+    subtitle: {
+      color: '#697789',
+      fontSize: 14,
+      lineHeight: 21,
+      textAlign: 'center',
+      marginTop: 8,
+      marginBottom: 28,
+    },
+
+    sectionTitle: {
+      color: '#24364B',
+      fontSize: 16,
+      fontWeight: '700',
+      marginTop: 27,
+      marginBottom: 7,
+    },
+
+    helperText: {
+      color: '#697789',
+      fontSize: 12,
+      lineHeight: 18,
+      marginBottom: 12,
+    },
+
+    // CIDADE
+
+    cityContainer: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+
+    cityCard: {
+      flex: 1,
+      minHeight: 95,
+      backgroundColor:
+        '#FFFFFF',
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 12,
+    },
+
+    cityCardSelected: {
+      backgroundColor:
+        '#0B2447',
+      borderColor:
+        '#0B2447',
+    },
+
+    cityIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor:
+        '#EAF0F6',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 8,
+    },
+
+    cityIconSelected: {
+      backgroundColor:
+        'rgba(255,255,255,0.15)',
+    },
+
+    cityText: {
+      color: '#0B2447',
+      fontSize: 14,
+      fontWeight: '700',
+    },
+
+    cityTextSelected: {
+      color: '#FFFFFF',
+    },
+
+    // IMÓVEL
+
+    propertyCard: {
+      backgroundColor:
+        '#FFFFFF',
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+      borderRadius: 15,
+      padding: 17,
+      marginBottom: 10,
+    },
+
+    propertyCardSelected: {
+      backgroundColor:
+        '#0B2447',
+      borderColor:
+        '#0B2447',
+    },
+
+    propertyHeader: {
+      flexDirection: 'row',
+      justifyContent:
+        'space-between',
+      alignItems: 'center',
+    },
+
+    propertyTitle: {
+      color: '#0B2447',
+      fontSize: 16,
+      fontWeight: '700',
+    },
+
+    propertyTitleSelected: {
+      color: '#FFFFFF',
+    },
+
+    propertySubtitle: {
+      color: '#697789',
+      fontSize: 12,
+      marginTop: 5,
+    },
+
+    propertySubtitleSelected: {
+      color: '#DCE6F1',
+    },
+
+    // CÔMODO
+
+    roomGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 9,
+    },
+
+    roomButton: {
+      backgroundColor:
+        '#FFFFFF',
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+    },
+
+    roomButtonSelected: {
+      backgroundColor:
+        '#E6EEF7',
+      borderColor:
+        '#0B2447',
+    },
+
+    roomButtonText: {
+      color: '#42566D',
+      fontSize: 12,
+    },
+
+    roomButtonTextSelected: {
+      color: '#0B2447',
+      fontWeight: '700',
+    },
+
+    // INPUTS
+
+    input: {
+      height: 54,
+      backgroundColor:
+        '#FFFFFF',
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+      borderRadius: 13,
+      paddingHorizontal: 15,
+      color: '#24364B',
+      fontSize: 14,
+      marginTop: 10,
+    },
+
+    descriptionInput: {
+      minHeight: 135,
+      backgroundColor:
+        '#FFFFFF',
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+      borderRadius: 14,
+      padding: 16,
+      color: '#24364B',
+      fontSize: 14,
+      lineHeight: 21,
+    },
+
+    availabilityInput: {
+      minHeight: 105,
+      backgroundColor:
+        '#FFFFFF',
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+      borderRadius: 14,
+      padding: 16,
+      color: '#24364B',
+      fontSize: 14,
+      lineHeight: 21,
+    },
+
+    counterText: {
+      color: '#8995A5',
+      fontSize: 10,
+      textAlign: 'right',
+      marginTop: 5,
+    },
+
+    inputWithIcon: {
+      minHeight: 56,
+      backgroundColor:
+        '#FFFFFF',
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+      borderRadius: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 15,
+    },
+
+    inputInside: {
+      flex: 1,
+      height: 54,
+      paddingHorizontal: 11,
+      color: '#24364B',
+      fontSize: 14,
+      outlineStyle:
+        'none' as any,
+    },
+
+    // FOTOS
+
+    photoCounterRow: {
+      flexDirection: 'row',
+      justifyContent:
+        'space-between',
+      alignItems: 'center',
+      marginBottom: 10,
+    },
+
+    photoCounterPending: {
+      color: '#A36B00',
+      fontSize: 12,
+      fontWeight: '700',
+    },
+
+    photoCounterSuccess: {
+      color: '#357A4F',
+      fontSize: 12,
+      fontWeight: '700',
+    },
+
+    photoMaxText: {
+      color: '#8995A5',
+      fontSize: 10,
+    },
+
+    photoRequirementBox: {
+      backgroundColor:
+        '#FFF7E6',
+      borderWidth: 1,
+      borderColor:
+        '#E5C77F',
+      borderRadius: 11,
+      paddingHorizontal: 12,
+      paddingVertical: 11,
+      marginBottom: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+
+    photoRequirementText: {
+      flex: 1,
+      color: '#7B5A12',
+      fontSize: 11,
+    },
+
+    photoReadyBox: {
+      backgroundColor:
+        '#EAF6EE',
+      borderWidth: 1,
+      borderColor:
+        '#76AA87',
+      borderRadius: 11,
+      paddingHorizontal: 12,
+      paddingVertical: 11,
+      marginBottom: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+
+    photoReadyText: {
+      flex: 1,
+      color: '#357A4F',
+      fontSize: 11,
+      fontWeight: '700',
+    },
+
+    photoButtons: {
+      flexDirection: 'row',
+      gap: 12,
+      marginBottom: 18,
+    },
+
+    photoButton: {
+      flex: 1,
+      minHeight: 80,
+      backgroundColor:
+        '#FFFFFF',
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+    photoIconContainer: {
+      width: 46,
+      height: 46,
+      borderRadius: 13,
+      backgroundColor:
+        '#EAF0F6',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
+    },
+
+    photoButtonContent: {
+      flex: 1,
+    },
+
+    photoButtonText: {
+      color: '#0B2447',
+      fontSize: 13,
+      fontWeight: '700',
+    },
+
+    photoButtonSubtext: {
+      color: '#8995A5',
+      fontSize: 10,
+      marginTop: 3,
+    },
+
+    photoGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+      marginTop: 4,
+    },
+
+    photoPreviewContainer: {
+      width: 120,
+      height: 120,
+      borderRadius: 12,
+      overflow: 'hidden',
+      position: 'relative',
+      backgroundColor:
+        '#E9EEF4',
+    },
+
+    photoPreview: {
+      width: '100%',
+      height: '100%',
+    },
+
+    photoNumberBadge: {
+      position: 'absolute',
+      left: 6,
+      bottom: 6,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor:
+        'rgba(11,36,71,0.88)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    photoNumberText: {
+      color: '#FFFFFF',
+      fontSize: 10,
+      fontWeight: '700',
+    },
+
+    removePhotoButton: {
+      position: 'absolute',
+      top: 6,
+      right: 6,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor:
+        'rgba(165,40,40,0.92)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    // ENVIO
+
+    sendButton: {
+      height: 60,
+      borderRadius: 16,
+      backgroundColor:
+        '#0B2447',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 30,
+    },
+
+    sendButtonDisabled: {
+      opacity: 0.45,
+    },
+
+    sendButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '700',
+    },
+
+    sendingContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+
+    requiredInfo: {
+      color: '#8995A5',
+      fontSize: 10,
+      lineHeight: 16,
+      textAlign: 'center',
+      marginTop: 10,
+    },
+
+    // ERROS
+
+    errorBox: {
+      backgroundColor:
+        '#FCEEEE',
+      borderRadius: 12,
+      padding: 13,
+      borderWidth: 1,
+      borderColor:
+        '#D29A9A',
+      marginBottom: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+
+    errorText: {
+      flex: 1,
+      color: '#9A3232',
+      fontSize: 12,
+    },
+
+    // VAZIO
+
+    emptyBox: {
+      backgroundColor:
+        '#FFFFFF',
+      borderRadius: 14,
+      padding: 22,
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+      alignItems: 'center',
+    },
+
+    emptyTitle: {
+      color: '#24364B',
+      fontSize: 13,
+      fontWeight: '700',
+      marginTop: 8,
+    },
+
+    emptyText: {
+      color: '#8995A5',
+      textAlign: 'center',
+      fontSize: 11,
+      lineHeight: 17,
+      marginTop: 5,
+    },
+
+    // LOADING
+
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+
+    loadingText: {
+      color: '#697789',
+      fontSize: 13,
+      marginTop: 10,
+    },
+
+    // SUCESSO
+
+    successPage: {
+      flexGrow: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 24,
+    },
+
+    successContent: {
+      width: '100%',
+      maxWidth: 500,
+      alignItems: 'center',
+    },
+
+    successIcon: {
+      width: 70,
+      height: 70,
+      borderRadius: 35,
+      backgroundColor:
+        '#EAF6EE',
+      borderWidth: 2,
+      borderColor:
+        '#76AA87',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 20,
+    },
+
+    successTitle: {
+      color: '#0B2447',
+      fontSize: 27,
+      fontWeight: '800',
+      textAlign: 'center',
+      marginTop: 20,
+    },
+
+    successSubtitle: {
+      color: '#697789',
+      fontSize: 14,
+      textAlign: 'center',
+      marginTop: 8,
+    },
+
+    protocolCard: {
+      width: '100%',
+      backgroundColor:
+        '#FFFFFF',
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+      borderRadius: 16,
+      padding: 22,
+      alignItems: 'center',
+      marginTop: 28,
+    },
+
+    protocolLabel: {
+      color: '#8995A5',
+      fontSize: 10,
+      fontWeight: '700',
+    },
+
+    protocolNumber: {
+      color: '#0B2447',
+      fontSize: 22,
+      fontWeight: '800',
+      marginTop: 8,
+    },
+
+    statusBadge: {
+      backgroundColor:
+        '#EAF0F6',
+      borderRadius: 20,
+      paddingHorizontal: 14,
+      paddingVertical: 7,
+      marginTop: 12,
+    },
+
+    statusBadgeText: {
+      color: '#0B2447',
+      fontSize: 11,
+      fontWeight: '700',
+    },
+
+    analysisInfoBox: {
+      width: '100%',
+      backgroundColor:
+        '#EAF0F6',
+      borderRadius: 14,
+      padding: 15,
+      marginTop: 15,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+    },
+
+    analysisInfoText: {
+      flex: 1,
+      color: '#42566D',
+      fontSize: 12,
+      lineHeight: 18,
+    },
+
+    photoSuccessCard: {
+      width: '100%',
+      backgroundColor:
+        '#EAF6EE',
+      borderRadius: 14,
+      padding: 15,
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+    photoSuccessLabel: {
+      color: '#557087',
+      fontSize: 10,
+    },
+
+    photoSuccessText: {
+      color: '#357A4F',
+      fontSize: 14,
+      fontWeight: '800',
+      marginTop: 2,
+    },
+
+    notificationSuccessBox: {
+      width: '100%',
+      backgroundColor:
+        '#EAF6EE',
+      borderWidth: 1,
+      borderColor:
+        '#76AA87',
+      borderRadius: 14,
+      padding: 15,
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+    notificationTextArea: {
+      flex: 1,
+      marginLeft: 10,
+    },
+
+    notificationSuccessTitle: {
+      color: '#357A4F',
+      fontSize: 12,
+      fontWeight: '800',
+    },
+
+    notificationSuccessText: {
+      color: '#557087',
+      fontSize: 11,
+      lineHeight: 17,
+      marginTop: 3,
+    },
+
+    warningBox: {
+      width: '100%',
+      backgroundColor:
+        '#FFF7E6',
+      borderWidth: 1,
+      borderColor:
+        '#E5C77F',
+      borderRadius: 12,
+      padding: 12,
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+    },
+
+    warningText: {
+      flex: 1,
+      color: '#7B5A12',
+      fontSize: 11,
+      lineHeight: 17,
+    },
+
+    protocolInfo: {
+      color: '#697789',
+      fontSize: 12,
+      textAlign: 'center',
+      marginTop: 16,
+    },
+
+    primaryButton: {
+      width: '100%',
+      height: 58,
+      borderRadius: 16,
+      backgroundColor:
+        '#0B2447',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 28,
+    },
+
+    primaryButtonText: {
+      color: '#FFFFFF',
+      fontSize: 15,
+      fontWeight: '700',
+    },
+
+    secondaryButton: {
+      paddingVertical: 15,
+      paddingHorizontal: 20,
+      marginTop: 8,
+    },
+
+    secondaryButtonText: {
+      color: '#0B5EA8',
+      fontSize: 13,
+      fontWeight: '600',
+    },
+
+    footer: {
+      color: '#8995A5',
+      fontSize: 10,
+      textAlign: 'center',
+      marginTop: 45,
+    },
+  });

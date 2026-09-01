@@ -24,8 +24,7 @@ export default function HomeScreen() {
         <Text style={styles.welcome}>Bem-vindo</Text>
 
         <Text style={styles.description}>
-          Acompanhe solicitações e serviços de assistência técnica de forma
-          simples e segura.
+          Acompanhe suas solicitações de manutenção de forma simples e segura.
         </Text>
       </View>
 

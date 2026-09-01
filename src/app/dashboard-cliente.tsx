@@ -1,6 +1,10 @@
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from 'react';
 
 import {
   ActivityIndicator,
@@ -16,7 +20,6 @@ import {
 
 import { supabase } from '../lib/supabase';
 
-
 type Solicitacao = {
   solicitacao_id: string;
   protocolo: string;
@@ -24,45 +27,49 @@ type Solicitacao = {
   empreendimento: string;
   unidade: string;
 
-  categoria: string | null;
-  elemento_construtivo: string | null;
-  manifestacao_patologica: string | null;
-
   descricao_problema: string;
-
-  status_garantia: string | null;
-  data_limite_garantia: string | null;
 
   status: string;
 
   created_at: string;
 };
 
-
 export default function DashboardClienteScreen() {
-  const [solicitacoes, setSolicitacoes] =
-    useState<Solicitacao[]>([]);
+  const [
+    solicitacoes,
+    setSolicitacoes,
+  ] = useState<Solicitacao[]>([]);
 
-  const [carregando, setCarregando] =
-    useState(true);
+  const [
+    carregando,
+    setCarregando,
+  ] = useState(true);
 
-  const [atualizando, setAtualizando] =
-    useState(false);
+  const [
+    atualizando,
+    setAtualizando,
+  ] = useState(false);
 
-  const [erro, setErro] = useState('');
-
+  const [erro, setErro] =
+    useState('');
 
   useEffect(() => {
     carregarSolicitacoes();
   }, []);
 
+  // ============================================================
+  // CARREGAR SOLICITAÇÕES
+  // ============================================================
 
   async function carregarSolicitacoes() {
     try {
       setCarregando(true);
       setErro('');
 
-      const { data, error } = await supabase.rpc(
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
         'listar_minhas_solicitacoes'
       );
 
@@ -93,6 +100,9 @@ export default function DashboardClienteScreen() {
     }
   }
 
+  // ============================================================
+  // ATUALIZAR PUXANDO PARA BAIXO
+  // ============================================================
 
   const atualizarSolicitacoes =
     useCallback(async () => {
@@ -100,10 +110,12 @@ export default function DashboardClienteScreen() {
         setAtualizando(true);
         setErro('');
 
-        const { data, error } =
-          await supabase.rpc(
-            'listar_minhas_solicitacoes'
-          );
+        const {
+          data,
+          error,
+        } = await supabase.rpc(
+          'listar_minhas_solicitacoes'
+        );
 
         if (error) {
           console.error(
@@ -132,13 +144,21 @@ export default function DashboardClienteScreen() {
       }
     }, []);
 
+  // ============================================================
+  // SAIR
+  // ============================================================
 
   async function sair() {
     await supabase.auth.signOut();
 
-    router.replace('/login-cliente');
+    router.replace(
+      '/login-cliente'
+    );
   }
 
+  // ============================================================
+  // DATA
+  // ============================================================
 
   function formatarDataHora(
     dataIso: string
@@ -147,36 +167,28 @@ export default function DashboardClienteScreen() {
       return '';
     }
 
-    const data = new Date(dataIso);
+    const data =
+      new Date(dataIso);
 
-    return data.toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return data.toLocaleString(
+      'pt-BR',
+      {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }
+    );
   }
 
+  // ============================================================
+  // STATUS
+  // ============================================================
 
-  function formatarData(
-    data: string | null
+  function textoStatus(
+    status: string
   ) {
-    if (!data) {
-      return '';
-    }
-
-    const partes = data.split('-');
-
-    if (partes.length !== 3) {
-      return data;
-    }
-
-    return `${partes[2]}/${partes[1]}/${partes[0]}`;
-  }
-
-
-  function textoStatus(status: string) {
     switch (status) {
       case 'aberta':
         return 'Aberta';
@@ -210,33 +222,9 @@ export default function DashboardClienteScreen() {
     }
   }
 
-
-  function textoGarantia(
-    status: string | null
+  function estiloStatus(
+    status: string
   ) {
-    switch (status) {
-      case 'dentro_da_garantia':
-        return 'Dentro da garantia';
-
-      case 'fora_da_garantia':
-        return 'Fora da garantia';
-
-      case 'dados_insuficientes':
-        return 'Dados insuficientes';
-
-      case 'ato_da_entrega':
-        return 'Garantia no ato da entrega';
-
-      case 'nao_se_aplica':
-        return 'Não se aplica';
-
-      default:
-        return 'Não informado';
-    }
-  }
-
-
-  function estiloStatus(status: string) {
     switch (status) {
       case 'aberta':
         return styles.statusOpen;
@@ -260,154 +248,210 @@ export default function DashboardClienteScreen() {
     }
   }
 
-
-  function estiloGarantia(
-    status: string | null
-  ) {
-    if (status === 'dentro_da_garantia') {
-      return styles.warrantySuccess;
-    }
-
-    if (status === 'fora_da_garantia') {
-      return styles.warrantyDanger;
-    }
-
-    return styles.warrantyNeutral;
-  }
-
+  // ============================================================
+  // TELA
+  // ============================================================
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+    >
       <StatusBar style="dark" />
 
       <ScrollView
         contentContainerStyle={
           styles.scrollContent
         }
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator={
+          false
+        }
         refreshControl={
           <RefreshControl
             refreshing={atualizando}
-            onRefresh={atualizarSolicitacoes}
+            onRefresh={
+              atualizarSolicitacoes
+            }
           />
         }
       >
         <View style={styles.content}>
+          {/* LOGO */}
+
           <Image
             source={require('../../assets/emafe/logo-horizontal-transparente.png')}
             style={styles.logo}
             resizeMode="contain"
           />
 
+          {/* TÍTULO */}
+
           <Text style={styles.title}>
             Área do Cliente
           </Text>
 
-          <Text style={styles.subtitle}>
+          <Text
+            style={styles.subtitle}
+          >
             Acompanhe suas solicitações de
-            Assistência Técnica.
+            manutenção de forma simples e
+            segura.
           </Text>
 
-
-          {/* NOVA SOLICITAÇÃO */}
+          {/* ==================================================
+              NOVA SOLICITAÇÃO
+          ================================================== */}
 
           <TouchableOpacity
             style={styles.newButton}
+            activeOpacity={0.85}
             onPress={() =>
-              router.push('/nova-solicitacao')
+              router.push(
+                '/nova-solicitacao'
+              )
             }
           >
             <Text
-              style={styles.newButtonText}
+              style={
+                styles.newButtonText
+              }
             >
               + Nova solicitação
             </Text>
           </TouchableOpacity>
 
+          {/* ==================================================
+              MINHAS SOLICITAÇÕES
+          ================================================== */}
 
-          {/* TÍTULO */}
-
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
+          <View
+            style={
+              styles.sectionHeader
+            }
+          >
+            <Text
+              style={
+                styles.sectionTitle
+              }
+            >
               Minhas solicitações
             </Text>
 
             {!carregando ? (
-              <Text style={styles.totalText}>
+              <Text
+                style={
+                  styles.totalText
+                }
+              >
                 {solicitacoes.length}{' '}
-                {solicitacoes.length === 1
+                {solicitacoes.length ===
+                1
                   ? 'solicitação'
                   : 'solicitações'}
               </Text>
             ) : null}
           </View>
 
-
-          {/* ERRO */}
+          {/* ==================================================
+              ERRO
+          ================================================== */}
 
           {erro ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>
+            <View
+              style={styles.errorBox}
+            >
+              <Text
+                style={
+                  styles.errorText
+                }
+              >
                 {erro}
               </Text>
 
               <TouchableOpacity
-                onPress={carregarSolicitacoes}
+                onPress={
+                  carregarSolicitacoes
+                }
               >
-                <Text style={styles.retryText}>
+                <Text
+                  style={
+                    styles.retryText
+                  }
+                >
                   Tentar novamente
                 </Text>
               </TouchableOpacity>
             </View>
           ) : null}
 
-
-          {/* CARREGANDO */}
+          {/* ==================================================
+              CARREGAMENTO
+          ================================================== */}
 
           {carregando ? (
             <View
-              style={styles.loadingContainer}
+              style={
+                styles.loadingContainer
+              }
             >
               <ActivityIndicator
                 size="large"
                 color="#0B2447"
               />
 
-              <Text style={styles.loadingText}>
+              <Text
+                style={
+                  styles.loadingText
+                }
+              >
                 Carregando solicitações...
               </Text>
             </View>
           ) : null}
 
-
-          {/* SEM SOLICITAÇÕES */}
+          {/* ==================================================
+              NENHUMA SOLICITAÇÃO
+          ================================================== */}
 
           {!carregando &&
           solicitacoes.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>
+            <View
+              style={styles.emptyCard}
+            >
+              <Text
+                style={
+                  styles.emptyTitle
+                }
+              >
                 Nenhuma solicitação
               </Text>
 
-              <Text style={styles.emptyText}>
+              <Text
+                style={
+                  styles.emptyText
+                }
+              >
                 Quando você abrir uma
-                solicitação de manutenção, ela
-                aparecerá aqui.
+                solicitação de manutenção,
+                ela aparecerá aqui.
               </Text>
             </View>
           ) : null}
 
-
-          {/* LISTA */}
+          {/* ==================================================
+              LISTA DE SOLICITAÇÕES
+          ================================================== */}
 
           {!carregando &&
             solicitacoes.map(
               (solicitacao) => (
                 <View
                   key={
-                    solicitacao.solicitacao_id
+                    solicitacao
+                      .solicitacao_id
                   }
-                  style={styles.requestCard}
+                  style={
+                    styles.requestCard
+                  }
                 >
                   {/* PROTOCOLO E STATUS */}
 
@@ -434,13 +478,17 @@ export default function DashboardClienteScreen() {
                           styles.protocolText
                         }
                       >
-                        {solicitacao.protocolo}
+                        {
+                          solicitacao
+                            .protocolo
+                        }
                       </Text>
                     </View>
 
                     <View
                       style={[
                         styles.statusBadge,
+
                         estiloStatus(
                           solicitacao.status
                         ),
@@ -458,11 +506,12 @@ export default function DashboardClienteScreen() {
                     </View>
                   </View>
 
-
                   {/* IMÓVEL */}
 
                   <View
-                    style={styles.propertyBox}
+                    style={
+                      styles.propertyBox
+                    }
                   >
                     <Text
                       style={
@@ -470,7 +519,8 @@ export default function DashboardClienteScreen() {
                       }
                     >
                       {
-                        solicitacao.empreendimento
+                        solicitacao
+                          .empreendimento
                       }
                     </Text>
 
@@ -480,51 +530,25 @@ export default function DashboardClienteScreen() {
                       }
                     >
                       Unidade{' '}
-                      {solicitacao.unidade}
+                      {
+                        solicitacao
+                          .unidade
+                      }
                     </Text>
                   </View>
 
+                  {/* ==================================================
+                      PROBLEMA RELATADO
 
-                  {/* PROBLEMA */}
+                      Não mostramos:
+                      - categoria técnica
+                      - elemento construtivo
+                      - manifestação patológica
+                      - garantia
 
-                  {solicitacao.categoria ? (
-                    <Text
-                      style={styles.category}
-                    >
-                      {solicitacao.categoria}
-                    </Text>
-                  ) : null}
-
-                  {solicitacao
-                    .elemento_construtivo ? (
-                    <Text
-                      style={
-                        styles.elementText
-                      }
-                    >
-                      {
-                        solicitacao
-                          .elemento_construtivo
-                      }
-                    </Text>
-                  ) : null}
-
-                  {solicitacao
-                    .manifestacao_patologica ? (
-                    <Text
-                      style={
-                        styles.problemText
-                      }
-                    >
-                      {
-                        solicitacao
-                          .manifestacao_patologica
-                      }
-                    </Text>
-                  ) : null}
-
-
-                  {/* DESCRIÇÃO DO CLIENTE */}
+                      Tudo isso será definido posteriormente
+                      pela equipe EMAFE.
+                  ================================================== */}
 
                   <View
                     style={
@@ -536,7 +560,7 @@ export default function DashboardClienteScreen() {
                         styles.descriptionLabel
                       }
                     >
-                      Sua descrição
+                      PROBLEMA RELATADO
                     </Text>
 
                     <Text
@@ -552,58 +576,38 @@ export default function DashboardClienteScreen() {
                     </Text>
                   </View>
 
+                  {/* STATUS DE ANÁLISE */}
 
-                  {/* GARANTIA */}
-
-                  <View
-                    style={
-                      styles.warrantyRow
-                    }
-                  >
+                  {solicitacao.status ===
+                  'aberta' ? (
                     <View
-                      style={[
-                        styles.warrantyBadge,
-                        estiloGarantia(
-                          solicitacao
-                            .status_garantia
-                        ),
-                      ]}
+                      style={
+                        styles.analysisBox
+                      }
                     >
                       <Text
                         style={
-                          styles.warrantyText
+                          styles.analysisText
                         }
                       >
-                        {textoGarantia(
-                          solicitacao
-                            .status_garantia
-                        )}
+                        Aguardando análise da
+                        equipe EMAFE
                       </Text>
                     </View>
-
-                    {solicitacao
-                      .data_limite_garantia ? (
-                      <Text
-                        style={
-                          styles.warrantyDate
-                        }
-                      >
-                        Limite:{' '}
-                        {formatarData(
-                          solicitacao
-                            .data_limite_garantia
-                        )}
-                      </Text>
-                    ) : null}
-                  </View>
-
+                  ) : null}
 
                   {/* DATA */}
 
-                  <View style={styles.divider} />
+                  <View
+                    style={
+                      styles.divider
+                    }
+                  />
 
                   <Text
-                    style={styles.dateText}
+                    style={
+                      styles.dateText
+                    }
                   >
                     Aberta em{' '}
                     {formatarDataHora(
@@ -611,13 +615,13 @@ export default function DashboardClienteScreen() {
                     )}
                   </Text>
 
-
-                  {/* ACOMPANHAR SOLICITAÇÃO */}
+                  {/* ACOMPANHAR */}
 
                   <TouchableOpacity
                     style={
                       styles.detailsButton
                     }
+                    activeOpacity={0.85}
                     onPress={() =>
                       router.push({
                         pathname:
@@ -643,22 +647,29 @@ export default function DashboardClienteScreen() {
               )
             )}
 
-
-          {/* SAIR */}
+          {/* ==================================================
+              SAIR
+          ================================================== */}
 
           <TouchableOpacity
-            style={styles.logoutButton}
+            style={
+              styles.logoutButton
+            }
             onPress={sair}
           >
-            <Text style={styles.logoutText}>
+            <Text
+              style={
+                styles.logoutText
+              }
+            >
               Sair
             </Text>
           </TouchableOpacity>
 
-
-          <Text style={styles.footer}>
-            EMAFE Engenharia • Assistência
-            Técnica
+          <Text
+            style={styles.footer}
+          >
+            EMAFE Engenharia • Manutenção
           </Text>
         </View>
       </ScrollView>
@@ -666,348 +677,352 @@ export default function DashboardClienteScreen() {
   );
 }
 
+// ============================================================
+// ESTILOS
+// ============================================================
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F7FA',
-  },
+const styles =
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor:
+        '#F5F7FA',
+    },
 
-  scrollContent: {
-    flexGrow: 1,
-  },
+    scrollContent: {
+      flexGrow: 1,
+    },
 
-  content: {
-    width: '100%',
-    maxWidth: 680,
-    alignSelf: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 30,
-    paddingBottom: 45,
-  },
+    content: {
+      width: '100%',
+      maxWidth: 680,
+      alignSelf: 'center',
+      paddingHorizontal: 24,
+      paddingTop: 30,
+      paddingBottom: 45,
+    },
 
-  logo: {
-    width: 260,
-    height: 95,
-    alignSelf: 'center',
-  },
+    logo: {
+      width: 260,
+      height: 95,
+      alignSelf: 'center',
+    },
 
-  title: {
-    color: '#0B2447',
-    fontSize: 30,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginTop: 10,
-  },
+    title: {
+      color: '#0B2447',
+      fontSize: 30,
+      fontWeight: '800',
+      textAlign: 'center',
+      marginTop: 10,
+    },
 
-  subtitle: {
-    color: '#697789',
-    fontSize: 14,
-    lineHeight: 21,
-    textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 28,
-  },
+    subtitle: {
+      color: '#697789',
+      fontSize: 14,
+      lineHeight: 21,
+      textAlign: 'center',
+      marginTop: 8,
+      marginBottom: 28,
+    },
 
-  newButton: {
-    height: 58,
-    borderRadius: 16,
-    backgroundColor: '#0B2447',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 32,
-  },
+    // NOVA SOLICITAÇÃO
 
-  newButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
+    newButton: {
+      height: 58,
+      borderRadius: 16,
+      backgroundColor:
+        '#0B2447',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 32,
+    },
 
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
+    newButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '700',
+    },
 
-  sectionTitle: {
-    color: '#0B2447',
-    fontSize: 20,
-    fontWeight: '800',
-  },
+    // CABEÇALHO
 
-  totalText: {
-    color: '#8995A5',
-    fontSize: 11,
-  },
+    sectionHeader: {
+      flexDirection: 'row',
+      justifyContent:
+        'space-between',
+      alignItems: 'center',
+      marginBottom: 14,
+    },
 
-  requestCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#D8DEE7',
-    marginBottom: 16,
-  },
+    sectionTitle: {
+      color: '#0B2447',
+      fontSize: 20,
+      fontWeight: '800',
+    },
 
-  requestHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
+    totalText: {
+      color: '#8995A5',
+      fontSize: 11,
+    },
 
-  protocolArea: {
-    flex: 1,
-  },
+    // CARD DO CHAMADO
 
-  protocolLabel: {
-    color: '#8995A5',
-    fontSize: 9,
-    fontWeight: '700',
-  },
+    requestCard: {
+      backgroundColor:
+        '#FFFFFF',
+      borderRadius: 16,
+      padding: 18,
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+      marginBottom: 16,
+    },
 
-  protocolText: {
-    color: '#0B2447',
-    fontSize: 15,
-    fontWeight: '800',
-    marginTop: 4,
-  },
+    requestHeader: {
+      flexDirection: 'row',
+      justifyContent:
+        'space-between',
+      alignItems: 'flex-start',
+      gap: 10,
+    },
 
-  statusBadge: {
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
+    protocolArea: {
+      flex: 1,
+    },
 
-  statusOpen: {
-    backgroundColor: '#E9F1FA',
-  },
+    protocolLabel: {
+      color: '#8995A5',
+      fontSize: 9,
+      fontWeight: '700',
+    },
 
-  statusProgress: {
-    backgroundColor: '#FFF4D9',
-  },
+    protocolText: {
+      color: '#0B2447',
+      fontSize: 15,
+      fontWeight: '800',
+      marginTop: 4,
+    },
 
-  statusSuccess: {
-    backgroundColor: '#EAF6EE',
-  },
+    // STATUS
 
-  statusDanger: {
-    backgroundColor: '#FCEEEE',
-  },
+    statusBadge: {
+      borderRadius: 20,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
 
-  statusNeutral: {
-    backgroundColor: '#EEF1F4',
-  },
+    statusOpen: {
+      backgroundColor:
+        '#E9F1FA',
+    },
 
-  statusText: {
-    color: '#0B2447',
-    fontSize: 10,
-    fontWeight: '700',
-  },
+    statusProgress: {
+      backgroundColor:
+        '#FFF4D9',
+    },
 
-  propertyBox: {
-    backgroundColor: '#F5F7FA',
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 15,
-    marginBottom: 15,
-  },
+    statusSuccess: {
+      backgroundColor:
+        '#EAF6EE',
+    },
 
-  propertyName: {
-    color: '#0B2447',
-    fontSize: 14,
-    fontWeight: '700',
-  },
+    statusDanger: {
+      backgroundColor:
+        '#FCEEEE',
+    },
 
-  propertyUnit: {
-    color: '#697789',
-    fontSize: 11,
-    marginTop: 3,
-  },
+    statusNeutral: {
+      backgroundColor:
+        '#EEF1F4',
+    },
 
-  category: {
-    color: '#0B5EA8',
-    fontSize: 11,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
+    statusText: {
+      color: '#0B2447',
+      fontSize: 10,
+      fontWeight: '700',
+    },
 
-  elementText: {
-    color: '#24364B',
-    fontSize: 13,
-    fontWeight: '700',
-    lineHeight: 19,
-  },
+    // IMÓVEL
 
-  problemText: {
-    color: '#697789',
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 4,
-  },
+    propertyBox: {
+      backgroundColor:
+        '#F5F7FA',
+      borderRadius: 12,
+      padding: 12,
+      marginTop: 15,
+    },
 
-  descriptionBox: {
-    marginTop: 15,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    padding: 12,
-  },
+    propertyName: {
+      color: '#0B2447',
+      fontSize: 14,
+      fontWeight: '700',
+    },
 
-  descriptionLabel: {
-    color: '#8995A5',
-    fontSize: 9,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    marginBottom: 5,
-  },
+    propertyUnit: {
+      color: '#697789',
+      fontSize: 11,
+      marginTop: 3,
+    },
 
-  descriptionText: {
-    color: '#42566D',
-    fontSize: 12,
-    lineHeight: 18,
-  },
+    // PROBLEMA RELATADO
 
-  warrantyRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 15,
-  },
+    descriptionBox: {
+      marginTop: 15,
+      backgroundColor:
+        '#F8FAFC',
+      borderRadius: 10,
+      padding: 12,
+    },
 
-  warrantyBadge: {
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
+    descriptionLabel: {
+      color: '#8995A5',
+      fontSize: 9,
+      fontWeight: '700',
+      textTransform:
+        'uppercase',
+      marginBottom: 5,
+    },
 
-  warrantySuccess: {
-    backgroundColor: '#EAF6EE',
-  },
+    descriptionText: {
+      color: '#42566D',
+      fontSize: 12,
+      lineHeight: 18,
+    },
 
-  warrantyDanger: {
-    backgroundColor: '#FCEEEE',
-  },
+    // AGUARDANDO ANÁLISE
 
-  warrantyNeutral: {
-    backgroundColor: '#FFF4D9',
-  },
+    analysisBox: {
+      alignSelf: 'flex-start',
+      marginTop: 13,
+      backgroundColor:
+        '#EAF0F6',
+      borderRadius: 20,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+    },
 
-  warrantyText: {
-    color: '#42566D',
-    fontSize: 10,
-    fontWeight: '700',
-  },
+    analysisText: {
+      color: '#42566D',
+      fontSize: 10,
+      fontWeight: '700',
+    },
 
-  warrantyDate: {
-    color: '#8995A5',
-    fontSize: 10,
-  },
+    divider: {
+      height: 1,
+      backgroundColor:
+        '#E5EAF0',
+      marginTop: 16,
+      marginBottom: 12,
+    },
 
-  divider: {
-    height: 1,
-    backgroundColor: '#E5EAF0',
-    marginTop: 16,
-    marginBottom: 12,
-  },
+    dateText: {
+      color: '#8995A5',
+      fontSize: 10,
+    },
 
-  dateText: {
-    color: '#8995A5',
-    fontSize: 10,
-  },
+    // ACOMPANHAR
 
-  detailsButton: {
-    height: 45,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#0B2447',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 15,
-  },
+    detailsButton: {
+      height: 45,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor:
+        '#0B2447',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 15,
+    },
 
-  detailsButtonText: {
-    color: '#0B2447',
-    fontSize: 12,
-    fontWeight: '700',
-  },
+    detailsButtonText: {
+      color: '#0B2447',
+      fontSize: 12,
+      fontWeight: '700',
+    },
 
-  loadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
+    // CARREGAMENTO
 
-  loadingText: {
-    color: '#697789',
-    fontSize: 12,
-    marginTop: 10,
-  },
+    loadingContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 60,
+    },
 
-  emptyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 30,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#D8DEE7',
-  },
+    loadingText: {
+      color: '#697789',
+      fontSize: 12,
+      marginTop: 10,
+    },
 
-  emptyTitle: {
-    color: '#0B2447',
-    fontSize: 16,
-    fontWeight: '700',
-  },
+    // VAZIO
 
-  emptyText: {
-    color: '#697789',
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 18,
-    marginTop: 6,
-  },
+    emptyCard: {
+      backgroundColor:
+        '#FFFFFF',
+      borderRadius: 16,
+      padding: 30,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+    },
 
-  errorBox: {
-    backgroundColor: '#FCEEEE',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#D29A9A',
-  },
+    emptyTitle: {
+      color: '#0B2447',
+      fontSize: 16,
+      fontWeight: '700',
+    },
 
-  errorText: {
-    color: '#9A3232',
-    fontSize: 12,
-  },
+    emptyText: {
+      color: '#697789',
+      fontSize: 12,
+      textAlign: 'center',
+      lineHeight: 18,
+      marginTop: 6,
+    },
 
-  retryText: {
-    color: '#0B5EA8',
-    fontSize: 12,
-    fontWeight: '700',
-    marginTop: 8,
-  },
+    // ERRO
 
-  logoutButton: {
-    alignSelf: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    marginTop: 15,
-  },
+    errorBox: {
+      backgroundColor:
+        '#FCEEEE',
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 15,
+      borderWidth: 1,
+      borderColor:
+        '#D29A9A',
+    },
 
-  logoutText: {
-    color: '#A52828',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+    errorText: {
+      color: '#9A3232',
+      fontSize: 12,
+    },
 
-  footer: {
-    color: '#8995A5',
-    fontSize: 10,
-    textAlign: 'center',
-    marginTop: 25,
-  },
-});
+    retryText: {
+      color: '#0B5EA8',
+      fontSize: 12,
+      fontWeight: '700',
+      marginTop: 8,
+    },
+
+    // SAIR
+
+    logoutButton: {
+      alignSelf: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      marginTop: 15,
+    },
+
+    logoutText: {
+      color: '#A52828',
+      fontSize: 14,
+      fontWeight: '600',
+    },
+
+    footer: {
+      color: '#8995A5',
+      fontSize: 10,
+      textAlign: 'center',
+      marginTop: 25,
+    },
+  });
