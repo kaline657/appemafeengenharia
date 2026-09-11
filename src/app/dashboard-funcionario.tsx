@@ -2,21 +2,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
-    useCallback,
-    useEffect,
-    useState,
+  useCallback,
+  useEffect,
+  useState,
 } from 'react';
 
 import {
-    ActivityIndicator,
-    Image,
-    RefreshControl,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 import { supabase } from '../lib/supabase';
@@ -659,6 +659,16 @@ export default function DashboardFuncionarioScreen() {
             <TouchableOpacity
               style={styles.menuCard}
               activeOpacity={0.85}
+              onPress={() =>
+                router.push({
+                  pathname:
+                    '/solicitacoes-funcionario',
+
+                  params: {
+                    filtro: 'vistorias',
+                  },
+                })
+              }
             >
               <View
                 style={

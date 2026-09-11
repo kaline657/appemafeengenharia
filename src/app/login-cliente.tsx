@@ -27,6 +27,7 @@ export default function LoginClienteScreen() {
       setMensagemErro(
         'Informe seu e-mail e sua senha.'
       );
+
       return;
     }
 
@@ -40,12 +41,17 @@ export default function LoginClienteScreen() {
         });
 
       if (error) {
-        console.error('Erro no login:', error);
+        console.error(
+          'Erro no login:',
+          error
+        );
 
         if (
           error.message
             .toLowerCase()
-            .includes('invalid login credentials')
+            .includes(
+              'invalid login credentials'
+            )
         ) {
           setMensagemErro(
             'E-mail ou senha incorretos.'
@@ -63,6 +69,7 @@ export default function LoginClienteScreen() {
         setMensagemErro(
           'Não foi possível iniciar sua sessão.'
         );
+
         return;
       }
 
@@ -71,7 +78,9 @@ export default function LoginClienteScreen() {
         data.user.email
       );
 
-      router.replace('/dashboard-cliente');
+      router.replace(
+        '/dashboard-cliente'
+      );
     } catch (erro: any) {
       console.error(
         'Erro inesperado no login:',
@@ -88,13 +97,19 @@ export default function LoginClienteScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+    >
       <StatusBar style="dark" />
 
       <View style={styles.content}>
+        {/* VOLTAR PARA A TELA INICIAL */}
+
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() =>
+            router.replace('/')
+          }
           disabled={carregando}
         >
           <Text style={styles.backText}>
@@ -148,18 +163,26 @@ export default function LoginClienteScreen() {
 
           <View style={styles.accessLinks}>
             <TouchableOpacity>
-              <Text style={styles.forgotText}>
+              <Text
+                style={styles.forgotText}
+              >
                 Esqueci minha senha
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={() =>
-                router.push('/primeiro-acesso')
+                router.push(
+                  '/primeiro-acesso'
+                )
               }
               disabled={carregando}
             >
-              <Text style={styles.firstAccessText}>
+              <Text
+                style={
+                  styles.firstAccessText
+                }
+              >
                 Primeiro acesso
               </Text>
             </TouchableOpacity>
@@ -167,7 +190,9 @@ export default function LoginClienteScreen() {
 
           {mensagemErro !== '' && (
             <View style={styles.errorBox}>
-              <Text style={styles.errorText}>
+              <Text
+                style={styles.errorText}
+              >
                 {mensagemErro}
               </Text>
             </View>
@@ -184,9 +209,15 @@ export default function LoginClienteScreen() {
             activeOpacity={0.85}
           >
             {carregando ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <ActivityIndicator
+                color="#FFFFFF"
+              />
             ) : (
-              <Text style={styles.loginButtonText}>
+              <Text
+                style={
+                  styles.loginButtonText
+                }
+              >
                 Entrar
               </Text>
             )}
@@ -276,7 +307,8 @@ const styles = StyleSheet.create({
 
   accessLinks: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent:
+      'space-between',
     alignItems: 'center',
     marginTop: -8,
     marginBottom: 25,

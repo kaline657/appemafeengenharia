@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import {
   router,
   useLocalSearchParams,
@@ -118,6 +119,45 @@ type AgendamentoVistoria = {
   responsavel_vistoria_nome: string | null;
 };
 
+type VistoriaTecnica = {
+  vistoria_id: string;
+  solicitacao_id: string;
+  protocolo: string;
+  status: string;
+  funcionario_id: string;
+  funcionario_nome: string;
+  problema_constatado: boolean | null;
+  parecer_tecnico: string | null;
+  servico_necessario: string | null;
+  observacoes: string | null;
+  iniciada_em: string;
+  finalizada_em: string | null;
+};
+
+type FotoVistoriaSalva = {
+  id: string;
+  vistoria_id: string;
+  caminho_storage: string;
+  nome_arquivo: string | null;
+  descricao: string | null;
+  created_at: string;
+  url: string;
+};
+
+type ExecucaoServico = {
+  execucao_id: string;
+  solicitacao_id: string;
+  numero_termo: number | null;
+  status?: string;
+  responsavel_servico_id: string | null;
+  responsavel_servico_nome: string | null;
+  solucao_tecnica?: string | null;
+  observacoes?: string | null;
+  conclusao?: string | null;
+  iniciada_em: string | null;
+  concluida_em?: string | null;
+};
+
 // ============================================================
 // TELA
 // ============================================================
@@ -220,6 +260,128 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     setSucessoVistoria,
   ] = useState('');
 
+  const [
+    iniciandoVistoria,
+    setIniciandoVistoria,
+  ] = useState(false);
+
+  const [
+    erroInicioVistoria,
+    setErroInicioVistoria,
+  ] = useState('');
+
+  const [
+    vistoriaTecnica,
+    setVistoriaTecnica,
+  ] = useState<VistoriaTecnica | null>(null);
+
+  const [
+    problemaConstatado,
+    setProblemaConstatado,
+  ] = useState<boolean | null>(null);
+
+  const [
+    parecerTecnico,
+    setParecerTecnico,
+  ] = useState('');
+
+  const [
+    servicoNecessario,
+    setServicoNecessario,
+  ] = useState('');
+
+  const [
+    observacoesTecnicas,
+    setObservacoesTecnicas,
+  ] = useState('');
+
+  const [
+    salvandoFormularioVistoria,
+    setSalvandoFormularioVistoria,
+  ] = useState(false);
+
+  const [
+    erroFormularioVistoria,
+    setErroFormularioVistoria,
+  ] = useState('');
+
+  const [
+    sucessoFormularioVistoria,
+    setSucessoFormularioVistoria,
+  ] = useState('');
+
+  const [
+    fotosVistoriaPendentes,
+    setFotosVistoriaPendentes,
+  ] = useState<
+    ImagePicker.ImagePickerAsset[]
+  >([]);
+
+  const [
+    fotosVistoriaSalvas,
+    setFotosVistoriaSalvas,
+  ] = useState<FotoVistoriaSalva[]>(
+    []
+  );
+
+  const [
+    carregandoFotosVistoria,
+    setCarregandoFotosVistoria,
+  ] = useState(false);
+
+  const [
+    resultadoVistoria,
+    setResultadoVistoria,
+  ] = useState<
+    'aprovada' |
+    'nao_aprovada' |
+    null
+  >(null);
+
+  const [
+    justificativaResultado,
+    setJustificativaResultado,
+  ] = useState('');
+
+  const [
+    finalizandoVistoria,
+    setFinalizandoVistoria,
+  ] = useState(false);
+
+  const [
+    erroFinalizacaoVistoria,
+    setErroFinalizacaoVistoria,
+  ] = useState('');
+
+  const [
+    sucessoFinalizacaoVistoria,
+    setSucessoFinalizacaoVistoria,
+  ] = useState('');
+
+  // ==========================================================
+  // EXECUÇÃO DO SERVIÇO
+  // ==========================================================
+
+  const [
+    execucaoServico,
+    setExecucaoServico,
+  ] = useState<ExecucaoServico | null>(null);
+
+  const [
+    iniciandoExecucao,
+    setIniciandoExecucao,
+  ] = useState(false);
+
+  const [
+    erroExecucao,
+    setErroExecucao,
+  ] = useState('');
+
+  const [
+    sucessoExecucao,
+    setSucessoExecucao,
+  ] = useState('');
+
   // ==========================================================
   // ESTADOS GERAIS
   // ==========================================================
@@ -313,6 +475,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       await carregarFotos();
 
       await carregarAgendamentoVistoria();
+
+      await carregarVistoriaTecnica();
+
+      await carregarExecucaoServico();
 
       // ======================================================
       // SE JÁ EXISTIR ANÁLISE TÉCNICA
@@ -727,6 +893,83 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   }
 
   // ==========================================================
+  // CARREGAR FICHA TÉCNICA DA VISTORIA
+  // ==========================================================
+
+  async function carregarVistoriaTecnica() {
+    try {
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'buscar_vistoria_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao buscar ficha da vistoria:',
+          error
+        );
+
+        return null;
+      }
+
+      const registro =
+        data?.[0] as
+          | VistoriaTecnica
+          | undefined;
+
+      if (!registro) {
+        setVistoriaTecnica(null);
+        setFotosVistoriaSalvas([]);
+
+        return null;
+      }
+
+      setVistoriaTecnica(
+        registro
+      );
+
+      setProblemaConstatado(
+        registro.problema_constatado ??
+          null
+      );
+
+      setParecerTecnico(
+        registro.parecer_tecnico ??
+          ''
+      );
+
+      setServicoNecessario(
+        registro.servico_necessario ??
+          ''
+      );
+
+      setObservacoesTecnicas(
+        registro.observacoes ??
+          ''
+      );
+
+      await carregarFotosVistoria(
+        registro.vistoria_id
+      );
+
+      return registro;
+    } catch (error) {
+      console.error(
+        'Erro ao carregar ficha da vistoria:',
+        error
+      );
+
+      return null;
+    }
+  }
+
+  // ==========================================================
   // CASCATA DA ANÁLISE
   // ==========================================================
 
@@ -798,6 +1041,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   const analiseConfirmada =
     !!solicitacao?.item_garantia_id &&
     solicitacao?.status !== 'aberta';
+
+  const dentroDaGarantia =
+    solicitacao?.status_garantia ===
+      'dentro_garantia' ||
+    solicitacao?.status_garantia ===
+      'dentro_da_garantia';
+
+  const foraDaGarantia =
+    analiseConfirmada &&
+    !dentroDaGarantia;
 
   // ==========================================================
   // SELEÇÕES
@@ -1280,6 +1533,931 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       );
     } finally {
       setSalvandoVistoria(false);
+    }
+  }
+
+  // ==========================================================
+  // INICIAR VISTORIA
+  // ==========================================================
+
+  async function iniciarVistoria() {
+    if (!solicitacao) {
+      return;
+    }
+
+    try {
+      setIniciandoVistoria(true);
+      setErroInicioVistoria('');
+      setErroVistoria('');
+      setSucessoVistoria('');
+      setErroFormularioVistoria('');
+      setSucessoFormularioVistoria('');
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'iniciar_vistoria_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao iniciar vistoria:',
+          error
+        );
+
+        setErroInicioVistoria(
+          error.message ||
+            'Não foi possível iniciar a vistoria.'
+        );
+
+        return;
+      }
+
+      if (
+        !data ||
+        data.length === 0
+      ) {
+        setErroInicioVistoria(
+          'Não foi possível iniciar a vistoria.'
+        );
+
+        return;
+      }
+
+      await carregarSolicitacao();
+
+      await carregarVistoriaTecnica();
+    } catch (error) {
+      console.error(
+        'Erro ao iniciar vistoria:',
+        error
+      );
+
+      setErroInicioVistoria(
+        'Ocorreu um erro ao iniciar a vistoria.'
+      );
+    } finally {
+      setIniciandoVistoria(false);
+    }
+  }
+
+  // ==========================================================
+  // FOTOS DA VISTORIA
+  // ==========================================================
+
+  async function carregarFotosVistoria(
+    vistoriaId?: string
+  ) {
+    const id =
+      vistoriaId ??
+      vistoriaTecnica?.vistoria_id;
+
+    if (!id) {
+      setFotosVistoriaSalvas([]);
+      return;
+    }
+
+    try {
+      setCarregandoFotosVistoria(
+        true
+      );
+
+      const {
+        data,
+        error,
+      } = await supabase
+        .from('vistoria_fotos')
+        .select(
+          'id, vistoria_id, caminho_storage, nome_arquivo, descricao, created_at'
+        )
+        .eq(
+          'vistoria_id',
+          id
+        )
+        .order(
+          'created_at',
+          {
+            ascending: true,
+          }
+        );
+
+      if (error) {
+        console.error(
+          'Erro ao carregar fotos da vistoria:',
+          error
+        );
+
+        return;
+      }
+
+      const fotosComUrl =
+        await Promise.all(
+          (data ?? []).map(
+            async (foto: any) => {
+              const {
+                data: signedData,
+                error:
+                  signedError,
+              } =
+                await supabase.storage
+                  .from(
+                    'vistorias-fotos'
+                  )
+                  .createSignedUrl(
+                    foto.caminho_storage,
+                    60 * 60
+                  );
+
+              if (signedError) {
+                console.error(
+                  'Erro ao gerar URL da foto:',
+                  signedError
+                );
+              }
+
+              return {
+                ...foto,
+                url:
+                  signedData
+                    ?.signedUrl ??
+                  '',
+              } as FotoVistoriaSalva;
+            }
+          )
+        );
+
+      setFotosVistoriaSalvas(
+        fotosComUrl
+      );
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao carregar fotos da vistoria:',
+        error
+      );
+    } finally {
+      setCarregandoFotosVistoria(
+        false
+      );
+    }
+  }
+
+  async function selecionarFotosVistoria() {
+    setErroFormularioVistoria('');
+    setSucessoFormularioVistoria('');
+
+    const quantidadeAtual =
+      fotosVistoriaPendentes.length +
+      fotosVistoriaSalvas.length;
+
+    if (quantidadeAtual >= 10) {
+      setErroFormularioVistoria(
+        'A vistoria pode ter no máximo 10 fotos.'
+      );
+
+      return;
+    }
+
+    try {
+      const resultado =
+        await ImagePicker.launchImageLibraryAsync(
+          {
+            mediaTypes:
+              ImagePicker
+                .MediaTypeOptions
+                .Images,
+
+            allowsMultipleSelection:
+              true,
+
+            selectionLimit:
+              10 -
+              quantidadeAtual,
+
+            quality: 0.8,
+          }
+        );
+
+      if (
+        resultado.canceled
+      ) {
+        return;
+      }
+
+      const disponiveis =
+        10 -
+        quantidadeAtual;
+
+      setFotosVistoriaPendentes(
+        (
+          atuais
+        ) => [
+          ...atuais,
+          ...resultado.assets.slice(
+            0,
+            disponiveis
+          ),
+        ]
+      );
+    } catch (error) {
+      console.error(
+        'Erro ao selecionar fotos:',
+        error
+      );
+
+      setErroFormularioVistoria(
+        'Não foi possível selecionar as fotos.'
+      );
+    }
+  }
+
+  function removerFotoVistoriaPendente(
+    uri: string
+  ) {
+    setFotosVistoriaPendentes(
+      (atuais) =>
+        atuais.filter(
+          (foto) =>
+            foto.uri !== uri
+        )
+    );
+  }
+
+  function extensaoFoto(
+    foto: ImagePicker.ImagePickerAsset
+  ) {
+    const nome =
+      foto.fileName ?? '';
+
+    const extensaoNome =
+      nome.includes('.')
+        ? nome
+            .split('.')
+            .pop()
+            ?.toLowerCase()
+        : null;
+
+    if (extensaoNome) {
+      return extensaoNome;
+    }
+
+    const mime =
+      foto.mimeType ?? '';
+
+    if (
+      mime.includes('png')
+    ) {
+      return 'png';
+    }
+
+    if (
+      mime.includes('webp')
+    ) {
+      return 'webp';
+    }
+
+    return 'jpg';
+  }
+
+  async function enviarFotosVistoria() {
+    if (
+      fotosVistoriaPendentes.length ===
+      0
+    ) {
+      return true;
+    }
+
+    if (!vistoriaTecnica) {
+      setErroFormularioVistoria(
+        'A ficha da vistoria ainda não foi carregada.'
+      );
+
+      return false;
+    }
+
+    const {
+      data: usuarioData,
+      error: usuarioError,
+    } =
+      await supabase.auth
+        .getUser();
+
+    if (
+      usuarioError ||
+      !usuarioData.user
+    ) {
+      setErroFormularioVistoria(
+        'Não foi possível identificar o funcionário.'
+      );
+
+      return false;
+    }
+
+    let pendentesRestantes = [
+      ...fotosVistoriaPendentes,
+    ];
+
+    for (
+      let indice = 0;
+      indice <
+      fotosVistoriaPendentes.length;
+      indice++
+    ) {
+      const foto =
+        fotosVistoriaPendentes[
+          indice
+        ];
+
+      try {
+        const resposta =
+          await fetch(
+            foto.uri
+          );
+
+        const blob =
+          await resposta.blob();
+
+        const extensao =
+          extensaoFoto(
+            foto
+          );
+
+        const nomeArquivo =
+          foto.fileName ??
+          `vistoria-${Date.now()}-${indice}.${extensao}`;
+
+        const caminho =
+          `${vistoriaTecnica.vistoria_id}/${usuarioData.user.id}/${Date.now()}-${indice}.${extensao}`;
+
+        const {
+          error:
+            uploadError,
+        } =
+          await supabase.storage
+            .from(
+              'vistorias-fotos'
+            )
+            .upload(
+              caminho,
+              blob,
+              {
+                contentType:
+                  foto.mimeType ??
+                  `image/${extensao === 'jpg' ? 'jpeg' : extensao}`,
+
+                upsert: false,
+              }
+            );
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const {
+          error:
+            insertError,
+        } =
+          await supabase
+            .from(
+              'vistoria_fotos'
+            )
+            .insert({
+              vistoria_id:
+                vistoriaTecnica.vistoria_id,
+
+              caminho_storage:
+                caminho,
+
+              nome_arquivo:
+                nomeArquivo,
+
+              funcionario_id:
+                usuarioData.user.id,
+            });
+
+        if (insertError) {
+          await supabase.storage
+            .from(
+              'vistorias-fotos'
+            )
+            .remove([
+              caminho,
+            ]);
+
+          throw insertError;
+        }
+
+        pendentesRestantes =
+          pendentesRestantes.filter(
+            (item) =>
+              item.uri !==
+              foto.uri
+          );
+
+        setFotosVistoriaPendentes(
+          pendentesRestantes
+        );
+      } catch (error: any) {
+        console.error(
+          'Erro ao enviar foto da vistoria:',
+          error
+        );
+
+        setErroFormularioVistoria(
+          error?.message ??
+            'Não foi possível enviar uma das fotos da vistoria.'
+        );
+
+        await carregarFotosVistoria(
+          vistoriaTecnica.vistoria_id
+        );
+
+        return false;
+      }
+    }
+
+    await carregarFotosVistoria(
+      vistoriaTecnica.vistoria_id
+    );
+
+    return true;
+  }
+
+  // ==========================================================
+  // SALVAR FORMULÁRIO DA VISTORIA
+  // ==========================================================
+
+  async function salvarFormularioVistoria() {
+    setErroFormularioVistoria('');
+    setSucessoFormularioVistoria('');
+
+    if (
+      problemaConstatado ===
+      null
+    ) {
+      setErroFormularioVistoria(
+        'Informe se o problema relatado foi constatado.'
+      );
+
+      return;
+    }
+
+    if (
+      !parecerTecnico.trim()
+    ) {
+      setErroFormularioVistoria(
+        'Informe o parecer técnico da vistoria.'
+      );
+
+      return;
+    }
+
+    try {
+      setSalvandoFormularioVistoria(
+        true
+      );
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'salvar_vistoria_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+
+          p_problema_constatado:
+            problemaConstatado,
+
+          p_parecer_tecnico:
+            parecerTecnico.trim(),
+
+          p_servico_necessario:
+            servicoNecessario.trim() ||
+            null,
+
+          p_observacoes:
+            observacoesTecnicas.trim() ||
+            null,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao salvar vistoria:',
+          error
+        );
+
+        setErroFormularioVistoria(
+          error.message ||
+            'Não foi possível salvar a vistoria.'
+        );
+
+        return;
+      }
+
+      if (
+        !data ||
+        data.length === 0
+      ) {
+        setErroFormularioVistoria(
+          'Não foi possível salvar os dados da vistoria.'
+        );
+
+        return;
+      }
+
+      const fotosEnviadas =
+        await enviarFotosVistoria();
+
+      if (!fotosEnviadas) {
+        return;
+      }
+
+      setSucessoFormularioVistoria(
+        fotosVistoriaPendentes.length >
+        0
+          ? 'Dados e fotos da vistoria salvos com sucesso.'
+          : 'Dados da vistoria salvos com sucesso.'
+      );
+
+      await carregarVistoriaTecnica();
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao salvar vistoria:',
+        error
+      );
+
+      setErroFormularioVistoria(
+        'Ocorreu um erro ao salvar os dados da vistoria.'
+      );
+    } finally {
+      setSalvandoFormularioVistoria(
+        false
+      );
+    }
+  }
+
+  // ==========================================================
+  // EXECUÇÃO DO SERVIÇO
+  // ==========================================================
+
+  async function carregarExecucaoServico() {
+    try {
+      const {
+        data,
+        error,
+      } = await supabase
+        .from('execucoes_servico')
+        .select(
+          'id, solicitacao_id, numero_termo, responsavel_servico_id, solucao_tecnica, observacoes, conclusao, iniciada_em, concluida_em'
+        )
+        .eq(
+          'solicitacao_id',
+          solicitacaoId
+        )
+        .maybeSingle();
+
+      if (error) {
+        console.error(
+          'Erro ao carregar execução do serviço:',
+          error
+        );
+
+        return null;
+      }
+
+      if (!data) {
+        setExecucaoServico(null);
+        return null;
+      }
+
+      let responsavelNome: string | null = null;
+
+      if (data.responsavel_servico_id) {
+        const {
+          data: perfil,
+        } = await supabase
+          .from('profiles')
+          .select('nome_completo')
+          .eq(
+            'id',
+            data.responsavel_servico_id
+          )
+          .maybeSingle();
+
+        responsavelNome =
+          perfil?.nome_completo ??
+          null;
+      }
+
+      const registro: ExecucaoServico = {
+        execucao_id: data.id,
+        solicitacao_id:
+          data.solicitacao_id,
+        numero_termo:
+          data.numero_termo,
+        responsavel_servico_id:
+          data.responsavel_servico_id,
+        responsavel_servico_nome:
+          responsavelNome,
+        solucao_tecnica:
+          data.solucao_tecnica,
+        observacoes:
+          data.observacoes,
+        conclusao:
+          data.conclusao,
+        iniciada_em:
+          data.iniciada_em,
+        concluida_em:
+          data.concluida_em,
+      };
+
+      setExecucaoServico(registro);
+
+      return registro;
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao carregar execução:',
+        error
+      );
+
+      return null;
+    }
+  }
+
+  async function iniciarExecucaoServico() {
+    setErroExecucao('');
+    setSucessoExecucao('');
+
+    try {
+      setIniciandoExecucao(true);
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'iniciar_execucao_servico_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao iniciar execução:',
+          error
+        );
+
+        setErroExecucao(
+          error.message ||
+            'Não foi possível iniciar a execução do serviço.'
+        );
+
+        return;
+      }
+
+      const registro =
+        data?.[0];
+
+      if (!registro) {
+        setErroExecucao(
+          'A execução não retornou confirmação de início.'
+        );
+
+        return;
+      }
+
+      setExecucaoServico({
+        execucao_id:
+          registro.execucao_id,
+        solicitacao_id:
+          registro.solicitacao_id,
+        numero_termo:
+          Number(
+            registro.numero_termo
+          ) || null,
+        status:
+          registro.status,
+        responsavel_servico_id:
+          registro.responsavel_servico_id,
+        responsavel_servico_nome:
+          registro.responsavel_servico_nome ??
+          null,
+        iniciada_em:
+          registro.iniciada_em,
+      });
+
+      setSucessoExecucao(
+        'Execução do serviço iniciada com sucesso.'
+      );
+
+      await carregarSolicitacao();
+      await carregarExecucaoServico();
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao iniciar execução:',
+        error
+      );
+
+      setErroExecucao(
+        'Ocorreu um erro ao iniciar a execução do serviço.'
+      );
+    } finally {
+      setIniciandoExecucao(false);
+    }
+  }
+
+  // ==========================================================
+  // FINALIZAR VISTORIA
+  // ==========================================================
+
+  async function finalizarVistoria() {
+    setErroFinalizacaoVistoria('');
+    setSucessoFinalizacaoVistoria('');
+
+    if (!resultadoVistoria) {
+      setErroFinalizacaoVistoria(
+        'Selecione o resultado da vistoria.'
+      );
+
+      return;
+    }
+
+    if (
+      problemaConstatado ===
+      null
+    ) {
+      setErroFinalizacaoVistoria(
+        'Informe se o problema relatado foi constatado.'
+      );
+
+      return;
+    }
+
+    if (
+      !parecerTecnico.trim()
+    ) {
+      setErroFinalizacaoVistoria(
+        'Preencha o parecer técnico antes de finalizar.'
+      );
+
+      return;
+    }
+
+    if (
+      resultadoVistoria ===
+        'aprovada' &&
+      !servicoNecessario.trim()
+    ) {
+      setErroFinalizacaoVistoria(
+        'Informe o serviço necessário antes de aprovar a vistoria.'
+      );
+
+      return;
+    }
+
+    if (
+      resultadoVistoria ===
+        'nao_aprovada' &&
+      !justificativaResultado.trim()
+    ) {
+      setErroFinalizacaoVistoria(
+        'Informe a justificativa da não aprovação.'
+      );
+
+      return;
+    }
+
+    try {
+      setFinalizandoVistoria(
+        true
+      );
+
+      // Salva os dados atuais antes de finalizar.
+      const {
+        error: salvarError,
+      } = await supabase.rpc(
+        'salvar_vistoria_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+
+          p_problema_constatado:
+            problemaConstatado,
+
+          p_parecer_tecnico:
+            parecerTecnico.trim(),
+
+          p_servico_necessario:
+            servicoNecessario.trim() ||
+            null,
+
+          p_observacoes:
+            observacoesTecnicas.trim() ||
+            null,
+        }
+      );
+
+      if (salvarError) {
+        console.error(
+          'Erro ao salvar antes de finalizar:',
+          salvarError
+        );
+
+        setErroFinalizacaoVistoria(
+          salvarError.message ||
+            'Não foi possível salvar os dados da vistoria.'
+        );
+
+        return;
+      }
+
+      // Envia eventuais fotos que ainda estejam pendentes.
+      const fotosEnviadas =
+        await enviarFotosVistoria();
+
+      if (!fotosEnviadas) {
+        setErroFinalizacaoVistoria(
+          'Não foi possível concluir porque existem fotos que não foram enviadas.'
+        );
+
+        return;
+      }
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'finalizar_vistoria_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+
+          p_resultado:
+            resultadoVistoria,
+
+          p_justificativa_resultado:
+            resultadoVistoria ===
+              'nao_aprovada'
+              ? justificativaResultado.trim()
+              : null,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao finalizar vistoria:',
+          error
+        );
+
+        setErroFinalizacaoVistoria(
+          error.message ||
+            'Não foi possível finalizar a vistoria.'
+        );
+
+        return;
+      }
+
+      if (
+        !data ||
+        data.length === 0
+      ) {
+        setErroFinalizacaoVistoria(
+          'A vistoria não retornou confirmação de finalização.'
+        );
+
+        return;
+      }
+
+      setSucessoFinalizacaoVistoria(
+        resultadoVistoria ===
+          'aprovada'
+          ? 'Vistoria finalizada e aprovada para execução.'
+          : 'Vistoria finalizada como não aprovada.'
+      );
+
+      await carregarSolicitacao();
+      await carregarVistoriaTecnica();
+      await carregarExecucaoServico();
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao finalizar vistoria:',
+        error
+      );
+
+      setErroFinalizacaoVistoria(
+        'Ocorreu um erro ao finalizar a vistoria.'
+      );
+    } finally {
+      setFinalizandoVistoria(
+        false
+      );
     }
   }
 
@@ -2513,7 +3691,8 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   VISTORIA
               ================================================= */}
 
-              {analiseConfirmada ? (
+              {analiseConfirmada &&
+              dentroDaGarantia ? (
                 <>
                   <Text
                     style={
@@ -2710,9 +3889,1276 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     ) : null}
 
                     {/* ===========================================
+                        INICIAR VISTORIA
+                    =========================================== */}
+
+                    {solicitacao.status ===
+                    'vistoria_agendada' ? (
+                      <View
+                        style={
+                          styles.iniciarVistoriaBox
+                        }
+                      >
+                        <View
+                          style={
+                            styles.iniciarVistoriaHeader
+                          }
+                        >
+                          <Ionicons
+                            name="clipboard-outline"
+                            size={22}
+                            color="#0B2447"
+                          />
+
+                          <View
+                            style={{
+                              flex: 1,
+                            }}
+                          >
+                            <Text
+                              style={
+                                styles.iniciarVistoriaTitle
+                              }
+                            >
+                              Realizar vistoria
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.iniciarVistoriaText
+                              }
+                            >
+                              Quando a equipe estiver no imóvel, inicie a vistoria para registrar a avaliação técnica.
+                            </Text>
+                          </View>
+                        </View>
+
+                        {erroInicioVistoria ? (
+                          <View
+                            style={
+                              styles.messageError
+                            }
+                          >
+                            <Ionicons
+                              name="alert-circle-outline"
+                              size={19}
+                              color="#9A3232"
+                            />
+
+                            <Text
+                              style={
+                                styles.messageErrorText
+                              }
+                            >
+                              {
+                                erroInicioVistoria
+                              }
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        <TouchableOpacity
+                          style={[
+                            styles.iniciarVistoriaButton,
+
+                            iniciandoVistoria &&
+                              styles.buttonDisabled,
+                          ]}
+                          disabled={
+                            iniciandoVistoria
+                          }
+                          onPress={
+                            iniciarVistoria
+                          }
+                        >
+                          {iniciandoVistoria ? (
+                            <ActivityIndicator
+                              size="small"
+                              color="#FFFFFF"
+                            />
+                          ) : (
+                            <Ionicons
+                              name="play-circle-outline"
+                              size={22}
+                              color="#FFFFFF"
+                            />
+                          )}
+
+                          <Text
+                            style={
+                              styles.iniciarVistoriaButtonText
+                            }
+                          >
+                            {iniciandoVistoria
+                              ? 'Iniciando...'
+                              : 'Iniciar vistoria'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
+
+                    {/* ===========================================
+                        FORMULÁRIO DA VISTORIA EM ANDAMENTO
+                    =========================================== */}
+
+                    {solicitacao.status ===
+                    'em_vistoria' ? (
+                      <View
+                        style={
+                          styles.formularioVistoriaBox
+                        }
+                      >
+                        <View
+                          style={
+                            styles.formularioVistoriaHeader
+                          }
+                        >
+                          <View
+                            style={
+                              styles.formularioVistoriaIcon
+                            }
+                          >
+                            <Ionicons
+                              name="clipboard-outline"
+                              size={22}
+                              color="#FFFFFF"
+                            />
+                          </View>
+
+                          <View
+                            style={{
+                              flex: 1,
+                            }}
+                          >
+                            <Text
+                              style={
+                                styles.formularioVistoriaTitle
+                              }
+                            >
+                              Vistoria em andamento
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.formularioVistoriaText
+                              }
+                            >
+                              Registre abaixo o que foi constatado durante a visita técnica.
+                            </Text>
+
+                            {vistoriaTecnica ? (
+                              <Text
+                                style={
+                                  styles.formularioVistoriaMeta
+                                }
+                              >
+                                Iniciada em{' '}
+                                {formatarDataHora(
+                                  vistoriaTecnica.iniciada_em
+                                )}
+                                {' • '}
+                                {
+                                  vistoriaTecnica.funcionario_nome
+                                }
+                              </Text>
+                            ) : null}
+                          </View>
+                        </View>
+
+                        <Text
+                          style={
+                            styles.inputLabel
+                          }
+                        >
+                          O PROBLEMA RELATADO FOI CONSTATADO?
+                        </Text>
+
+                        <View
+                          style={
+                            styles.constatacaoRow
+                          }
+                        >
+                          <TouchableOpacity
+                            style={[
+                              styles.constatacaoButton,
+
+                              problemaConstatado ===
+                                true &&
+                                styles.constatacaoButtonActive,
+                            ]}
+                            onPress={() => {
+                              setProblemaConstatado(
+                                true
+                              );
+
+                              setErroFormularioVistoria(
+                                ''
+                              );
+
+                              setSucessoFormularioVistoria(
+                                ''
+                              );
+                            }}
+                          >
+                            <Ionicons
+                              name="checkmark-circle-outline"
+                              size={19}
+                              color={
+                                problemaConstatado ===
+                                true
+                                  ? '#FFFFFF'
+                                  : '#287A46'
+                              }
+                            />
+
+                            <Text
+                              style={[
+                                styles.constatacaoButtonText,
+
+                                problemaConstatado ===
+                                  true &&
+                                  styles.constatacaoButtonTextActive,
+                              ]}
+                            >
+                              Sim
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[
+                              styles.constatacaoButton,
+
+                              problemaConstatado ===
+                                false &&
+                                styles.constatacaoButtonActive,
+                            ]}
+                            onPress={() => {
+                              setProblemaConstatado(
+                                false
+                              );
+
+                              setErroFormularioVistoria(
+                                ''
+                              );
+
+                              setSucessoFormularioVistoria(
+                                ''
+                              );
+                            }}
+                          >
+                            <Ionicons
+                              name="close-circle-outline"
+                              size={19}
+                              color={
+                                problemaConstatado ===
+                                false
+                                  ? '#FFFFFF'
+                                  : '#9A3232'
+                              }
+                            />
+
+                            <Text
+                              style={[
+                                styles.constatacaoButtonText,
+
+                                problemaConstatado ===
+                                  false &&
+                                  styles.constatacaoButtonTextActive,
+                              ]}
+                            >
+                              Não
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        <Text
+                          style={
+                            styles.inputLabel
+                          }
+                        >
+                          PARECER TÉCNICO *
+                        </Text>
+
+                        <TextInput
+                          style={[
+                            styles.input,
+                            styles.textArea,
+                          ]}
+                          value={
+                            parecerTecnico
+                          }
+                          placeholder="Descreva o que foi encontrado durante a vistoria."
+                          placeholderTextColor="#9AA6B4"
+                          multiline
+                          numberOfLines={5}
+                          textAlignVertical="top"
+                          onChangeText={(
+                            texto
+                          ) => {
+                            setParecerTecnico(
+                              texto
+                            );
+
+                            setErroFormularioVistoria(
+                              ''
+                            );
+
+                            setSucessoFormularioVistoria(
+                              ''
+                            );
+                          }}
+                        />
+
+                        <Text
+                          style={
+                            styles.inputLabel
+                          }
+                        >
+                          SERVIÇO NECESSÁRIO
+                        </Text>
+
+                        <TextInput
+                          style={[
+                            styles.input,
+                            styles.textArea,
+                          ]}
+                          value={
+                            servicoNecessario
+                          }
+                          placeholder="Descreva o serviço ou intervenção necessária."
+                          placeholderTextColor="#9AA6B4"
+                          multiline
+                          numberOfLines={4}
+                          textAlignVertical="top"
+                          onChangeText={(
+                            texto
+                          ) => {
+                            setServicoNecessario(
+                              texto
+                            );
+
+                            setErroFormularioVistoria(
+                              ''
+                            );
+
+                            setSucessoFormularioVistoria(
+                              ''
+                            );
+                          }}
+                        />
+
+                        <Text
+                          style={
+                            styles.inputLabel
+                          }
+                        >
+                          OBSERVAÇÕES DA VISTORIA
+                        </Text>
+
+                        <TextInput
+                          style={[
+                            styles.input,
+                            styles.textArea,
+                          ]}
+                          value={
+                            observacoesTecnicas
+                          }
+                          placeholder="Inclua informações adicionais, se necessário."
+                          placeholderTextColor="#9AA6B4"
+                          multiline
+                          numberOfLines={4}
+                          textAlignVertical="top"
+                          onChangeText={(
+                            texto
+                          ) => {
+                            setObservacoesTecnicas(
+                              texto
+                            );
+
+                            setErroFormularioVistoria(
+                              ''
+                            );
+
+                            setSucessoFormularioVistoria(
+                              ''
+                            );
+                          }}
+                        />
+
+                        <Text
+                          style={
+                            styles.inputLabel
+                          }
+                        >
+                          FOTOS DA VISTORIA
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.fotosVistoriaAjuda
+                          }
+                        >
+                          Adicione fotos do que foi constatado no imóvel. Você pode selecionar até 10 imagens.
+                        </Text>
+
+                        <TouchableOpacity
+                          style={
+                            styles.adicionarFotosVistoriaButton
+                          }
+                          onPress={
+                            selecionarFotosVistoria
+                          }
+                          disabled={
+                            salvandoFormularioVistoria
+                          }
+                        >
+                          <Ionicons
+                            name="images-outline"
+                            size={20}
+                            color="#0B5EA8"
+                          />
+
+                          <Text
+                            style={
+                              styles.adicionarFotosVistoriaButtonText
+                            }
+                          >
+                            + Adicionar fotos
+                          </Text>
+                        </TouchableOpacity>
+
+                        {fotosVistoriaPendentes.length >
+                        0 ? (
+                          <View
+                            style={
+                              styles.fotosVistoriaSection
+                            }
+                          >
+                            <Text
+                              style={
+                                styles.fotosVistoriaSubtitulo
+                              }
+                            >
+                              Fotos aguardando salvamento
+                            </Text>
+
+                            <View
+                              style={
+                                styles.fotosVistoriaGrid
+                              }
+                            >
+                              {fotosVistoriaPendentes.map(
+                                (
+                                  foto,
+                                  indice
+                                ) => (
+                                  <View
+                                    key={`${foto.uri}-${indice}`}
+                                    style={
+                                      styles.fotoVistoriaCard
+                                    }
+                                  >
+                                    <Image
+                                      source={{
+                                        uri:
+                                          foto.uri,
+                                      }}
+                                      style={
+                                        styles.fotoVistoriaImagem
+                                      }
+                                      resizeMode="cover"
+                                    />
+
+                                    <TouchableOpacity
+                                      style={
+                                        styles.removerFotoVistoriaButton
+                                      }
+                                      onPress={() =>
+                                        removerFotoVistoriaPendente(
+                                          foto.uri
+                                        )
+                                      }
+                                    >
+                                      <Ionicons
+                                        name="close"
+                                        size={17}
+                                        color="#FFFFFF"
+                                      />
+                                    </TouchableOpacity>
+
+                                    <View
+                                      style={
+                                        styles.fotoVistoriaPendenteBadge
+                                      }
+                                    >
+                                      <Text
+                                        style={
+                                          styles.fotoVistoriaPendenteText
+                                        }
+                                      >
+                                        Aguardando salvar
+                                      </Text>
+                                    </View>
+                                  </View>
+                                )
+                              )}
+                            </View>
+                          </View>
+                        ) : null}
+
+                        {carregandoFotosVistoria ? (
+                          <View
+                            style={
+                              styles.fotosVistoriaLoading
+                            }
+                          >
+                            <ActivityIndicator
+                              size="small"
+                              color="#0B5EA8"
+                            />
+
+                            <Text
+                              style={
+                                styles.fotosVistoriaLoadingText
+                              }
+                            >
+                              Carregando fotos...
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        {!carregandoFotosVistoria &&
+                        fotosVistoriaSalvas.length >
+                          0 ? (
+                          <View
+                            style={
+                              styles.fotosVistoriaSection
+                            }
+                          >
+                            <Text
+                              style={
+                                styles.fotosVistoriaSubtitulo
+                              }
+                            >
+                              Fotos já salvas
+                            </Text>
+
+                            <View
+                              style={
+                                styles.fotosVistoriaGrid
+                              }
+                            >
+                              {fotosVistoriaSalvas.map(
+                                (
+                                  foto
+                                ) => (
+                                  <View
+                                    key={
+                                      foto.id
+                                    }
+                                    style={
+                                      styles.fotoVistoriaCard
+                                    }
+                                  >
+                                    {foto.url ? (
+                                      <Image
+                                        source={{
+                                          uri:
+                                            foto.url,
+                                        }}
+                                        style={
+                                          styles.fotoVistoriaImagem
+                                        }
+                                        resizeMode="cover"
+                                      />
+                                    ) : (
+                                      <View
+                                        style={
+                                          styles.fotoVistoriaSemImagem
+                                        }
+                                      >
+                                        <Ionicons
+                                          name="image-outline"
+                                          size={26}
+                                          color="#8995A5"
+                                        />
+                                      </View>
+                                    )}
+
+                                    <View
+                                      style={
+                                        styles.fotoVistoriaSalvaBadge
+                                      }
+                                    >
+                                      <Ionicons
+                                        name="checkmark-circle"
+                                        size={13}
+                                        color="#287A46"
+                                      />
+
+                                      <Text
+                                        style={
+                                          styles.fotoVistoriaSalvaText
+                                        }
+                                      >
+                                        Salva
+                                      </Text>
+                                    </View>
+                                  </View>
+                                )
+                              )}
+                            </View>
+                          </View>
+                        ) : null}
+
+                        {erroFormularioVistoria ? (
+                          <View
+                            style={
+                              styles.messageError
+                            }
+                          >
+                            <Ionicons
+                              name="alert-circle-outline"
+                              size={19}
+                              color="#9A3232"
+                            />
+
+                            <Text
+                              style={
+                                styles.messageErrorText
+                              }
+                            >
+                              {
+                                erroFormularioVistoria
+                              }
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        {sucessoFormularioVistoria ? (
+                          <View
+                            style={
+                              styles.messageSuccess
+                            }
+                          >
+                            <Ionicons
+                              name="checkmark-circle-outline"
+                              size={20}
+                              color="#287A46"
+                            />
+
+                            <Text
+                              style={
+                                styles.messageSuccessText
+                              }
+                            >
+                              {
+                                sucessoFormularioVistoria
+                              }
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        <TouchableOpacity
+                          style={[
+                            styles.salvarFormularioVistoriaButton,
+
+                            salvandoFormularioVistoria &&
+                              styles.buttonDisabled,
+                          ]}
+                          disabled={
+                            salvandoFormularioVistoria
+                          }
+                          onPress={
+                            salvarFormularioVistoria
+                          }
+                        >
+                          {salvandoFormularioVistoria ? (
+                            <ActivityIndicator
+                              size="small"
+                              color="#FFFFFF"
+                            />
+                          ) : (
+                            <Ionicons
+                              name="save-outline"
+                              size={20}
+                              color="#FFFFFF"
+                            />
+                          )}
+
+                          <Text
+                            style={
+                              styles.salvarFormularioVistoriaButtonText
+                            }
+                          >
+                            {salvandoFormularioVistoria
+                              ? 'Salvando...'
+                              : fotosVistoriaPendentes.length >
+                                  0
+                                ? 'Salvar vistoria e fotos'
+                                : 'Salvar vistoria'}
+                          </Text>
+                        </TouchableOpacity>
+
+                        <View
+                          style={
+                            styles.finalizarVistoriaBox
+                          }
+                        >
+                          <View
+                            style={
+                              styles.finalizarVistoriaHeader
+                            }
+                          >
+                            <Ionicons
+                              name="flag-outline"
+                              size={22}
+                              color="#0B2447"
+                            />
+
+                            <View
+                              style={{
+                                flex: 1,
+                              }}
+                            >
+                              <Text
+                                style={
+                                  styles.finalizarVistoriaTitle
+                                }
+                              >
+                                Finalizar vistoria
+                              </Text>
+
+                              <Text
+                                style={
+                                  styles.finalizarVistoriaText
+                                }
+                              >
+                                Selecione o resultado final. Ao finalizar, os dados atuais e as fotos pendentes também serão salvos.
+                              </Text>
+                            </View>
+                          </View>
+
+                          <Text
+                            style={
+                              styles.inputLabel
+                            }
+                          >
+                            RESULTADO DA VISTORIA
+                          </Text>
+
+                          <View
+                            style={
+                              styles.resultadoVistoriaRow
+                            }
+                          >
+                            <TouchableOpacity
+                              style={[
+                                styles.resultadoVistoriaButton,
+
+                                resultadoVistoria ===
+                                  'aprovada' &&
+                                  styles.resultadoVistoriaButtonAprovada,
+                              ]}
+                              onPress={() => {
+                                setResultadoVistoria(
+                                  'aprovada'
+                                );
+
+                                setJustificativaResultado(
+                                  ''
+                                );
+
+                                setErroFinalizacaoVistoria(
+                                  ''
+                                );
+                              }}
+                            >
+                              <Ionicons
+                                name="checkmark-circle-outline"
+                                size={20}
+                                color={
+                                  resultadoVistoria ===
+                                  'aprovada'
+                                    ? '#FFFFFF'
+                                    : '#287A46'
+                                }
+                              />
+
+                              <Text
+                                style={[
+                                  styles.resultadoVistoriaButtonText,
+
+                                  resultadoVistoria ===
+                                    'aprovada' &&
+                                    styles.resultadoVistoriaButtonTextActive,
+                                ]}
+                              >
+                                Aprovada para execução
+                              </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={[
+                                styles.resultadoVistoriaButton,
+
+                                resultadoVistoria ===
+                                  'nao_aprovada' &&
+                                  styles.resultadoVistoriaButtonNaoAprovada,
+                              ]}
+                              onPress={() => {
+                                setResultadoVistoria(
+                                  'nao_aprovada'
+                                );
+
+                                setErroFinalizacaoVistoria(
+                                  ''
+                                );
+                              }}
+                            >
+                              <Ionicons
+                                name="close-circle-outline"
+                                size={20}
+                                color={
+                                  resultadoVistoria ===
+                                  'nao_aprovada'
+                                    ? '#FFFFFF'
+                                    : '#9A3232'
+                                }
+                              />
+
+                              <Text
+                                style={[
+                                  styles.resultadoVistoriaButtonText,
+
+                                  resultadoVistoria ===
+                                    'nao_aprovada' &&
+                                    styles.resultadoVistoriaButtonTextActive,
+                                ]}
+                              >
+                                Não aprovada
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          {resultadoVistoria ===
+                          'nao_aprovada' ? (
+                            <>
+                              <Text
+                                style={
+                                  styles.inputLabel
+                                }
+                              >
+                                JUSTIFICATIVA *
+                              </Text>
+
+                              <TextInput
+                                style={[
+                                  styles.input,
+                                  styles.textArea,
+                                ]}
+                                value={
+                                  justificativaResultado
+                                }
+                                placeholder="Informe o motivo da não aprovação da vistoria."
+                                placeholderTextColor="#9AA6B4"
+                                multiline
+                                numberOfLines={4}
+                                textAlignVertical="top"
+                                onChangeText={(
+                                  texto
+                                ) => {
+                                  setJustificativaResultado(
+                                    texto
+                                  );
+
+                                  setErroFinalizacaoVistoria(
+                                    ''
+                                  );
+                                }}
+                              />
+                            </>
+                          ) : null}
+
+                          {erroFinalizacaoVistoria ? (
+                            <View
+                              style={
+                                styles.messageError
+                              }
+                            >
+                              <Ionicons
+                                name="alert-circle-outline"
+                                size={19}
+                                color="#9A3232"
+                              />
+
+                              <Text
+                                style={
+                                  styles.messageErrorText
+                                }
+                              >
+                                {
+                                  erroFinalizacaoVistoria
+                                }
+                              </Text>
+                            </View>
+                          ) : null}
+
+                          <TouchableOpacity
+                            style={[
+                              styles.finalizarVistoriaButton,
+
+                              finalizandoVistoria &&
+                                styles.buttonDisabled,
+                            ]}
+                            disabled={
+                              finalizandoVistoria
+                            }
+                            onPress={
+                              finalizarVistoria
+                            }
+                          >
+                            {finalizandoVistoria ? (
+                              <ActivityIndicator
+                                size="small"
+                                color="#FFFFFF"
+                              />
+                            ) : (
+                              <Ionicons
+                                name="checkmark-done-outline"
+                                size={21}
+                                color="#FFFFFF"
+                              />
+                            )}
+
+                            <Text
+                              style={
+                                styles.finalizarVistoriaButtonText
+                              }
+                            >
+                              {finalizandoVistoria
+                                ? 'Finalizando...'
+                                : 'Finalizar vistoria'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : null}
+
+                    {solicitacao.status ===
+                      'aprovada' ||
+                    solicitacao.status ===
+                      'nao_aprovada' ? (
+                      <View
+                        style={[
+                          styles.vistoriaFinalizadaBox,
+
+                          solicitacao.status ===
+                            'aprovada'
+                            ? styles.vistoriaFinalizadaAprovada
+                            : styles.vistoriaFinalizadaNaoAprovada,
+                        ]}
+                      >
+                        <Ionicons
+                          name={
+                            solicitacao.status ===
+                            'aprovada'
+                              ? 'checkmark-circle'
+                              : 'close-circle'
+                          }
+                          size={24}
+                          color={
+                            solicitacao.status ===
+                            'aprovada'
+                              ? '#287A46'
+                              : '#9A3232'
+                          }
+                        />
+
+                        <View
+                          style={{
+                            flex: 1,
+                          }}
+                        >
+                          <Text
+                            style={
+                              styles.vistoriaFinalizadaTitle
+                            }
+                          >
+                            {solicitacao.status ===
+                            'aprovada'
+                              ? 'Vistoria aprovada para execução'
+                              : 'Vistoria não aprovada'}
+                          </Text>
+
+                          <Text
+                            style={
+                              styles.vistoriaFinalizadaText
+                            }
+                          >
+                            {solicitacao.status ===
+                            'aprovada'
+                              ? 'A vistoria foi encerrada e o chamado está pronto para seguir para a próxima etapa.'
+                              : 'A vistoria foi encerrada e o chamado não seguirá para execução.'}
+                          </Text>
+                        </View>
+                      </View>
+                    ) : null}
+
+                    {solicitacao.status ===
+                      'aprovada' ||
+                    solicitacao.status ===
+                      'em_execucao' ? (
+                      <View
+                        style={
+                          styles.execucaoServicoBox
+                        }
+                      >
+                        <View
+                          style={
+                            styles.execucaoServicoHeader
+                          }
+                        >
+                          <View
+                            style={
+                              styles.execucaoServicoIcon
+                            }
+                          >
+                            <Ionicons
+                              name="construct-outline"
+                              size={22}
+                              color="#FFFFFF"
+                            />
+                          </View>
+
+                          <View
+                            style={{
+                              flex: 1,
+                            }}
+                          >
+                            <Text
+                              style={
+                                styles.execucaoServicoTitle
+                              }
+                            >
+                              Execução do serviço
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.execucaoServicoText
+                              }
+                            >
+                              {solicitacao.status ===
+                              'aprovada'
+                                ? 'A vistoria foi aprovada. Inicie a execução quando a equipe começar o serviço no imóvel.'
+                                : 'O atendimento está em execução.'}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View
+                          style={
+                            styles.execucaoServicoInfoGrid
+                          }
+                        >
+                          <View
+                            style={
+                              styles.execucaoServicoInfoCard
+                            }
+                          >
+                            <Text
+                              style={
+                                styles.execucaoServicoInfoLabel
+                              }
+                            >
+                              Nº DO TERMO DE SERVIÇO
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.execucaoServicoInfoValue
+                              }
+                            >
+                              {execucaoServico?.numero_termo
+                                ? String(
+                                    execucaoServico.numero_termo
+                                  )
+                                : 'Será gerado ao iniciar'}
+                            </Text>
+                          </View>
+
+                          {execucaoServico?.responsavel_servico_nome ? (
+                            <View
+                              style={
+                                styles.execucaoServicoInfoCard
+                              }
+                            >
+                              <Text
+                                style={
+                                  styles.execucaoServicoInfoLabel
+                                }
+                              >
+                                RESPONSÁVEL
+                              </Text>
+
+                              <Text
+                                style={
+                                  styles.execucaoServicoInfoValue
+                                }
+                              >
+                                {
+                                  execucaoServico.responsavel_servico_nome
+                                }
+                              </Text>
+                            </View>
+                          ) : null}
+
+                          {execucaoServico?.iniciada_em ? (
+                            <View
+                              style={
+                                styles.execucaoServicoInfoCard
+                              }
+                            >
+                              <Text
+                                style={
+                                  styles.execucaoServicoInfoLabel
+                                }
+                              >
+                                INÍCIO
+                              </Text>
+
+                              <Text
+                                style={
+                                  styles.execucaoServicoInfoValue
+                                }
+                              >
+                                {formatarDataHora(
+                                  execucaoServico.iniciada_em
+                                )}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+
+                        {erroExecucao ? (
+                          <View
+                            style={
+                              styles.messageError
+                            }
+                          >
+                            <Ionicons
+                              name="alert-circle-outline"
+                              size={19}
+                              color="#9A3232"
+                            />
+
+                            <Text
+                              style={
+                                styles.messageErrorText
+                              }
+                            >
+                              {erroExecucao}
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        {sucessoExecucao ? (
+                          <View
+                            style={
+                              styles.messageSuccess
+                            }
+                          >
+                            <Ionicons
+                              name="checkmark-circle-outline"
+                              size={20}
+                              color="#287A46"
+                            />
+
+                            <Text
+                              style={
+                                styles.messageSuccessText
+                              }
+                            >
+                              {sucessoExecucao}
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        {solicitacao.status ===
+                        'aprovada' ? (
+                          <TouchableOpacity
+                            style={[
+                              styles.iniciarExecucaoButton,
+
+                              iniciandoExecucao &&
+                                styles.buttonDisabled,
+                            ]}
+                            disabled={
+                              iniciandoExecucao
+                            }
+                            onPress={
+                              iniciarExecucaoServico
+                            }
+                          >
+                            {iniciandoExecucao ? (
+                              <ActivityIndicator
+                                size="small"
+                                color="#FFFFFF"
+                              />
+                            ) : (
+                              <Ionicons
+                                name="play-circle-outline"
+                                size={21}
+                                color="#FFFFFF"
+                              />
+                            )}
+
+                            <Text
+                              style={
+                                styles.iniciarExecucaoButtonText
+                              }
+                            >
+                              {iniciandoExecucao
+                                ? 'Iniciando...'
+                                : 'Iniciar execução do serviço'}
+                            </Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <View
+                            style={
+                              styles.execucaoEmAndamentoBox
+                            }
+                          >
+                            <Ionicons
+                              name="hammer-outline"
+                              size={20}
+                              color="#0B5EA8"
+                            />
+
+                            <Text
+                              style={
+                                styles.execucaoEmAndamentoText
+                              }
+                            >
+                              Execução em andamento
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    ) : null}
+
+                    {/* ===========================================
                         DEFINIR DATA E HORÁRIO
                     =========================================== */}
 
+                    {[
+                      'em_analise',
+                      'vistoria_agendada',
+                    ].includes(
+                      solicitacao.status
+                    ) ? (
+                      <>
                     <View
                       style={
                         styles.definirAgendamentoHeader
@@ -2975,6 +5421,54 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           : 'Agendar vistoria'}
                       </Text>
                     </TouchableOpacity>
+                      </>
+                    ) : null}
+                  </View>
+                </>
+              ) : null}
+
+              {foraDaGarantia ? (
+                <>
+                  <Text
+                    style={
+                      styles.sectionTitle
+                    }
+                  >
+                    Vistoria
+                  </Text>
+
+                  <View
+                    style={
+                      styles.foraGarantiaBox
+                    }
+                  >
+                    <Ionicons
+                      name="alert-circle-outline"
+                      size={24}
+                      color="#9A3232"
+                    />
+
+                    <View
+                      style={{
+                        flex: 1,
+                      }}
+                    >
+                      <Text
+                        style={
+                          styles.foraGarantiaTitulo
+                        }
+                      >
+                        Atendimento fora da garantia
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.foraGarantiaTexto
+                        }
+                      >
+                        Este item não possui cobertura de garantia vigente. O agendamento de vistoria de garantia não está disponível para este chamado.
+                      </Text>
+                    </View>
                   </View>
                 </>
               ) : null}
@@ -3837,6 +6331,556 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
     marginTop: 5,
+  },
+
+  // FORA DA GARANTIA
+
+  foraGarantiaBox: {
+    backgroundColor:
+      '#FCEEEE',
+    borderWidth: 1,
+    borderColor:
+      '#D29A9A',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 8,
+    marginBottom: 18,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+
+  foraGarantiaTitulo: {
+    color: '#9A3232',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  foraGarantiaTexto: {
+    color: '#7A4A4A',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 4,
+  },
+
+  // FORMULÁRIO DA VISTORIA
+
+  formularioVistoriaBox: {
+    backgroundColor:
+      '#F8FAFC',
+    borderWidth: 1,
+    borderColor:
+      '#CCD7E3',
+    borderRadius: 16,
+    padding: 18,
+    marginTop: 18,
+    marginBottom: 18,
+  },
+
+  formularioVistoriaHeader: {
+    flexDirection: 'row',
+    alignItems:
+      'flex-start',
+    gap: 11,
+    marginBottom: 18,
+  },
+
+  formularioVistoriaIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor:
+      '#0B2447',
+    alignItems: 'center',
+    justifyContent:
+      'center',
+  },
+
+  formularioVistoriaTitle: {
+    color: '#0B2447',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+
+  formularioVistoriaText: {
+    color: '#697789',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 3,
+  },
+
+  formularioVistoriaMeta: {
+    color: '#8995A5',
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 6,
+  },
+
+  constatacaoRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 18,
+  },
+
+  constatacaoButton: {
+    minWidth: 110,
+    minHeight: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor:
+      '#CCD7E3',
+    backgroundColor:
+      '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent:
+      'center',
+    gap: 7,
+    paddingHorizontal: 18,
+  },
+
+  constatacaoButtonActive: {
+    backgroundColor:
+      '#0B2447',
+    borderColor:
+      '#0B2447',
+  },
+
+  constatacaoButtonText: {
+    color: '#24364B',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  constatacaoButtonTextActive: {
+    color: '#FFFFFF',
+  },
+
+  fotosVistoriaAjuda: {
+    color: '#697789',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: -2,
+    marginBottom: 10,
+  },
+
+  adicionarFotosVistoriaButton: {
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BFCBDA',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingHorizontal: 16,
+    marginBottom: 14,
+  },
+
+  adicionarFotosVistoriaButtonText: {
+    color: '#0B5EA8',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  fotosVistoriaSection: {
+    marginBottom: 16,
+  },
+
+  fotosVistoriaSubtitulo: {
+    color: '#42566D',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 9,
+  },
+
+  fotosVistoriaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+
+  fotoVistoriaCard: {
+    width: 145,
+    height: 120,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#EAF0F6',
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    position: 'relative',
+  },
+
+  fotoVistoriaImagem: {
+    width: '100%',
+    height: '100%',
+  },
+
+  fotoVistoriaSemImagem: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  removerFotoVistoriaButton: {
+    position: 'absolute',
+    top: 7,
+    right: 7,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(154, 50, 50, 0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  fotoVistoriaPendenteBadge: {
+    position: 'absolute',
+    left: 7,
+    bottom: 7,
+    backgroundColor: 'rgba(11, 36, 71, 0.90)',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+  },
+
+  fotoVistoriaPendenteText: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontWeight: '700',
+  },
+
+  fotoVistoriaSalvaBadge: {
+    position: 'absolute',
+    left: 7,
+    bottom: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(234, 246, 238, 0.94)',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+  },
+
+  fotoVistoriaSalvaText: {
+    color: '#287A46',
+    fontSize: 8,
+    fontWeight: '800',
+  },
+
+  fotosVistoriaLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginBottom: 14,
+  },
+
+  fotosVistoriaLoadingText: {
+    color: '#697789',
+    fontSize: 10,
+  },
+
+  execucaoServicoBox: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CCD7E3',
+    borderRadius: 16,
+    padding: 18,
+    marginTop: 18,
+    marginBottom: 18,
+  },
+
+  execucaoServicoHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 11,
+    marginBottom: 16,
+  },
+
+  execucaoServicoIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#0B2447',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  execucaoServicoTitle: {
+    color: '#0B2447',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+
+  execucaoServicoText: {
+    color: '#697789',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 3,
+  },
+
+  execucaoServicoInfoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 14,
+  },
+
+  execucaoServicoInfoCard: {
+    flexGrow: 1,
+    flexBasis: 190,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    borderRadius: 12,
+    padding: 13,
+  },
+
+  execucaoServicoInfoLabel: {
+    color: '#8995A5',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+
+  execucaoServicoInfoValue: {
+    color: '#24364B',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 5,
+  },
+
+  iniciarExecucaoButton: {
+    minHeight: 55,
+    borderRadius: 13,
+    backgroundColor: '#0B2447',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+
+  iniciarExecucaoButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  execucaoEmAndamentoBox: {
+    minHeight: 52,
+    borderRadius: 12,
+    backgroundColor: '#EAF2FB',
+    borderWidth: 1,
+    borderColor: '#B9D0EA',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+
+  execucaoEmAndamentoText: {
+    color: '#0B5EA8',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  finalizarVistoriaBox: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CCD7E3',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 18,
+  },
+
+  finalizarVistoriaHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 16,
+  },
+
+  finalizarVistoriaTitle: {
+    color: '#0B2447',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  finalizarVistoriaText: {
+    color: '#697789',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 3,
+  },
+
+  resultadoVistoriaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 16,
+  },
+
+  resultadoVistoriaButton: {
+    flexGrow: 1,
+    flexBasis: 220,
+    minHeight: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CCD7E3',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+  },
+
+  resultadoVistoriaButtonAprovada: {
+    backgroundColor: '#287A46',
+    borderColor: '#287A46',
+  },
+
+  resultadoVistoriaButtonNaoAprovada: {
+    backgroundColor: '#9A3232',
+    borderColor: '#9A3232',
+  },
+
+  resultadoVistoriaButtonText: {
+    color: '#24364B',
+    fontSize: 11,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+
+  resultadoVistoriaButtonTextActive: {
+    color: '#FFFFFF',
+  },
+
+  finalizarVistoriaButton: {
+    minHeight: 55,
+    borderRadius: 13,
+    backgroundColor: '#0B2447',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+
+  finalizarVistoriaButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  vistoriaFinalizadaBox: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 18,
+    marginBottom: 18,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+
+  vistoriaFinalizadaAprovada: {
+    backgroundColor: '#EAF6EE',
+    borderColor: '#AED7BA',
+  },
+
+  vistoriaFinalizadaNaoAprovada: {
+    backgroundColor: '#FCEEEE',
+    borderColor: '#D29A9A',
+  },
+
+  vistoriaFinalizadaTitle: {
+    color: '#24364B',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  vistoriaFinalizadaText: {
+    color: '#697789',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 4,
+  },
+
+  salvarFormularioVistoriaButton: {
+    minHeight: 54,
+    backgroundColor:
+      '#0B2447',
+    borderRadius: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent:
+      'center',
+    gap: 8,
+    marginTop: 8,
+  },
+
+  salvarFormularioVistoriaButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  // INICIAR VISTORIA
+
+  iniciarVistoriaBox: {
+    backgroundColor:
+      '#F4F7FA',
+    borderWidth: 1,
+    borderColor:
+      '#D8DEE7',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 18,
+    marginBottom: 18,
+  },
+
+  iniciarVistoriaHeader: {
+    flexDirection: 'row',
+    alignItems:
+      'flex-start',
+    gap: 10,
+  },
+
+  iniciarVistoriaTitle: {
+    color: '#0B2447',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  iniciarVistoriaText: {
+    color: '#697789',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 4,
+  },
+
+  iniciarVistoriaButton: {
+    minHeight: 54,
+    backgroundColor:
+      '#0B2447',
+    borderRadius: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent:
+      'center',
+    gap: 8,
+    marginTop: 16,
+  },
+
+  iniciarVistoriaButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
 
   // DEFINIR AGENDAMENTO

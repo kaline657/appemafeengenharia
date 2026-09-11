@@ -1,25 +1,28 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import {
+  router,
+  useLocalSearchParams,
+} from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
-    useCallback,
-    useEffect,
-    useMemo,
-    useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
 } from 'react';
 
 import {
-    ActivityIndicator,
-    Image,
-    RefreshControl,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    useWindowDimensions,
-    View,
+  ActivityIndicator,
+  Image,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from 'react-native';
 
 import { supabase } from '../lib/supabase';
@@ -60,6 +63,14 @@ type FiltroStatus =
   | 'concluidas';
 
 export default function SolicitacoesFuncionarioScreen() {
+  const params =
+    useLocalSearchParams();
+
+  const filtroRecebido =
+    String(
+      params.filtro ?? ''
+    );
+
   const { width } =
     useWindowDimensions();
 
@@ -98,7 +109,10 @@ export default function SolicitacoesFuncionarioScreen() {
     setFiltroStatus,
   ] =
     useState<FiltroStatus>(
-      'todos'
+      filtroRecebido ===
+        'vistorias'
+        ? 'vistorias'
+        : 'todos'
     );
 
   const [
@@ -109,6 +123,17 @@ export default function SolicitacoesFuncionarioScreen() {
   useEffect(() => {
     iniciarTela();
   }, []);
+
+  useEffect(() => {
+    if (
+      filtroRecebido ===
+      'vistorias'
+    ) {
+      setFiltroStatus(
+        'vistorias'
+      );
+    }
+  }, [filtroRecebido]);
 
   // ==========================================================
   // INICIALIZA

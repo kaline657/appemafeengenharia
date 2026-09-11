@@ -49,6 +49,16 @@ type FotoSolicitacao = {
   url: string;
 };
 
+type AgendamentoVistoria = {
+  solicitacao_id: string;
+  protocolo: string;
+  status: string;
+  data_vistoria: string | null;
+  hora_vistoria: string | null;
+  observacao_vistoria: string | null;
+  responsavel_vistoria_nome: string | null;
+};
+
 export default function DetalhesSolicitacaoScreen() {
   const params = useLocalSearchParams();
 
@@ -79,6 +89,23 @@ export default function DetalhesSolicitacaoScreen() {
   const [erroFotos, setErroFotos] =
     useState('');
 
+  const [
+    agendamento,
+    setAgendamento,
+  ] = useState<AgendamentoVistoria | null>(
+    null
+  );
+
+  const [
+    carregandoAgendamento,
+    setCarregandoAgendamento,
+  ] = useState(false);
+
+  const [
+    erroAgendamento,
+    setErroAgendamento,
+  ] = useState('');
+
   useEffect(() => {
     if (!solicitacaoId) {
       setErro(
@@ -96,6 +123,7 @@ export default function DetalhesSolicitacaoScreen() {
   async function carregarDados() {
     await carregarSolicitacao();
     await carregarFotos();
+    await carregarAgendamentoVistoria();
   }
 
   async function carregarSolicitacao() {
@@ -240,6 +268,94 @@ export default function DetalhesSolicitacaoScreen() {
     }
   }
 
+  async function carregarAgendamentoVistoria() {
+    try {
+      setCarregandoAgendamento(true);
+      setErroAgendamento('');
+
+      const { data, error } =
+        await supabase.rpc(
+          'buscar_agendamento_minha_solicitacao',
+          {
+            p_solicitacao_id:
+              solicitacaoId,
+          }
+        );
+
+      if (error) {
+        console.error(
+          'Erro ao buscar agendamento da vistoria:',
+          error
+        );
+
+        setErroAgendamento(
+          'Não foi possível carregar os dados da vistoria.'
+        );
+
+        return;
+      }
+
+      const resultado =
+        data?.[0] as
+          | AgendamentoVistoria
+          | undefined;
+
+      if (
+        !resultado ||
+        !resultado.data_vistoria
+      ) {
+        setAgendamento(null);
+        return;
+      }
+
+      setAgendamento(resultado);
+    } catch (error) {
+      console.error(
+        'Erro ao carregar agendamento:',
+        error
+      );
+
+      setErroAgendamento(
+        'Ocorreu um erro ao carregar os dados da vistoria.'
+      );
+    } finally {
+      setCarregandoAgendamento(false);
+    }
+  }
+
+  function formatarData(
+    dataIso:
+      | string
+      | null
+      | undefined
+  ) {
+    if (!dataIso) {
+      return '-';
+    }
+
+    const partes =
+      dataIso.split('-');
+
+    if (partes.length === 3) {
+      return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
+
+    return dataIso;
+  }
+
+  function formatarHora(
+    hora:
+      | string
+      | null
+      | undefined
+  ) {
+    if (!hora) {
+      return '-';
+    }
+
+    return hora.substring(0, 5);
+  }
+
   function formatarDataHora(
     dataIso: string
   ) {
@@ -295,6 +411,52 @@ export default function DetalhesSolicitacaoScreen() {
 
       default:
         return status;
+    }
+  }
+
+  function statusJaPassouDaAnalise(
+    status: string
+  ) {
+    return status !== 'aberta';
+  }
+
+  function statusJaChegouNaVistoria(
+    status: string
+  ) {
+    return [
+      'vistoria_agendada',
+      'em_vistoria',
+      'aprovada',
+      'nao_aprovada',
+      'em_execucao',
+      'concluida',
+    ].includes(status);
+  }
+
+  function textoProximaEtapa(
+    status: string
+  ) {
+    switch (status) {
+      case 'aberta':
+        return 'A equipe da EMAFE analisará sua solicitação. As atualizações aparecerão nesta tela.';
+
+      case 'em_analise':
+        return 'Sua solicitação está em análise. Quando a vistoria for agendada, a data e o horário aparecerão nesta tela.';
+
+      case 'vistoria_agendada':
+        return 'Sua vistoria já está agendada. Confira a data, o horário e as orientações acima.';
+
+      case 'em_vistoria':
+        return 'A vistoria técnica está em andamento. As próximas atualizações serão registradas neste protocolo.';
+
+      case 'em_execucao':
+        return 'O atendimento está em execução. Você poderá acompanhar a conclusão por esta tela.';
+
+      case 'concluida':
+        return 'O atendimento foi concluído. Este protocolo permanece disponível para consulta.';
+
+      default:
+        return 'Acompanhe esta tela para consultar as próximas atualizações do atendimento.';
     }
   }
 
@@ -911,6 +1073,284 @@ export default function DetalhesSolicitacaoScreen() {
                 </>
               ) : null}
 
+              {/* VISTORIA AGENDADA */}
+
+              {(carregandoAgendamento ||
+                erroAgendamento ||
+                agendamento) ? (
+                <>
+                  <Text
+                    style={
+                      styles.sectionTitle
+                    }
+                  >
+                    Vistoria
+                  </Text>
+
+                  {carregandoAgendamento ? (
+                    <View
+                      style={
+                        styles.vistoriaLoadingCard
+                      }
+                    >
+                      <ActivityIndicator
+                        color="#0B2447"
+                      />
+
+                      <Text
+                        style={
+                          styles.vistoriaLoadingText
+                        }
+                      >
+                        Carregando dados da vistoria...
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {erroAgendamento ? (
+                    <View
+                      style={
+                        styles.photoErrorBox
+                      }
+                    >
+                      <Ionicons
+                        name="alert-circle-outline"
+                        size={19}
+                        color="#9A3232"
+                      />
+
+                      <Text
+                        style={
+                          styles.photoErrorText
+                        }
+                      >
+                        {erroAgendamento}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {!carregandoAgendamento &&
+                  !erroAgendamento &&
+                  agendamento ? (
+                    <View
+                      style={
+                        styles.vistoriaCard
+                      }
+                    >
+                      <View
+                        style={
+                          styles.vistoriaHeader
+                        }
+                      >
+                        <View
+                          style={
+                            styles.vistoriaIcon
+                          }
+                        >
+                          <Ionicons
+                            name="calendar-outline"
+                            size={23}
+                            color="#287A46"
+                          />
+                        </View>
+
+                        <View
+                          style={{
+                            flex: 1,
+                          }}
+                        >
+                          <Text
+                            style={
+                              styles.vistoriaStatusLabel
+                            }
+                          >
+                            VISTORIA AGENDADA
+                          </Text>
+
+                          <Text
+                            style={
+                              styles.vistoriaTitle
+                            }
+                          >
+                            Visita técnica programada
+                          </Text>
+
+                          <Text
+                            style={
+                              styles.vistoriaSubtitle
+                            }
+                          >
+                            Confira abaixo os dados definidos pela equipe da EMAFE.
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View
+                        style={
+                          styles.vistoriaInfoGrid
+                        }
+                      >
+                        <View
+                          style={
+                            styles.vistoriaInfoItem
+                          }
+                        >
+                          <Ionicons
+                            name="calendar-outline"
+                            size={19}
+                            color="#0B2447"
+                          />
+
+                          <View
+                            style={{
+                              flex: 1,
+                            }}
+                          >
+                            <Text
+                              style={
+                                styles.vistoriaInfoLabel
+                              }
+                            >
+                              DATA
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.vistoriaInfoValue
+                              }
+                            >
+                              {formatarData(
+                                agendamento.data_vistoria
+                              )}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View
+                          style={
+                            styles.vistoriaInfoItem
+                          }
+                        >
+                          <Ionicons
+                            name="time-outline"
+                            size={19}
+                            color="#0B2447"
+                          />
+
+                          <View
+                            style={{
+                              flex: 1,
+                            }}
+                          >
+                            <Text
+                              style={
+                                styles.vistoriaInfoLabel
+                              }
+                            >
+                              HORÁRIO
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.vistoriaInfoValue
+                              }
+                            >
+                              {formatarHora(
+                                agendamento.hora_vistoria
+                              )}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      {agendamento.responsavel_vistoria_nome ? (
+                        <View
+                          style={
+                            styles.vistoriaDetailRow
+                          }
+                        >
+                          <Ionicons
+                            name="person-outline"
+                            size={19}
+                            color="#697789"
+                          />
+
+                          <View
+                            style={{
+                              flex: 1,
+                            }}
+                          >
+                            <Text
+                              style={
+                                styles.vistoriaDetailLabel
+                              }
+                            >
+                              Responsável pela vistoria
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.vistoriaDetailValue
+                              }
+                            >
+                              {
+                                agendamento.responsavel_vistoria_nome
+                              }
+                            </Text>
+                          </View>
+                        </View>
+                      ) : null}
+
+                      {agendamento.observacao_vistoria ? (
+                        <View
+                          style={
+                            styles.vistoriaObservacao
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.vistoriaDetailLabel
+                            }
+                          >
+                            Observação
+                          </Text>
+
+                          <Text
+                            style={
+                              styles.vistoriaObservacaoText
+                            }
+                          >
+                            {
+                              agendamento.observacao_vistoria
+                            }
+                          </Text>
+                        </View>
+                      ) : null}
+
+                      <View
+                        style={
+                          styles.vistoriaAviso
+                        }
+                      >
+                        <Ionicons
+                          name="information-circle-outline"
+                          size={19}
+                          color="#0B5EA8"
+                        />
+
+                        <Text
+                          style={
+                            styles.vistoriaAvisoText
+                          }
+                        >
+                          Caso seja necessário alterar o agendamento, a equipe da EMAFE entrará em contato pelos dados informados na solicitação.
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
+                </>
+              ) : null}
+
               {/* ANDAMENTO */}
 
               <Text
@@ -969,8 +1409,9 @@ export default function DetalhesSolicitacaoScreen() {
                   </View>
                 </View>
 
-                {solicitacao.status !==
-                'aberta' ? (
+                {statusJaPassouDaAnalise(
+                  solicitacao.status
+                ) ? (
                   <View
                     style={
                       styles.timelineItem
@@ -980,6 +1421,194 @@ export default function DetalhesSolicitacaoScreen() {
                       style={
                         styles.timelineMarker
                       }
+                    >
+                      <Ionicons
+                        name="search-outline"
+                        size={14}
+                        color="#FFFFFF"
+                      />
+                    </View>
+
+                    <View
+                      style={
+                        styles.timelineContent
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.timelineTitle
+                        }
+                      >
+                        Em análise
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.timelineDate
+                        }
+                      >
+                        Análise técnica registrada
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {statusJaChegouNaVistoria(
+                  solicitacao.status
+                ) &&
+                agendamento ? (
+                  <View
+                    style={
+                      styles.timelineItem
+                    }
+                  >
+                    <View
+                      style={
+                        styles.timelineMarker
+                      }
+                    >
+                      <Ionicons
+                        name="calendar-outline"
+                        size={14}
+                        color="#FFFFFF"
+                      />
+                    </View>
+
+                    <View
+                      style={
+                        styles.timelineContent
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.timelineTitle
+                        }
+                      >
+                        Vistoria agendada
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.timelineDate
+                        }
+                      >
+                        {formatarData(
+                          agendamento.data_vistoria
+                        )}{' '}
+                        às{' '}
+                        {formatarHora(
+                          agendamento.hora_vistoria
+                        )}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {solicitacao.status ===
+                  'em_vistoria' ||
+                solicitacao.status ===
+                  'em_execucao' ||
+                solicitacao.status ===
+                  'concluida' ? (
+                  <View
+                    style={
+                      styles.timelineItem
+                    }
+                  >
+                    <View
+                      style={
+                        styles.timelineMarker
+                      }
+                    >
+                      <Ionicons
+                        name="construct-outline"
+                        size={14}
+                        color="#FFFFFF"
+                      />
+                    </View>
+
+                    <View
+                      style={
+                        styles.timelineContent
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.timelineTitle
+                        }
+                      >
+                        Em vistoria
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.timelineDate
+                        }
+                      >
+                        Vistoria técnica iniciada
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {solicitacao.status ===
+                  'em_execucao' ||
+                solicitacao.status ===
+                  'concluida' ? (
+                  <View
+                    style={
+                      styles.timelineItem
+                    }
+                  >
+                    <View
+                      style={
+                        styles.timelineMarker
+                      }
+                    >
+                      <Ionicons
+                        name="hammer-outline"
+                        size={14}
+                        color="#FFFFFF"
+                      />
+                    </View>
+
+                    <View
+                      style={
+                        styles.timelineContent
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.timelineTitle
+                        }
+                      >
+                        Em execução
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.timelineDate
+                        }
+                      >
+                        Atendimento em execução
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {solicitacao.status ===
+                'concluida' ? (
+                  <View
+                    style={[
+                      styles.timelineItem,
+                      styles.timelineItemLast,
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.timelineMarker,
+                        styles.timelineMarkerSuccess,
+                      ]}
                     >
                       <Ionicons
                         name="checkmark"
@@ -998,9 +1627,7 @@ export default function DetalhesSolicitacaoScreen() {
                           styles.timelineTitle
                         }
                       >
-                        {textoStatus(
-                          solicitacao.status
-                        )}
+                        Concluída
                       </Text>
 
                       <Text
@@ -1008,11 +1635,7 @@ export default function DetalhesSolicitacaoScreen() {
                           styles.timelineDate
                         }
                       >
-                        Atualizado em{' '}
-                        {formatarDataHora(
-                          solicitacao
-                            .updated_at
-                        )}
+                        Atendimento concluído
                       </Text>
                     </View>
                   </View>
@@ -1049,10 +1672,9 @@ export default function DetalhesSolicitacaoScreen() {
                     styles.infoText
                   }
                 >
-                  A equipe da EMAFE analisará
-                  sua solicitação de manutenção.
-                  As atualizações aparecerão
-                  nesta tela.
+                  {textoProximaEtapa(
+                    solicitacao.status
+                  )}
                 </Text>
               </View>
             </>
@@ -1349,6 +1971,156 @@ const styles =
       fontSize: 11,
     },
 
+    // ======================================================
+    // VISTORIA
+    // ======================================================
+
+    vistoriaLoadingCard: {
+      minHeight: 95,
+      borderRadius: 14,
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1,
+      borderColor: '#D8DEE7',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    vistoriaLoadingText: {
+      color: '#697789',
+      fontSize: 11,
+      marginTop: 8,
+    },
+
+    vistoriaCard: {
+      backgroundColor: '#F0F8F2',
+      borderWidth: 1,
+      borderColor: '#B7DCC2',
+      borderRadius: 16,
+      padding: 16,
+    },
+
+    vistoriaHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 11,
+    },
+
+    vistoriaIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 13,
+      backgroundColor: '#FFFFFF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    vistoriaStatusLabel: {
+      color: '#287A46',
+      fontSize: 9,
+      fontWeight: '800',
+    },
+
+    vistoriaTitle: {
+      color: '#0B2447',
+      fontSize: 16,
+      fontWeight: '800',
+      marginTop: 3,
+    },
+
+    vistoriaSubtitle: {
+      color: '#697789',
+      fontSize: 11,
+      lineHeight: 17,
+      marginTop: 4,
+    },
+
+    vistoriaInfoGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+      marginTop: 16,
+    },
+
+    vistoriaInfoItem: {
+      flexGrow: 1,
+      flexBasis: 180,
+      minHeight: 68,
+      backgroundColor: '#FFFFFF',
+      borderRadius: 12,
+      paddingHorizontal: 13,
+      paddingVertical: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+
+    vistoriaInfoLabel: {
+      color: '#8995A5',
+      fontSize: 9,
+      fontWeight: '700',
+    },
+
+    vistoriaInfoValue: {
+      color: '#0B2447',
+      fontSize: 14,
+      fontWeight: '800',
+      marginTop: 3,
+    },
+
+    vistoriaDetailRow: {
+      backgroundColor: '#FFFFFF',
+      borderRadius: 12,
+      padding: 13,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 10,
+    },
+
+    vistoriaDetailLabel: {
+      color: '#8995A5',
+      fontSize: 9,
+      fontWeight: '700',
+    },
+
+    vistoriaDetailValue: {
+      color: '#24364B',
+      fontSize: 12,
+      fontWeight: '700',
+      marginTop: 3,
+    },
+
+    vistoriaObservacao: {
+      backgroundColor: '#FFFFFF',
+      borderRadius: 12,
+      padding: 13,
+      marginTop: 10,
+    },
+
+    vistoriaObservacaoText: {
+      color: '#42566D',
+      fontSize: 12,
+      lineHeight: 18,
+      marginTop: 5,
+    },
+
+    vistoriaAviso: {
+      backgroundColor: '#FFFFFF',
+      borderRadius: 12,
+      padding: 12,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      marginTop: 10,
+    },
+
+    vistoriaAvisoText: {
+      flex: 1,
+      color: '#52667D',
+      fontSize: 10,
+      lineHeight: 16,
+    },
+
     timeline: {
       backgroundColor: '#FFFFFF',
       borderRadius: 14,
@@ -1370,6 +2142,14 @@ const styles =
       backgroundColor: '#0B2447',
       alignItems: 'center',
       justifyContent: 'center',
+    },
+
+    timelineMarkerSuccess: {
+      backgroundColor: '#287A46',
+    },
+
+    timelineItemLast: {
+      marginBottom: 0,
     },
 
     timelineContent: {
