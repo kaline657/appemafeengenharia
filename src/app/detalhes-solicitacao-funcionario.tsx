@@ -1,13 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Asset } from 'expo-asset';
 import * as ImagePicker from 'expo-image-picker';
+import * as Print from 'expo-print';
 import {
   router,
   useLocalSearchParams,
 } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import { StatusBar } from 'expo-status-bar';
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -15,6 +19,8 @@ import {
   ActivityIndicator,
   Image,
   Modal,
+  PanResponder,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -23,6 +29,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
+import Svg, { Path as SvgPath } from 'react-native-svg';
 
 import { supabase } from '../lib/supabase';
 
@@ -156,6 +164,84 @@ type ExecucaoServico = {
   conclusao?: string | null;
   iniciada_em: string | null;
   concluida_em?: string | null;
+};
+
+type FotoExecucaoSalva = {
+  id: string;
+  execucao_id: string;
+  caminho_storage: string;
+  nome_arquivo: string | null;
+  descricao: string | null;
+  created_at: string;
+  url: string;
+};
+
+type EstadoAssinaturasForm03 = {
+  modo_assinatura:
+    | 'manual_app'
+    | 'externa_pdf'
+    | null;
+
+  status: string;
+
+  assinatura_cliente_svg: string | null;
+  assinatura_cliente_nome: string | null;
+  assinado_cliente_em: string | null;
+
+  assinatura_funcionario_svg: string | null;
+  assinatura_funcionario_nome: string | null;
+  assinado_funcionario_em: string | null;
+};
+
+type DadosForm03 = {
+  form03_id: string | null;
+  form03_status: string | null;
+
+  solicitacao_id: string;
+  protocolo: string;
+  data_reclamacao: string;
+
+  cliente_id: string;
+  solicitante: string;
+  telefone: string | null;
+  email: string | null;
+  disponibilidade: string | null;
+
+  empreendimento: string;
+  unidade: string;
+  comodo: string | null;
+
+  problema_relatado: string;
+
+  categoria: string | null;
+  elemento_construtivo: string | null;
+  manifestacao_patologica: string | null;
+  status_garantia: string | null;
+  prazo_quantidade: number | null;
+  prazo_unidade: string | null;
+  data_limite_garantia: string | null;
+
+  vistoria_id: string | null;
+  responsavel_vistoria: string | null;
+  inicio_vistoria: string | null;
+  fim_vistoria: string | null;
+  problema_constatado: boolean | null;
+  parecer_tecnico: string | null;
+  servico_necessario: string | null;
+  observacoes_vistoria: string | null;
+  resultado_vistoria: string | null;
+
+  execucao_id: string | null;
+  numero_termo: number | null;
+  responsavel_servico: string | null;
+  inicio_execucao: string | null;
+  data_conclusao: string | null;
+  conclusao: string | null;
+  solucao_tecnica: string | null;
+  observacoes_execucao: string | null;
+
+  fotos_vistoria: any[];
+  fotos_execucao: any[];
 };
 
 // ============================================================
@@ -381,6 +467,140 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     sucessoExecucao,
     setSucessoExecucao,
   ] = useState('');
+
+  const [
+    solucaoTecnicaExecucao,
+    setSolucaoTecnicaExecucao,
+  ] = useState('');
+
+  const [
+    observacoesExecucao,
+    setObservacoesExecucao,
+  ] = useState('');
+
+  const [
+    salvandoExecucao,
+    setSalvandoExecucao,
+  ] = useState(false);
+
+  const [
+    erroFormularioExecucao,
+    setErroFormularioExecucao,
+  ] = useState('');
+
+  const [
+    sucessoFormularioExecucao,
+    setSucessoFormularioExecucao,
+  ] = useState('');
+
+  const [
+    fotosExecucaoPendentes,
+    setFotosExecucaoPendentes,
+  ] = useState<
+    ImagePicker.ImagePickerAsset[]
+  >([]);
+
+  const [
+    fotosExecucaoSalvas,
+    setFotosExecucaoSalvas,
+  ] = useState<FotoExecucaoSalva[]>(
+    []
+  );
+
+  const [
+    carregandoFotosExecucao,
+    setCarregandoFotosExecucao,
+  ] = useState(false);
+
+  const [
+    conclusaoExecucao,
+    setConclusaoExecucao,
+  ] = useState<
+    'total' |
+    'improcedente' |
+    null
+  >(null);
+
+  const [
+    finalizandoExecucao,
+    setFinalizandoExecucao,
+  ] = useState(false);
+
+  const [
+    erroFinalizacaoExecucao,
+    setErroFinalizacaoExecucao,
+  ] = useState('');
+
+  const [
+    sucessoFinalizacaoExecucao,
+    setSucessoFinalizacaoExecucao,
+  ] = useState('');
+
+  const [
+    dadosForm03,
+    setDadosForm03,
+  ] = useState<DadosForm03 | null>(null);
+
+  const [
+    carregandoForm03,
+    setCarregandoForm03,
+  ] = useState(false);
+
+  const [
+    erroForm03,
+    setErroForm03,
+  ] = useState('');
+
+  const [
+    gerandoPdfForm03,
+    setGerandoPdfForm03,
+  ] = useState(false);
+
+  const [
+    pdfForm03Gerado,
+    setPdfForm03Gerado,
+  ] = useState(false);
+
+  const [
+    pdfForm03Uri,
+    setPdfForm03Uri,
+  ] = useState<string | null>(null);
+
+  const [
+    modoAssinaturaForm03,
+    setModoAssinaturaForm03,
+  ] = useState<
+    'manual_app' |
+    'externa_pdf' |
+    null
+  >(null);
+
+  const [
+    definindoModoAssinatura,
+    setDefinindoModoAssinatura,
+  ] = useState(false);
+
+  const [
+    mensagemAssinaturaForm03,
+    setMensagemAssinaturaForm03,
+  ] = useState('');
+
+  const [
+    estadoAssinaturasForm03,
+    setEstadoAssinaturasForm03,
+  ] =
+    useState<EstadoAssinaturasForm03 | null>(
+      null
+    );
+
+  const [
+    salvandoAssinaturaManual,
+    setSalvandoAssinaturaManual,
+  ] = useState<
+    'cliente' |
+    'funcionario' |
+    null
+  >(null);
 
   // ==========================================================
   // ESTADOS GERAIS
@@ -2133,6 +2353,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
       if (!data) {
         setExecucaoServico(null);
+        setSolucaoTecnicaExecucao('');
+        setObservacoesExecucao('');
+        setFotosExecucaoSalvas([]);
         return null;
       }
 
@@ -2179,6 +2402,35 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
       setExecucaoServico(registro);
 
+      setSolucaoTecnicaExecucao(
+        registro.solucao_tecnica ??
+          ''
+      );
+
+      setObservacoesExecucao(
+        registro.observacoes ??
+          ''
+      );
+
+      if (
+        registro.conclusao ===
+          'total' ||
+        registro.conclusao ===
+          'improcedente'
+      ) {
+        setConclusaoExecucao(
+          registro.conclusao
+        );
+      } else {
+        setConclusaoExecucao(
+          null
+        );
+      }
+
+      await carregarFotosExecucao(
+        registro.execucao_id
+      );
+
       return registro;
     } catch (error) {
       console.error(
@@ -2193,6 +2445,8 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   async function iniciarExecucaoServico() {
     setErroExecucao('');
     setSucessoExecucao('');
+    setErroFormularioExecucao('');
+    setSucessoFormularioExecucao('');
 
     try {
       setIniciandoExecucao(true);
@@ -2270,6 +2524,1905 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       );
     } finally {
       setIniciandoExecucao(false);
+    }
+  }
+
+  // ==========================================================
+  // FOTOS DA EXECUÇÃO DO SERVIÇO
+  // ==========================================================
+
+  async function carregarFotosExecucao(
+    execucaoId?: string
+  ) {
+    const id =
+      execucaoId ??
+      execucaoServico?.execucao_id;
+
+    if (!id) {
+      setFotosExecucaoSalvas([]);
+      return;
+    }
+
+    try {
+      setCarregandoFotosExecucao(
+        true
+      );
+
+      const {
+        data,
+        error,
+      } = await supabase
+        .from('execucao_fotos')
+        .select(
+          'id, execucao_id, caminho_storage, nome_arquivo, descricao, created_at'
+        )
+        .eq(
+          'execucao_id',
+          id
+        )
+        .order(
+          'created_at',
+          {
+            ascending: true,
+          }
+        );
+
+      if (error) {
+        console.error(
+          'Erro ao carregar fotos da execução:',
+          error
+        );
+
+        return;
+      }
+
+      const fotosComUrl =
+        await Promise.all(
+          (data ?? []).map(
+            async (foto: any) => {
+              const {
+                data: signedData,
+                error:
+                  signedError,
+              } =
+                await supabase.storage
+                  .from(
+                    'execucoes-fotos'
+                  )
+                  .createSignedUrl(
+                    foto.caminho_storage,
+                    60 * 60
+                  );
+
+              if (signedError) {
+                console.error(
+                  'Erro ao gerar URL da foto da execução:',
+                  signedError
+                );
+              }
+
+              return {
+                ...foto,
+                url:
+                  signedData
+                    ?.signedUrl ??
+                  '',
+              } as FotoExecucaoSalva;
+            }
+          )
+        );
+
+      setFotosExecucaoSalvas(
+        fotosComUrl
+      );
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao carregar fotos da execução:',
+        error
+      );
+    } finally {
+      setCarregandoFotosExecucao(
+        false
+      );
+    }
+  }
+
+  async function selecionarFotosExecucao() {
+    setErroFormularioExecucao('');
+    setSucessoFormularioExecucao('');
+
+    const quantidadeAtual =
+      fotosExecucaoPendentes.length +
+      fotosExecucaoSalvas.length;
+
+    if (quantidadeAtual >= 10) {
+      setErroFormularioExecucao(
+        'A execução pode ter no máximo 10 fotos.'
+      );
+
+      return;
+    }
+
+    try {
+      const resultado =
+        await ImagePicker.launchImageLibraryAsync(
+          {
+            mediaTypes:
+              ImagePicker
+                .MediaTypeOptions
+                .Images,
+
+            allowsMultipleSelection:
+              true,
+
+            selectionLimit:
+              10 -
+              quantidadeAtual,
+
+            quality: 0.8,
+          }
+        );
+
+      if (
+        resultado.canceled
+      ) {
+        return;
+      }
+
+      const disponiveis =
+        10 -
+        quantidadeAtual;
+
+      setFotosExecucaoPendentes(
+        (
+          atuais
+        ) => [
+          ...atuais,
+          ...resultado.assets.slice(
+            0,
+            disponiveis
+          ),
+        ]
+      );
+    } catch (error) {
+      console.error(
+        'Erro ao selecionar fotos da execução:',
+        error
+      );
+
+      setErroFormularioExecucao(
+        'Não foi possível selecionar as fotos da execução.'
+      );
+    }
+  }
+
+  function removerFotoExecucaoPendente(
+    uri: string
+  ) {
+    setFotosExecucaoPendentes(
+      (atuais) =>
+        atuais.filter(
+          (foto) =>
+            foto.uri !== uri
+        )
+    );
+  }
+
+  async function enviarFotosExecucao() {
+    if (
+      fotosExecucaoPendentes.length ===
+      0
+    ) {
+      return true;
+    }
+
+    if (!execucaoServico) {
+      setErroFormularioExecucao(
+        'A ficha da execução ainda não foi carregada.'
+      );
+
+      return false;
+    }
+
+    const {
+      data: usuarioData,
+      error: usuarioError,
+    } =
+      await supabase.auth
+        .getUser();
+
+    if (
+      usuarioError ||
+      !usuarioData.user
+    ) {
+      setErroFormularioExecucao(
+        'Não foi possível identificar o funcionário.'
+      );
+
+      return false;
+    }
+
+    let pendentesRestantes = [
+      ...fotosExecucaoPendentes,
+    ];
+
+    for (
+      let indice = 0;
+      indice <
+      fotosExecucaoPendentes.length;
+      indice++
+    ) {
+      const foto =
+        fotosExecucaoPendentes[
+          indice
+        ];
+
+      try {
+        const resposta =
+          await fetch(
+            foto.uri
+          );
+
+        const blob =
+          await resposta.blob();
+
+        const extensao =
+          extensaoFoto(
+            foto
+          );
+
+        const nomeArquivo =
+          foto.fileName ??
+          `execucao-${Date.now()}-${indice}.${extensao}`;
+
+        const caminho =
+          `${execucaoServico.execucao_id}/${usuarioData.user.id}/${Date.now()}-${indice}.${extensao}`;
+
+        const {
+          error:
+            uploadError,
+        } =
+          await supabase.storage
+            .from(
+              'execucoes-fotos'
+            )
+            .upload(
+              caminho,
+              blob,
+              {
+                contentType:
+                  foto.mimeType ??
+                  `image/${extensao === 'jpg' ? 'jpeg' : extensao}`,
+
+                upsert: false,
+              }
+            );
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const {
+          error:
+            insertError,
+        } =
+          await supabase
+            .from(
+              'execucao_fotos'
+            )
+            .insert({
+              execucao_id:
+                execucaoServico.execucao_id,
+
+              caminho_storage:
+                caminho,
+
+              nome_arquivo:
+                nomeArquivo,
+
+              funcionario_id:
+                usuarioData.user.id,
+            });
+
+        if (insertError) {
+          await supabase.storage
+            .from(
+              'execucoes-fotos'
+            )
+            .remove([
+              caminho,
+            ]);
+
+          throw insertError;
+        }
+
+        pendentesRestantes =
+          pendentesRestantes.filter(
+            (item) =>
+              item.uri !==
+              foto.uri
+          );
+
+        setFotosExecucaoPendentes(
+          pendentesRestantes
+        );
+      } catch (error: any) {
+        console.error(
+          'Erro ao enviar foto da execução:',
+          error
+        );
+
+        setErroFormularioExecucao(
+          error?.message ??
+            'Não foi possível enviar uma das fotos da execução.'
+        );
+
+        await carregarFotosExecucao(
+          execucaoServico.execucao_id
+        );
+
+        return false;
+      }
+    }
+
+    await carregarFotosExecucao(
+      execucaoServico.execucao_id
+    );
+
+    return true;
+  }
+
+  // ==========================================================
+  // SALVAR EXECUÇÃO DO SERVIÇO
+  // ==========================================================
+
+  async function salvarExecucaoServico() {
+    setErroFormularioExecucao('');
+    setSucessoFormularioExecucao('');
+
+    if (
+      !solucaoTecnicaExecucao.trim()
+    ) {
+      setErroFormularioExecucao(
+        'Informe a solução técnica executada.'
+      );
+
+      return;
+    }
+
+    try {
+      setSalvandoExecucao(true);
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'salvar_execucao_servico_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+
+          p_solucao_tecnica:
+            solucaoTecnicaExecucao.trim(),
+
+          p_observacoes:
+            observacoesExecucao.trim() ||
+            null,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao salvar execução:',
+          error
+        );
+
+        setErroFormularioExecucao(
+          error.message ||
+            'Não foi possível salvar a execução do serviço.'
+        );
+
+        return;
+      }
+
+      if (
+        !data ||
+        data.length === 0
+      ) {
+        setErroFormularioExecucao(
+          'A execução não retornou confirmação de salvamento.'
+        );
+
+        return;
+      }
+
+      const tinhaFotosPendentes =
+        fotosExecucaoPendentes.length >
+        0;
+
+      const fotosEnviadas =
+        await enviarFotosExecucao();
+
+      if (!fotosEnviadas) {
+        return;
+      }
+
+      setSucessoFormularioExecucao(
+        tinhaFotosPendentes
+          ? 'Dados e fotos da execução salvos com sucesso.'
+          : 'Dados da execução salvos com sucesso.'
+      );
+
+      await carregarExecucaoServico();
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao salvar execução:',
+        error
+      );
+
+      setErroFormularioExecucao(
+        'Ocorreu um erro ao salvar a execução do serviço.'
+      );
+    } finally {
+      setSalvandoExecucao(false);
+    }
+  }
+
+  // ==========================================================
+  // FINALIZAR EXECUÇÃO DO SERVIÇO
+  // ==========================================================
+
+  async function finalizarExecucaoServico() {
+    setErroFinalizacaoExecucao('');
+    setSucessoFinalizacaoExecucao('');
+
+    if (!conclusaoExecucao) {
+      setErroFinalizacaoExecucao(
+        'Selecione a conclusão do serviço.'
+      );
+
+      return;
+    }
+
+    if (
+      !solucaoTecnicaExecucao.trim()
+    ) {
+      setErroFinalizacaoExecucao(
+        'Preencha a solução técnica antes de finalizar o serviço.'
+      );
+
+      return;
+    }
+
+    try {
+      setFinalizandoExecucao(
+        true
+      );
+
+      // Salva os dados atuais antes de concluir.
+      const {
+        error: salvarError,
+      } = await supabase.rpc(
+        'salvar_execucao_servico_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+
+          p_solucao_tecnica:
+            solucaoTecnicaExecucao.trim(),
+
+          p_observacoes:
+            observacoesExecucao.trim() ||
+            null,
+        }
+      );
+
+      if (salvarError) {
+        console.error(
+          'Erro ao salvar execução antes de finalizar:',
+          salvarError
+        );
+
+        setErroFinalizacaoExecucao(
+          salvarError.message ||
+            'Não foi possível salvar os dados da execução.'
+        );
+
+        return;
+      }
+
+      // Envia fotos que ainda estejam aguardando salvamento.
+      const fotosEnviadas =
+        await enviarFotosExecucao();
+
+      if (!fotosEnviadas) {
+        setErroFinalizacaoExecucao(
+          'Não foi possível finalizar porque existem fotos que não foram enviadas.'
+        );
+
+        return;
+      }
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'finalizar_execucao_servico_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+
+          p_conclusao:
+            conclusaoExecucao,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao finalizar execução:',
+          error
+        );
+
+        setErroFinalizacaoExecucao(
+          error.message ||
+            'Não foi possível finalizar o serviço.'
+        );
+
+        return;
+      }
+
+      if (
+        !data ||
+        data.length === 0
+      ) {
+        setErroFinalizacaoExecucao(
+          'O sistema não retornou a confirmação da conclusão do serviço.'
+        );
+
+        return;
+      }
+
+      setSucessoFinalizacaoExecucao(
+        'Serviço finalizado com sucesso.'
+      );
+
+      await carregarSolicitacao();
+      await carregarExecucaoServico();
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao finalizar execução:',
+        error
+      );
+
+      setErroFinalizacaoExecucao(
+        'Ocorreu um erro ao finalizar o serviço.'
+      );
+    } finally {
+      setFinalizandoExecucao(
+        false
+      );
+    }
+  }
+
+  // ==========================================================
+  // CARREGAR DADOS DO FORM 03
+  // ==========================================================
+
+  async function carregarDadosForm03() {
+    setErroForm03('');
+
+    try {
+      setCarregandoForm03(true);
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'buscar_dados_form03_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao buscar dados do FORM 03:',
+          error
+        );
+
+        setErroForm03(
+          error.message ||
+            'Não foi possível carregar os dados do FORM 03.'
+        );
+
+        return;
+      }
+
+      const registro =
+        data?.[0] as
+          | DadosForm03
+          | undefined;
+
+      if (!registro) {
+        setErroForm03(
+          'Nenhum dado foi retornado para o FORM 03.'
+        );
+
+        return;
+      }
+
+      setDadosForm03(
+        registro
+      );
+
+      await carregarEstadoAssinaturasForm03();
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao carregar FORM 03:',
+        error
+      );
+
+      setErroForm03(
+        'Ocorreu um erro ao carregar os dados do FORM 03.'
+      );
+    } finally {
+      setCarregandoForm03(false);
+    }
+  }
+
+  // ==========================================================
+  // ASSINATURAS MANUAIS DO FORM 03
+  // ==========================================================
+
+  async function carregarEstadoAssinaturasForm03() {
+    try {
+      const {
+        data,
+        error,
+      } = await supabase
+        .from(
+          'form03_documentos'
+        )
+        .select(
+          [
+            'modo_assinatura',
+            'status',
+            'assinatura_cliente_svg',
+            'assinatura_cliente_nome',
+            'assinado_cliente_em',
+            'assinatura_funcionario_svg',
+            'assinatura_funcionario_nome',
+            'assinado_funcionario_em',
+          ].join(',')
+        )
+        .eq(
+          'solicitacao_id',
+          solicitacaoId
+        )
+        .maybeSingle();
+
+      if (error) {
+        console.error(
+          'Erro ao carregar assinaturas do FORM 03:',
+          error
+        );
+
+        return;
+      }
+
+      if (!data) {
+        setEstadoAssinaturasForm03(
+          null
+        );
+
+        return;
+      }
+
+      const estado =
+        data as unknown as
+          EstadoAssinaturasForm03;
+
+      setEstadoAssinaturasForm03(
+        estado
+      );
+
+      if (
+        estado.modo_assinatura
+      ) {
+        setModoAssinaturaForm03(
+          estado.modo_assinatura
+        );
+      }
+
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao carregar assinaturas:',
+        error
+      );
+    }
+  }
+
+  async function salvarAssinaturaFuncionarioForm03(
+    assinaturaSvg: string
+  ) {
+    setErroForm03('');
+    setMensagemAssinaturaForm03('');
+
+    try {
+      setSalvandoAssinaturaManual(
+        'funcionario'
+      );
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'salvar_assinatura_funcionario_form03',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+
+          p_assinatura_svg:
+            assinaturaSvg,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao salvar assinatura do responsável:',
+          error
+        );
+
+        setErroForm03(
+          error.message ||
+            'Não foi possível salvar a assinatura do responsável.'
+        );
+
+        return;
+      }
+
+      if (
+        !data ||
+        data.length === 0
+      ) {
+        setErroForm03(
+          'O sistema não confirmou o salvamento da assinatura.'
+        );
+
+        return;
+      }
+
+      setMensagemAssinaturaForm03(
+        'Assinatura do responsável salva com sucesso.'
+      );
+
+      await carregarEstadoAssinaturasForm03();
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao salvar assinatura do responsável:',
+        error
+      );
+
+      setErroForm03(
+        'Ocorreu um erro ao salvar a assinatura do responsável.'
+      );
+    } finally {
+      setSalvandoAssinaturaManual(
+        null
+      );
+    }
+  }
+
+  // ==========================================================
+  // PDF DO FORM 03
+  // ==========================================================
+
+  function escaparHtml(
+    valor: unknown
+  ) {
+    return String(
+      valor ?? ''
+    )
+      .replace(
+        /&/g,
+        '&amp;'
+      )
+      .replace(
+        /</g,
+        '&lt;'
+      )
+      .replace(
+        />/g,
+        '&gt;'
+      )
+      .replace(
+        /"/g,
+        '&quot;'
+      )
+      .replace(
+        /'/g,
+        '&#039;'
+      );
+  }
+
+  async function gerarUrlsFotosForm03() {
+    if (!dadosForm03) {
+      return [] as string[];
+    }
+
+    const fotos = [
+      ...(dadosForm03.fotos_vistoria ??
+        []).map(
+        (foto: any) => ({
+          bucket:
+            'vistorias-fotos',
+          caminho:
+            foto.caminho_storage,
+        })
+      ),
+
+      ...(dadosForm03.fotos_execucao ??
+        []).map(
+        (foto: any) => ({
+          bucket:
+            'execucoes-fotos',
+          caminho:
+            foto.caminho_storage,
+        })
+      ),
+    ].slice(0, 3);
+
+    const urls: string[] = [];
+
+    for (const foto of fotos) {
+      if (!foto.caminho) {
+        continue;
+      }
+
+      const {
+        data,
+        error,
+      } = await supabase.storage
+        .from(foto.bucket)
+        .createSignedUrl(
+          foto.caminho,
+          60 * 60
+        );
+
+      if (error) {
+        console.error(
+          'Erro ao gerar URL de foto para o FORM 03:',
+          error
+        );
+
+        continue;
+      }
+
+      if (data?.signedUrl) {
+        urls.push(
+          data.signedUrl
+        );
+      }
+    }
+
+    return urls;
+  }
+
+  async function montarHtmlForm03() {
+    if (!dadosForm03) {
+      throw new Error(
+        'Carregue os dados do FORM 03 antes de gerar o PDF.'
+      );
+    }
+
+    const logoAsset =
+      Asset.fromModule(
+        require(
+          '../../assets/emafe/logo-horizontal-transparente.png'
+        )
+      );
+
+    if (!logoAsset.localUri) {
+      await logoAsset.downloadAsync();
+    }
+
+    const logoForm03Uri =
+      logoAsset.localUri ??
+      logoAsset.uri;
+
+    const urlsFotos =
+      await gerarUrlsFotosForm03();
+
+    const fotosHtml =
+      urlsFotos.length > 0
+        ? urlsFotos
+            .map(
+              (
+                url,
+                indice
+              ) => `
+                <div class="foto-box">
+                  <div class="foto-titulo">
+                    REGISTRO FOTOGRÁFICO ${indice + 1}
+                  </div>
+
+                  <img
+                    src="${escaparHtml(url)}"
+                    class="foto"
+                  />
+                </div>
+              `
+            )
+            .join('')
+        : `
+            <div class="sem-fotos">
+              Nenhum registro fotográfico disponível.
+            </div>
+          `;
+
+    const procedencia =
+      dadosForm03.problema_constatado ===
+      true
+        ? 'P - Procedente'
+        : dadosForm03.problema_constatado ===
+            false
+          ? 'I - Improcedente'
+          : '-';
+
+    const conclusao =
+      dadosForm03.conclusao ===
+      'total'
+        ? 'TOTAL'
+        : dadosForm03.conclusao ===
+            'improcedente'
+          ? 'IMPROCEDENTE'
+          : '-';
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+
+  <style>
+    @page {
+      size: A4;
+      margin: 12mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: #1d2c3f;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10px;
+      line-height: 1.35;
+    }
+
+    .header {
+      width: calc(100% - 2px);
+      margin-right: 2px;
+      border: 1.5px solid #0B2447;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      text-align: center;
+      overflow: hidden;
+      page-break-inside: avoid;
+    }
+
+    .logo-form03 {
+      display: block;
+      width: 180px;
+      max-height: 60px;
+      object-fit: contain;
+      margin: 0 auto 5px auto;
+    }
+
+    .titulo {
+      margin-top: 5px;
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .revisao {
+      margin-top: 3px;
+      color: #5d6b7b;
+      font-size: 9px;
+    }
+
+    .section-title {
+      margin-top: 10px;
+      padding: 6px 8px;
+      color: #ffffff;
+      background: #0B2447;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border-left: 1px solid #9eabb8;
+      border-top: 1px solid #9eabb8;
+    }
+
+    .cell {
+      min-height: 45px;
+      padding: 7px;
+      border-right: 1px solid #9eabb8;
+      border-bottom: 1px solid #9eabb8;
+    }
+
+    .cell-full {
+      grid-column: 1 / -1;
+    }
+
+    .label {
+      margin-bottom: 4px;
+      color: #647486;
+      font-size: 8px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .value {
+      font-size: 10px;
+      font-weight: 600;
+      white-space: pre-wrap;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th,
+    td {
+      border: 1px solid #9eabb8;
+      padding: 6px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    th {
+      color: #0B2447;
+      background: #eef3f8;
+      font-size: 8px;
+    }
+
+    .fotos {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 7px;
+      margin-top: 7px;
+    }
+
+    .foto-box {
+      border: 1px solid #9eabb8;
+      padding: 5px;
+      page-break-inside: avoid;
+    }
+
+    .foto-titulo {
+      margin-bottom: 4px;
+      color: #647486;
+      font-size: 7px;
+      font-weight: 800;
+    }
+
+    .foto {
+      display: block;
+      width: 100%;
+      height: 150px;
+      object-fit: cover;
+    }
+
+    .sem-fotos {
+      padding: 12px;
+      border: 1px solid #9eabb8;
+      margin-top: 7px;
+      color: #647486;
+    }
+
+    .termo {
+      margin-top: 10px;
+      padding: 9px;
+      border: 1px solid #9eabb8;
+      font-size: 9px;
+      text-align: justify;
+    }
+
+    .assinaturas {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin-top: 38px;
+      page-break-inside: avoid;
+    }
+
+    .assinatura {
+      text-align: center;
+    }
+
+    .assinatura-svg {
+      width: 100%;
+      height: 70px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+
+    .assinatura-svg svg {
+      width: 100%;
+      height: 70px;
+    }
+
+    .linha {
+      border-top: 1px solid #1d2c3f;
+      padding-top: 5px;
+    }
+
+    .data {
+      margin-top: 10px;
+      color: #647486;
+      font-size: 8px;
+    }
+
+    .rodape {
+      margin-top: 12px;
+      color: #7a8795;
+      font-size: 7px;
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <img
+      src="${escaparHtml(
+        logoForm03Uri
+      )}"
+      class="logo-form03"
+      alt="EMAFE Engenharia"
+    />
+
+    <div class="titulo">
+      FORM 03 — TERMO DE VISTORIA E EXECUÇÃO
+    </div>
+
+    <div class="revisao">
+      Revisão 06 • Protocolo ${escaparHtml(
+        dadosForm03.protocolo
+      )}
+    </div>
+  </div>
+
+  <div class="section-title">
+    SOLICITAÇÃO
+  </div>
+
+  <div class="grid">
+    <div class="cell">
+      <div class="label">
+        Solicitante
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          dadosForm03.solicitante
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Data da reclamação
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          formatarDataHora(
+            dadosForm03.data_reclamacao
+          )
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Contato
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          dadosForm03.telefone ??
+            '-'
+        )}
+        <br />
+        ${escaparHtml(
+          dadosForm03.email ??
+            '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Horário / disponibilidade
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          dadosForm03.disponibilidade ??
+            '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Empreendimento
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          dadosForm03.empreendimento
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Unidade / Local
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          dadosForm03.unidade
+        )}
+        ${
+          dadosForm03.comodo
+            ? ` • ${escaparHtml(
+                dadosForm03.comodo
+              )}`
+            : ''
+        }
+      </div>
+    </div>
+
+    <div class="cell cell-full">
+      <div class="label">
+        Problema relatado
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          dadosForm03.problema_relatado
+        )}
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">
+    VISTORIA
+  </div>
+
+  <div class="grid">
+    <div class="cell">
+      <div class="label">
+        Responsável pela vistoria
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          dadosForm03.responsavel_vistoria ??
+            '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Data da vistoria
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          formatarDataHora(
+            dadosForm03.inicio_vistoria
+          )
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Constatação do problema
+      </div>
+
+      <div class="value">
+        ${
+          dadosForm03.problema_constatado ===
+          true
+            ? 'SIM'
+            : dadosForm03.problema_constatado ===
+                false
+              ? 'NÃO'
+              : '-'
+        }
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Resultado
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          dadosForm03.resultado_vistoria ===
+          'aprovada'
+            ? 'Aprovada'
+            : dadosForm03.resultado_vistoria ===
+                'nao_aprovada'
+              ? 'Não aprovada'
+              : '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell cell-full">
+      <div class="label">
+        Parecer técnico
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          dadosForm03.parecer_tecnico ??
+            '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell cell-full">
+      <div class="label">
+        Serviço necessário
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          dadosForm03.servico_necessario ??
+            '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell cell-full">
+      <div class="label">
+        Observações da vistoria
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          dadosForm03.observacoes_vistoria ??
+            '-'
+        )}
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">
+    GARANTIA
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Problema</th>
+        <th>Descrição da garantia</th>
+        <th>Prazo</th>
+        <th>Vigência</th>
+        <th>P / I</th>
+        <th>Observações</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      <tr>
+        <td>
+          ${escaparHtml(
+            dadosForm03.categoria ??
+              dadosForm03.manifestacao_patologica ??
+              '-'
+          )}
+        </td>
+
+        <td>
+          ${escaparHtml(
+            [
+              dadosForm03.elemento_construtivo,
+              dadosForm03.manifestacao_patologica,
+            ]
+              .filter(Boolean)
+              .join(' - ') ||
+              '-'
+          )}
+        </td>
+
+        <td>
+          ${escaparHtml(
+            dadosForm03.prazo_quantidade ??
+              '-'
+          )}
+          ${escaparHtml(
+            dadosForm03.prazo_unidade ??
+              ''
+          )}
+        </td>
+
+        <td>
+          ${escaparHtml(
+            formatarData(
+              dadosForm03.data_limite_garantia
+            )
+          )}
+        </td>
+
+        <td>
+          ${escaparHtml(
+            procedencia
+          )}
+        </td>
+
+        <td>
+          ${escaparHtml(
+            dadosForm03.observacoes_vistoria ??
+              '-'
+          )}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">
+    SERVIÇO
+  </div>
+
+  <div class="grid">
+    <div class="cell">
+      <div class="label">
+        Nº Termo de Serviço
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          dadosForm03.numero_termo ??
+            '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Responsável pelo serviço
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          dadosForm03.responsavel_servico ??
+            '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Data de conclusão
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          formatarDataHora(
+            dadosForm03.data_conclusao
+          )
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Conclusão
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          conclusao
+        )}
+      </div>
+    </div>
+
+    <div class="cell cell-full">
+      <div class="label">
+        Solução técnica
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          dadosForm03.solucao_tecnica ??
+            '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell cell-full">
+      <div class="label">
+        Observações
+      </div>
+
+      <div class="value">
+        ${escaparHtml(
+          dadosForm03.observacoes_execucao ??
+            '-'
+        )}
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">
+    REGISTROS FOTOGRÁFICOS
+  </div>
+
+  <div class="fotos">
+    ${fotosHtml}
+  </div>
+
+  <div class="section-title">
+    TERMO DE RECEBIMENTO DOS SERVIÇOS
+  </div>
+
+  <div class="termo">
+    Pelo presente termo, aceito os serviços prestados para a correção
+    das falhas apontadas, nada mais tendo a reclamar sobre os mesmos.
+  </div>
+
+  <div class="assinaturas">
+    <div class="assinatura">
+      ${
+        estadoAssinaturasForm03
+          ?.assinatura_cliente_svg
+          ? `
+            <div class="assinatura-svg">
+              ${
+                estadoAssinaturasForm03
+                  .assinatura_cliente_svg
+              }
+            </div>
+          `
+          : ''
+      }
+
+      <div class="linha">
+        ${escaparHtml(
+          estadoAssinaturasForm03
+            ?.assinatura_cliente_nome ??
+            dadosForm03.solicitante
+        )}
+      </div>
+
+      <div>
+        Nome / Assinatura do Cliente ou seu representante
+      </div>
+
+      <div class="data">
+        ${
+          estadoAssinaturasForm03
+            ?.assinado_cliente_em
+            ? `Data: ${escaparHtml(
+                formatarDataHora(
+                  estadoAssinaturasForm03
+                    .assinado_cliente_em
+                )
+              )}`
+            : 'Data: _____ / _____ / __________'
+        }
+      </div>
+    </div>
+
+    <div class="assinatura">
+      ${
+        estadoAssinaturasForm03
+          ?.assinatura_funcionario_svg
+          ? `
+            <div class="assinatura-svg">
+              ${
+                estadoAssinaturasForm03
+                  .assinatura_funcionario_svg
+              }
+            </div>
+          `
+          : ''
+      }
+
+      <div class="linha">
+        ${escaparHtml(
+          estadoAssinaturasForm03
+            ?.assinatura_funcionario_nome ??
+            dadosForm03.responsavel_servico ??
+            ''
+        )}
+      </div>
+
+      <div>
+        Assinatura do responsável pela execução dos serviços
+      </div>
+
+      <div class="data">
+        ${
+          estadoAssinaturasForm03
+            ?.assinado_funcionario_em
+            ? `Data: ${escaparHtml(
+                formatarDataHora(
+                  estadoAssinaturasForm03
+                    .assinado_funcionario_em
+                )
+              )}`
+            : 'Data: _____ / _____ / __________'
+        }
+      </div>
+    </div>
+  </div>
+
+  <div class="rodape">
+    EMAFE Engenharia • FORM 03 • Revisão 06
+  </div>
+</body>
+</html>
+    `;
+  }
+
+  async function gerarPdfForm03() {
+    setErroForm03('');
+    setMensagemAssinaturaForm03('');
+
+    if (!dadosForm03) {
+      setErroForm03(
+        'Carregue os dados do FORM 03 antes de gerar o PDF.'
+      );
+
+      return;
+    }
+
+    try {
+      setGerandoPdfForm03(true);
+
+      const html =
+        await montarHtmlForm03();
+
+      if (
+        Platform.OS === 'web'
+      ) {
+        const janela =
+          window.open(
+            '',
+            '_blank'
+          );
+
+        if (!janela) {
+          setErroForm03(
+            'O navegador bloqueou a janela do PDF. Permita pop-ups para localhost e tente novamente.'
+          );
+
+          return;
+        }
+
+        janela.document.open();
+        janela.document.write(
+          html
+        );
+        janela.document.close();
+
+        setPdfForm03Gerado(
+          true
+        );
+
+        setMensagemAssinaturaForm03(
+          'FORM 03 preparado. Na janela aberta, use Imprimir e escolha “Salvar como PDF”.'
+        );
+
+        setTimeout(
+          () => {
+            try {
+              janela.focus();
+              janela.print();
+            } catch (
+              error
+            ) {
+              console.error(
+                'Erro ao abrir impressão:',
+                error
+              );
+            }
+          },
+          500
+        );
+
+        return;
+      }
+
+      const resultado =
+        await Print.printToFileAsync(
+          {
+            html,
+          }
+        );
+
+      setPdfForm03Uri(
+        resultado.uri
+      );
+
+      setPdfForm03Gerado(
+        true
+      );
+
+      setMensagemAssinaturaForm03(
+        'PDF do FORM 03 gerado com sucesso.'
+      );
+    } catch (error: any) {
+      console.error(
+        'Erro ao gerar PDF do FORM 03:',
+        error
+      );
+
+      setErroForm03(
+        error?.message ??
+          'Não foi possível gerar o PDF do FORM 03.'
+      );
+    } finally {
+      setGerandoPdfForm03(
+        false
+      );
+    }
+  }
+
+  async function compartilharPdfForm03() {
+    if (!pdfForm03Uri) {
+      return;
+    }
+
+    try {
+      const disponivel =
+        await Sharing
+          .isAvailableAsync();
+
+      if (!disponivel) {
+        setErroForm03(
+          'O compartilhamento de arquivos não está disponível neste dispositivo.'
+        );
+
+        return;
+      }
+
+      await Sharing.shareAsync(
+        pdfForm03Uri,
+        {
+          mimeType:
+            'application/pdf',
+
+          dialogTitle:
+            'FORM 03 - EMAFE',
+        }
+      );
+    } catch (error) {
+      console.error(
+        'Erro ao compartilhar PDF:',
+        error
+      );
+
+      setErroForm03(
+        'Não foi possível compartilhar o PDF.'
+      );
+    }
+  }
+
+  async function definirModoAssinaturaForm03(
+    modo:
+      | 'manual_app'
+      | 'externa_pdf'
+  ) {
+    setErroForm03('');
+    setMensagemAssinaturaForm03('');
+
+    if (!pdfForm03Gerado) {
+      setErroForm03(
+        'Gere o PDF do FORM 03 antes de escolher a forma de assinatura.'
+      );
+
+      return;
+    }
+
+    try {
+      setDefinindoModoAssinatura(
+        true
+      );
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'definir_modo_assinatura_form03_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+
+          p_modo_assinatura:
+            modo,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao definir modo de assinatura:',
+          error
+        );
+
+        setErroForm03(
+          error.message ||
+            'Não foi possível definir o modo de assinatura.'
+        );
+
+        return;
+      }
+
+      if (
+        !data ||
+        data.length === 0
+      ) {
+        setErroForm03(
+          'O sistema não confirmou o modo de assinatura.'
+        );
+
+        return;
+      }
+
+      setModoAssinaturaForm03(
+        modo
+      );
+
+      await carregarEstadoAssinaturasForm03();
+
+      if (
+        modo ===
+        'manual_app'
+      ) {
+        setMensagemAssinaturaForm03(
+          'Assinatura no aplicativo selecionada. A próxima etapa será coletar a assinatura do cliente e do responsável na tela.'
+        );
+      } else {
+        setMensagemAssinaturaForm03(
+          'Assinatura externa selecionada. Use o PDF gerado para assinatura eletrônica e depois envie o arquivo assinado ao protocolo.'
+        );
+      }
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao definir assinatura:',
+        error
+      );
+
+      setErroForm03(
+        'Ocorreu um erro ao definir o modo de assinatura.'
+      );
+    } finally {
+      setDefinindoModoAssinatura(
+        false
+      );
     }
   }
 
@@ -4908,7 +7061,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     {solicitacao.status ===
                       'aprovada' ||
                     solicitacao.status ===
-                      'em_execucao' ? (
+                      'em_execucao' ||
+                    solicitacao.status ===
+                      'concluida' ? (
                       <View
                         style={
                           styles.execucaoServicoBox
@@ -4952,7 +7107,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               {solicitacao.status ===
                               'aprovada'
                                 ? 'A vistoria foi aprovada. Inicie a execução quando a equipe começar o serviço no imóvel.'
-                                : 'O atendimento está em execução.'}
+                                : solicitacao.status ===
+                                    'em_execucao'
+                                  ? 'O atendimento está em execução.'
+                                  : 'O serviço foi concluído.'}
                             </Text>
                           </View>
                         </View>
@@ -5124,27 +7282,2284 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 : 'Iniciar execução do serviço'}
                             </Text>
                           </TouchableOpacity>
+                        ) : solicitacao.status ===
+                          'em_execucao' ? (
+                          <>
+                            <View
+                              style={
+                                styles.execucaoEmAndamentoBox
+                              }
+                            >
+                              <Ionicons
+                                name="hammer-outline"
+                                size={20}
+                                color="#0B5EA8"
+                              />
+
+                              <Text
+                                style={
+                                  styles.execucaoEmAndamentoText
+                                }
+                              >
+                                Execução em andamento
+                              </Text>
+                            </View>
+
+                            <View
+                              style={
+                                styles.formularioExecucaoBox
+                              }
+                            >
+                              <View
+                                style={
+                                  styles.formularioExecucaoHeader
+                                }
+                              >
+                                <Ionicons
+                                  name="build-outline"
+                                  size={22}
+                                  color="#0B2447"
+                                />
+
+                                <View
+                                  style={{
+                                    flex: 1,
+                                  }}
+                                >
+                                  <Text
+                                    style={
+                                      styles.formularioExecucaoTitle
+                                    }
+                                  >
+                                    Registro da execução
+                                  </Text>
+
+                                  <Text
+                                    style={
+                                      styles.formularioExecucaoText
+                                    }
+                                  >
+                                    Registre a solução aplicada no imóvel e as observações do serviço.
+                                  </Text>
+                                </View>
+                              </View>
+
+                              <Text
+                                style={
+                                  styles.inputLabel
+                                }
+                              >
+                                SOLUÇÃO TÉCNICA *
+                              </Text>
+
+                              <TextInput
+                                style={[
+                                  styles.input,
+                                  styles.textArea,
+                                ]}
+                                value={
+                                  solucaoTecnicaExecucao
+                                }
+                                placeholder="Descreva o serviço executado e a solução aplicada."
+                                placeholderTextColor="#9AA6B4"
+                                multiline
+                                numberOfLines={5}
+                                textAlignVertical="top"
+                                onChangeText={(
+                                  texto
+                                ) => {
+                                  setSolucaoTecnicaExecucao(
+                                    texto
+                                  );
+
+                                  setErroFormularioExecucao(
+                                    ''
+                                  );
+
+                                  setSucessoFormularioExecucao(
+                                    ''
+                                  );
+                                }}
+                              />
+
+                              <Text
+                                style={
+                                  styles.inputLabel
+                                }
+                              >
+                                OBSERVAÇÕES DA EXECUÇÃO
+                              </Text>
+
+                              <TextInput
+                                style={[
+                                  styles.input,
+                                  styles.textArea,
+                                ]}
+                                value={
+                                  observacoesExecucao
+                                }
+                                placeholder="Inclua informações adicionais sobre a execução, se necessário."
+                                placeholderTextColor="#9AA6B4"
+                                multiline
+                                numberOfLines={4}
+                                textAlignVertical="top"
+                                onChangeText={(
+                                  texto
+                                ) => {
+                                  setObservacoesExecucao(
+                                    texto
+                                  );
+
+                                  setErroFormularioExecucao(
+                                    ''
+                                  );
+
+                                  setSucessoFormularioExecucao(
+                                    ''
+                                  );
+                                }}
+                              />
+
+                              <Text
+                                style={
+                                  styles.inputLabel
+                                }
+                              >
+                                FOTOS DA EXECUÇÃO
+                              </Text>
+
+                              <Text
+                                style={
+                                  styles.fotosExecucaoAjuda
+                                }
+                              >
+                                Adicione fotos do serviço executado no imóvel. Você pode selecionar até 10 imagens.
+                              </Text>
+
+                              <TouchableOpacity
+                                style={
+                                  styles.adicionarFotosExecucaoButton
+                                }
+                                onPress={
+                                  selecionarFotosExecucao
+                                }
+                                disabled={
+                                  salvandoExecucao
+                                }
+                              >
+                                <Ionicons
+                                  name="images-outline"
+                                  size={20}
+                                  color="#0B5EA8"
+                                />
+
+                                <Text
+                                  style={
+                                    styles.adicionarFotosExecucaoButtonText
+                                  }
+                                >
+                                  + Adicionar fotos
+                                </Text>
+                              </TouchableOpacity>
+
+                              {fotosExecucaoPendentes.length >
+                              0 ? (
+                                <View
+                                  style={
+                                    styles.fotosExecucaoSection
+                                  }
+                                >
+                                  <Text
+                                    style={
+                                      styles.fotosExecucaoSubtitulo
+                                    }
+                                  >
+                                    Fotos aguardando salvamento
+                                  </Text>
+
+                                  <View
+                                    style={
+                                      styles.fotosExecucaoGrid
+                                    }
+                                  >
+                                    {fotosExecucaoPendentes.map(
+                                      (
+                                        foto,
+                                        indice
+                                      ) => (
+                                        <View
+                                          key={`${foto.uri}-${indice}`}
+                                          style={
+                                            styles.fotoExecucaoCard
+                                          }
+                                        >
+                                          <Image
+                                            source={{
+                                              uri:
+                                                foto.uri,
+                                            }}
+                                            style={
+                                              styles.fotoExecucaoImagem
+                                            }
+                                            resizeMode="cover"
+                                          />
+
+                                          <TouchableOpacity
+                                            style={
+                                              styles.removerFotoExecucaoButton
+                                            }
+                                            onPress={() =>
+                                              removerFotoExecucaoPendente(
+                                                foto.uri
+                                              )
+                                            }
+                                          >
+                                            <Ionicons
+                                              name="close"
+                                              size={17}
+                                              color="#FFFFFF"
+                                            />
+                                          </TouchableOpacity>
+
+                                          <View
+                                            style={
+                                              styles.fotoExecucaoPendenteBadge
+                                            }
+                                          >
+                                            <Text
+                                              style={
+                                                styles.fotoExecucaoPendenteText
+                                              }
+                                            >
+                                              Aguardando salvar
+                                            </Text>
+                                          </View>
+                                        </View>
+                                      )
+                                    )}
+                                  </View>
+                                </View>
+                              ) : null}
+
+                              {carregandoFotosExecucao ? (
+                                <View
+                                  style={
+                                    styles.fotosExecucaoLoading
+                                  }
+                                >
+                                  <ActivityIndicator
+                                    size="small"
+                                    color="#0B5EA8"
+                                  />
+
+                                  <Text
+                                    style={
+                                      styles.fotosExecucaoLoadingText
+                                    }
+                                  >
+                                    Carregando fotos...
+                                  </Text>
+                                </View>
+                              ) : null}
+
+                              {!carregandoFotosExecucao &&
+                              fotosExecucaoSalvas.length >
+                                0 ? (
+                                <View
+                                  style={
+                                    styles.fotosExecucaoSection
+                                  }
+                                >
+                                  <Text
+                                    style={
+                                      styles.fotosExecucaoSubtitulo
+                                    }
+                                  >
+                                    Fotos já salvas
+                                  </Text>
+
+                                  <View
+                                    style={
+                                      styles.fotosExecucaoGrid
+                                    }
+                                  >
+                                    {fotosExecucaoSalvas.map(
+                                      (
+                                        foto
+                                      ) => (
+                                        <View
+                                          key={
+                                            foto.id
+                                          }
+                                          style={
+                                            styles.fotoExecucaoCard
+                                          }
+                                        >
+                                          {foto.url ? (
+                                            <Image
+                                              source={{
+                                                uri:
+                                                  foto.url,
+                                              }}
+                                              style={
+                                                styles.fotoExecucaoImagem
+                                              }
+                                              resizeMode="cover"
+                                            />
+                                          ) : (
+                                            <View
+                                              style={
+                                                styles.fotoExecucaoSemImagem
+                                              }
+                                            >
+                                              <Ionicons
+                                                name="image-outline"
+                                                size={26}
+                                                color="#8995A5"
+                                              />
+                                            </View>
+                                          )}
+
+                                          <View
+                                            style={
+                                              styles.fotoExecucaoSalvaBadge
+                                            }
+                                          >
+                                            <Ionicons
+                                              name="checkmark-circle"
+                                              size={13}
+                                              color="#287A46"
+                                            />
+
+                                            <Text
+                                              style={
+                                                styles.fotoExecucaoSalvaText
+                                              }
+                                            >
+                                              Salva
+                                            </Text>
+                                          </View>
+                                        </View>
+                                      )
+                                    )}
+                                  </View>
+                                </View>
+                              ) : null}
+
+                              {erroFormularioExecucao ? (
+                                <View
+                                  style={
+                                    styles.messageError
+                                  }
+                                >
+                                  <Ionicons
+                                    name="alert-circle-outline"
+                                    size={19}
+                                    color="#9A3232"
+                                  />
+
+                                  <Text
+                                    style={
+                                      styles.messageErrorText
+                                    }
+                                  >
+                                    {
+                                      erroFormularioExecucao
+                                    }
+                                  </Text>
+                                </View>
+                              ) : null}
+
+                              {sucessoFormularioExecucao ? (
+                                <View
+                                  style={
+                                    styles.messageSuccess
+                                  }
+                                >
+                                  <Ionicons
+                                    name="checkmark-circle-outline"
+                                    size={20}
+                                    color="#287A46"
+                                  />
+
+                                  <Text
+                                    style={
+                                      styles.messageSuccessText
+                                    }
+                                  >
+                                    {
+                                      sucessoFormularioExecucao
+                                    }
+                                  </Text>
+                                </View>
+                              ) : null}
+
+                              <TouchableOpacity
+                                style={[
+                                  styles.salvarExecucaoButton,
+
+                                  salvandoExecucao &&
+                                    styles.buttonDisabled,
+                                ]}
+                                disabled={
+                                  salvandoExecucao
+                                }
+                                onPress={
+                                  salvarExecucaoServico
+                                }
+                              >
+                                {salvandoExecucao ? (
+                                  <ActivityIndicator
+                                    size="small"
+                                    color="#FFFFFF"
+                                  />
+                                ) : (
+                                  <Ionicons
+                                    name="save-outline"
+                                    size={20}
+                                    color="#FFFFFF"
+                                  />
+                                )}
+
+                                <Text
+                                  style={
+                                    styles.salvarExecucaoButtonText
+                                  }
+                                >
+                                  {salvandoExecucao
+                                    ? 'Salvando...'
+                                    : fotosExecucaoPendentes.length >
+                                        0
+                                      ? 'Salvar execução e fotos'
+                                      : 'Salvar execução'}
+                                </Text>
+                              </TouchableOpacity>
+
+                              <View
+                                style={
+                                  styles.finalizarExecucaoBox
+                                }
+                              >
+                                <View
+                                  style={
+                                    styles.finalizarExecucaoHeader
+                                  }
+                                >
+                                  <Ionicons
+                                    name="flag-outline"
+                                    size={22}
+                                    color="#0B2447"
+                                  />
+
+                                  <View
+                                    style={{
+                                      flex: 1,
+                                    }}
+                                  >
+                                    <Text
+                                      style={
+                                        styles.finalizarExecucaoTitle
+                                      }
+                                    >
+                                      Finalizar serviço
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.finalizarExecucaoText
+                                      }
+                                    >
+                                      Confirme a conclusão do serviço. A data e o horário de conclusão serão registrados automaticamente.
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                <Text
+                                  style={
+                                    styles.inputLabel
+                                  }
+                                >
+                                  CONCLUSÃO
+                                </Text>
+
+                                <View
+                                  style={
+                                    styles.conclusaoExecucaoRow
+                                  }
+                                >
+                                  <TouchableOpacity
+                                    style={[
+                                      styles.conclusaoExecucaoButton,
+
+                                      conclusaoExecucao ===
+                                        'total' &&
+                                        styles.conclusaoExecucaoButtonTotal,
+                                    ]}
+                                    onPress={() => {
+                                      setConclusaoExecucao(
+                                        'total'
+                                      );
+
+                                      setErroFinalizacaoExecucao(
+                                        ''
+                                      );
+                                    }}
+                                  >
+                                    <Ionicons
+                                      name="checkmark-circle-outline"
+                                      size={20}
+                                      color={
+                                        conclusaoExecucao ===
+                                        'total'
+                                          ? '#FFFFFF'
+                                          : '#287A46'
+                                      }
+                                    />
+
+                                    <Text
+                                      style={[
+                                        styles.conclusaoExecucaoButtonText,
+
+                                        conclusaoExecucao ===
+                                          'total' &&
+                                          styles.conclusaoExecucaoButtonTextActive,
+                                      ]}
+                                    >
+                                      Total
+                                    </Text>
+                                  </TouchableOpacity>
+
+                                  <TouchableOpacity
+                                    style={[
+                                      styles.conclusaoExecucaoButton,
+
+                                      conclusaoExecucao ===
+                                        'improcedente' &&
+                                        styles.conclusaoExecucaoButtonImprocedente,
+                                    ]}
+                                    onPress={() => {
+                                      setConclusaoExecucao(
+                                        'improcedente'
+                                      );
+
+                                      setErroFinalizacaoExecucao(
+                                        ''
+                                      );
+                                    }}
+                                  >
+                                    <Ionicons
+                                      name="close-circle-outline"
+                                      size={20}
+                                      color={
+                                        conclusaoExecucao ===
+                                        'improcedente'
+                                          ? '#FFFFFF'
+                                          : '#9A3232'
+                                      }
+                                    />
+
+                                    <Text
+                                      style={[
+                                        styles.conclusaoExecucaoButtonText,
+
+                                        conclusaoExecucao ===
+                                          'improcedente' &&
+                                          styles.conclusaoExecucaoButtonTextActive,
+                                      ]}
+                                    >
+                                      Improcedente
+                                    </Text>
+                                  </TouchableOpacity>
+                                </View>
+
+                                {erroFinalizacaoExecucao ? (
+                                  <View
+                                    style={
+                                      styles.messageError
+                                    }
+                                  >
+                                    <Ionicons
+                                      name="alert-circle-outline"
+                                      size={19}
+                                      color="#9A3232"
+                                    />
+
+                                    <Text
+                                      style={
+                                        styles.messageErrorText
+                                      }
+                                    >
+                                      {
+                                        erroFinalizacaoExecucao
+                                      }
+                                    </Text>
+                                  </View>
+                                ) : null}
+
+                                {sucessoFinalizacaoExecucao ? (
+                                  <View
+                                    style={
+                                      styles.messageSuccess
+                                    }
+                                  >
+                                    <Ionicons
+                                      name="checkmark-circle-outline"
+                                      size={20}
+                                      color="#287A46"
+                                    />
+
+                                    <Text
+                                      style={
+                                        styles.messageSuccessText
+                                      }
+                                    >
+                                      {
+                                        sucessoFinalizacaoExecucao
+                                      }
+                                    </Text>
+                                  </View>
+                                ) : null}
+
+                                <TouchableOpacity
+                                  style={[
+                                    styles.finalizarExecucaoButton,
+
+                                    finalizandoExecucao &&
+                                      styles.buttonDisabled,
+                                  ]}
+                                  disabled={
+                                    finalizandoExecucao
+                                  }
+                                  onPress={
+                                    finalizarExecucaoServico
+                                  }
+                                >
+                                  {finalizandoExecucao ? (
+                                    <ActivityIndicator
+                                      size="small"
+                                      color="#FFFFFF"
+                                    />
+                                  ) : (
+                                    <Ionicons
+                                      name="checkmark-done-outline"
+                                      size={21}
+                                      color="#FFFFFF"
+                                    />
+                                  )}
+
+                                  <Text
+                                    style={
+                                      styles.finalizarExecucaoButtonText
+                                    }
+                                  >
+                                    {finalizandoExecucao
+                                      ? 'Finalizando...'
+                                      : 'Finalizar serviço'}
+                                  </Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          </>
                         ) : (
                           <View
                             style={
-                              styles.execucaoEmAndamentoBox
+                              styles.execucaoConcluidaBox
                             }
                           >
                             <Ionicons
-                              name="hammer-outline"
-                              size={20}
-                              color="#0B5EA8"
+                              name="checkmark-circle"
+                              size={26}
+                              color="#287A46"
                             />
 
-                            <Text
-                              style={
-                                styles.execucaoEmAndamentoText
-                              }
+                            <View
+                              style={{
+                                flex: 1,
+                              }}
                             >
-                              Execução em andamento
-                            </Text>
+                              <Text
+                                style={
+                                  styles.execucaoConcluidaTitle
+                                }
+                              >
+                                Serviço concluído
+                              </Text>
+
+                              <Text
+                                style={
+                                  styles.execucaoConcluidaText
+                                }
+                              >
+                                A execução foi encerrada e o chamado foi concluído.
+                              </Text>
+
+                              {execucaoServico?.conclusao ? (
+                                <Text
+                                  style={
+                                    styles.execucaoConcluidaInfo
+                                  }
+                                >
+                                  Conclusão:{' '}
+                                  {execucaoServico.conclusao ===
+                                  'total'
+                                    ? 'Total'
+                                    : 'Improcedente'}
+                                </Text>
+                              ) : null}
+
+                              {execucaoServico?.concluida_em ? (
+                                <Text
+                                  style={
+                                    styles.execucaoConcluidaInfo
+                                  }
+                                >
+                                  Data da conclusão:{' '}
+                                  {formatarDataHora(
+                                    execucaoServico.concluida_em
+                                  )}
+                                </Text>
+                              ) : null}
+                            </View>
                           </View>
                         )}
+
+                        {solicitacao.status ===
+                        'concluida' ? (
+                          <View
+                            style={
+                              styles.form03Box
+                            }
+                          >
+                            <View
+                              style={
+                                styles.form03Header
+                              }
+                            >
+                              <View
+                                style={
+                                  styles.form03Icon
+                                }
+                              >
+                                <Ionicons
+                                  name="document-text-outline"
+                                  size={22}
+                                  color="#FFFFFF"
+                                />
+                              </View>
+
+                              <View
+                                style={{
+                                  flex: 1,
+                                }}
+                              >
+                                <Text
+                                  style={
+                                    styles.form03Title
+                                  }
+                                >
+                                  FORM 03 — Termo de Vistoria e Execução
+                                </Text>
+
+                                <Text
+                                  style={
+                                    styles.form03Text
+                                  }
+                                >
+                                  Confira os dados que serão usados para gerar o documento antes de criar o PDF.
+                                </Text>
+                              </View>
+                            </View>
+
+                            {!dadosForm03 ? (
+                              <TouchableOpacity
+                                style={[
+                                  styles.form03Button,
+
+                                  carregandoForm03 &&
+                                    styles.buttonDisabled,
+                                ]}
+                                disabled={
+                                  carregandoForm03
+                                }
+                                onPress={
+                                  carregarDadosForm03
+                                }
+                              >
+                                {carregandoForm03 ? (
+                                  <ActivityIndicator
+                                    size="small"
+                                    color="#FFFFFF"
+                                  />
+                                ) : (
+                                  <Ionicons
+                                    name="search-outline"
+                                    size={20}
+                                    color="#FFFFFF"
+                                  />
+                                )}
+
+                                <Text
+                                  style={
+                                    styles.form03ButtonText
+                                  }
+                                >
+                                  {carregandoForm03
+                                    ? 'Carregando...'
+                                    : 'Conferir dados do FORM 03'}
+                                </Text>
+                              </TouchableOpacity>
+                            ) : (
+                              <>
+                                <View
+                                  style={
+                                    styles.form03Grid
+                                  }
+                                >
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      PROTOCOLO
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {
+                                        dadosForm03.protocolo
+                                      }
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      SOLICITANTE
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {
+                                        dadosForm03.solicitante
+                                      }
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      EMPREENDIMENTO
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {
+                                        dadosForm03.empreendimento
+                                      }
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      UNIDADE
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {
+                                        dadosForm03.unidade
+                                      }
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      RESPONSÁVEL PELA VISTORIA
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {
+                                        dadosForm03.responsavel_vistoria ??
+                                        '-'
+                                      }
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      Nº DO TERMO
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {dadosForm03.numero_termo ??
+                                        '-'}
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      RESPONSÁVEL PELO SERVIÇO
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {
+                                        dadosForm03.responsavel_servico ??
+                                        '-'
+                                      }
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      CONCLUSÃO
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {dadosForm03.conclusao ===
+                                      'total'
+                                        ? 'Total'
+                                        : dadosForm03.conclusao ===
+                                            'improcedente'
+                                          ? 'Improcedente'
+                                          : '-'}
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                <Text
+                                  style={
+                                    styles.form03SectionTitle
+                                  }
+                                >
+                                  Dados da solicitação
+                                </Text>
+
+                                <View
+                                  style={
+                                    styles.form03Grid
+                                  }
+                                >
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      DATA DA RECLAMAÇÃO
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {formatarDataHora(
+                                        dadosForm03.data_reclamacao
+                                      )}
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      CONTATO
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {dadosForm03.telefone ??
+                                        '-'}
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03SubValue
+                                      }
+                                    >
+                                      {dadosForm03.email ??
+                                        '-'}
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      DISPONIBILIDADE
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {dadosForm03.disponibilidade ??
+                                        '-'}
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      LOCAL / CÔMODO
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {dadosForm03.comodo ??
+                                        '-'}
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                <View
+                                  style={
+                                    styles.form03WideCard
+                                  }
+                                >
+                                  <Text
+                                    style={
+                                      styles.form03Label
+                                    }
+                                  >
+                                    PROBLEMA RELATADO
+                                  </Text>
+
+                                  <Text
+                                    style={
+                                      styles.form03Value
+                                    }
+                                  >
+                                    {
+                                      dadosForm03.problema_relatado
+                                    }
+                                  </Text>
+                                </View>
+
+                                <Text
+                                  style={
+                                    styles.form03SectionTitle
+                                  }
+                                >
+                                  Vistoria
+                                </Text>
+
+                                <View
+                                  style={
+                                    styles.form03Grid
+                                  }
+                                >
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      DATA DA VISTORIA
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {formatarDataHora(
+                                        dadosForm03.inicio_vistoria
+                                      )}
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      CONSTATAÇÃO DO PROBLEMA
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {dadosForm03.problema_constatado ===
+                                      true
+                                        ? 'Sim'
+                                        : dadosForm03.problema_constatado ===
+                                            false
+                                          ? 'Não'
+                                          : '-'}
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      RESULTADO DA VISTORIA
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {dadosForm03.resultado_vistoria ===
+                                      'aprovada'
+                                        ? 'Aprovada'
+                                        : dadosForm03.resultado_vistoria ===
+                                            'nao_aprovada'
+                                          ? 'Não aprovada'
+                                          : '-'}
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      FIM DA VISTORIA
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {formatarDataHora(
+                                        dadosForm03.fim_vistoria
+                                      )}
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                <View
+                                  style={
+                                    styles.form03WideCard
+                                  }
+                                >
+                                  <Text
+                                    style={
+                                      styles.form03Label
+                                    }
+                                  >
+                                    PARECER TÉCNICO
+                                  </Text>
+
+                                  <Text
+                                    style={
+                                      styles.form03Value
+                                    }
+                                  >
+                                    {dadosForm03.parecer_tecnico ??
+                                      '-'}
+                                  </Text>
+                                </View>
+
+                                <View
+                                  style={
+                                    styles.form03WideCard
+                                  }
+                                >
+                                  <Text
+                                    style={
+                                      styles.form03Label
+                                    }
+                                  >
+                                    SERVIÇO NECESSÁRIO
+                                  </Text>
+
+                                  <Text
+                                    style={
+                                      styles.form03Value
+                                    }
+                                  >
+                                    {dadosForm03.servico_necessario ??
+                                      '-'}
+                                  </Text>
+                                </View>
+
+                                <View
+                                  style={
+                                    styles.form03WideCard
+                                  }
+                                >
+                                  <Text
+                                    style={
+                                      styles.form03Label
+                                    }
+                                  >
+                                    OBSERVAÇÕES DA VISTORIA
+                                  </Text>
+
+                                  <Text
+                                    style={
+                                      styles.form03Value
+                                    }
+                                  >
+                                    {dadosForm03.observacoes_vistoria ??
+                                      '-'}
+                                  </Text>
+                                </View>
+
+                                <Text
+                                  style={
+                                    styles.form03SectionTitle
+                                  }
+                                >
+                                  Garantia
+                                </Text>
+
+                                <View
+                                  style={
+                                    styles.form03Grid
+                                  }
+                                >
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      PROBLEMA / CATEGORIA
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {dadosForm03.categoria ??
+                                        '-'}
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      ELEMENTO CONSTRUTIVO
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {dadosForm03.elemento_construtivo ??
+                                        '-'}
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      MANIFESTAÇÃO PATOLÓGICA
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {dadosForm03.manifestacao_patologica ??
+                                        '-'}
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      STATUS DA GARANTIA
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {textoGarantia(
+                                        dadosForm03.status_garantia
+                                      )}
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      PRAZO DA GARANTIA
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {dadosForm03.prazo_quantidade ??
+                                        '-'}{' '}
+                                      {dadosForm03.prazo_unidade ??
+                                        ''}
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      VIGÊNCIA ATÉ
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {formatarData(
+                                        dadosForm03.data_limite_garantia
+                                      )}
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      PROCEDÊNCIA
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {dadosForm03.problema_constatado ===
+                                      true
+                                        ? 'Procedente'
+                                        : dadosForm03.problema_constatado ===
+                                            false
+                                          ? 'Improcedente'
+                                          : '-'}
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                <Text
+                                  style={
+                                    styles.form03SectionTitle
+                                  }
+                                >
+                                  Execução do serviço
+                                </Text>
+
+                                <View
+                                  style={
+                                    styles.form03Grid
+                                  }
+                                >
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      INÍCIO DA EXECUÇÃO
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {formatarDataHora(
+                                        dadosForm03.inicio_execucao
+                                      )}
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03InfoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      DATA DA CONCLUSÃO
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03Value
+                                      }
+                                    >
+                                      {formatarDataHora(
+                                        dadosForm03.data_conclusao
+                                      )}
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                <View
+                                  style={
+                                    styles.form03WideCard
+                                  }
+                                >
+                                  <Text
+                                    style={
+                                      styles.form03Label
+                                    }
+                                  >
+                                    SOLUÇÃO TÉCNICA
+                                  </Text>
+
+                                  <Text
+                                    style={
+                                      styles.form03Value
+                                    }
+                                  >
+                                    {
+                                      dadosForm03.solucao_tecnica ??
+                                      '-'
+                                    }
+                                  </Text>
+                                </View>
+
+                                <View
+                                  style={
+                                    styles.form03WideCard
+                                  }
+                                >
+                                  <Text
+                                    style={
+                                      styles.form03Label
+                                    }
+                                  >
+                                    OBSERVAÇÕES DA EXECUÇÃO
+                                  </Text>
+
+                                  <Text
+                                    style={
+                                      styles.form03Value
+                                    }
+                                  >
+                                    {dadosForm03.observacoes_execucao ??
+                                      '-'}
+                                  </Text>
+                                </View>
+
+                                <Text
+                                  style={
+                                    styles.form03SectionTitle
+                                  }
+                                >
+                                  Registros e assinaturas
+                                </Text>
+
+                                <View
+                                  style={
+                                    styles.form03FotosResumo
+                                  }
+                                >
+                                  <Ionicons
+                                    name="images-outline"
+                                    size={18}
+                                    color="#0B5EA8"
+                                  />
+
+                                  <Text
+                                    style={
+                                      styles.form03FotosResumoText
+                                    }
+                                  >
+                                    {
+                                      dadosForm03.fotos_vistoria
+                                        ?.length ??
+                                      0
+                                    }{' '}
+                                    foto(s) da vistoria •{' '}
+                                    {
+                                      dadosForm03.fotos_execucao
+                                        ?.length ??
+                                      0
+                                    }{' '}
+                                    foto(s) da execução
+                                  </Text>
+                                </View>
+
+                                <View
+                                  style={
+                                    styles.form03Grid
+                                  }
+                                >
+                                  <View
+                                    style={
+                                      styles.form03SignatureCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      ASSINATURA DO CLIENTE
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03PendingText
+                                      }
+                                    >
+                                      Pendente
+                                    </Text>
+                                  </View>
+
+                                  <View
+                                    style={
+                                      styles.form03SignatureCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03Label
+                                      }
+                                    >
+                                      ASSINATURA DO RESPONSÁVEL
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03PendingText
+                                      }
+                                    >
+                                      Pendente
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                <View
+                                  style={
+                                    styles.messageSuccess
+                                  }
+                                >
+                                  <Ionicons
+                                    name="checkmark-circle-outline"
+                                    size={20}
+                                    color="#287A46"
+                                  />
+
+                                  <Text
+                                    style={
+                                      styles.messageSuccessText
+                                    }
+                                  >
+                                    Dados do FORM 03 carregados com sucesso.
+                                  </Text>
+                                </View>
+
+                                <TouchableOpacity
+                                  style={
+                                    styles.form03SecondaryButton
+                                  }
+                                  onPress={
+                                    carregarDadosForm03
+                                  }
+                                  disabled={
+                                    carregandoForm03
+                                  }
+                                >
+                                  <Ionicons
+                                    name="refresh-outline"
+                                    size={18}
+                                    color="#0B5EA8"
+                                  />
+
+                                  <Text
+                                    style={
+                                      styles.form03SecondaryButtonText
+                                    }
+                                  >
+                                    Atualizar dados
+                                  </Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                  style={[
+                                    styles.form03GerarPdfButton,
+
+                                    gerandoPdfForm03 &&
+                                      styles.buttonDisabled,
+                                  ]}
+                                  onPress={
+                                    gerarPdfForm03
+                                  }
+                                  disabled={
+                                    gerandoPdfForm03
+                                  }
+                                >
+                                  {gerandoPdfForm03 ? (
+                                    <ActivityIndicator
+                                      size="small"
+                                      color="#FFFFFF"
+                                    />
+                                  ) : (
+                                    <Ionicons
+                                      name="document-text-outline"
+                                      size={21}
+                                      color="#FFFFFF"
+                                    />
+                                  )}
+
+                                  <Text
+                                    style={
+                                      styles.form03GerarPdfButtonText
+                                    }
+                                  >
+                                    {gerandoPdfForm03
+                                      ? 'Gerando PDF...'
+                                      : 'Gerar PDF do FORM 03'}
+                                  </Text>
+                                </TouchableOpacity>
+
+                                {pdfForm03Uri &&
+                                Platform.OS !==
+                                  'web' ? (
+                                  <TouchableOpacity
+                                    style={
+                                      styles.form03SecondaryButton
+                                    }
+                                    onPress={
+                                      compartilharPdfForm03
+                                    }
+                                  >
+                                    <Ionicons
+                                      name="share-outline"
+                                      size={18}
+                                      color="#0B5EA8"
+                                    />
+
+                                    <Text
+                                      style={
+                                        styles.form03SecondaryButtonText
+                                      }
+                                    >
+                                      Compartilhar / salvar PDF
+                                    </Text>
+                                  </TouchableOpacity>
+                                ) : null}
+
+                                {pdfForm03Gerado ? (
+                                  <View
+                                    style={
+                                      styles.form03AssinaturaBox
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.form03AssinaturaTitle
+                                      }
+                                    >
+                                      Como deseja coletar as assinaturas?
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.form03AssinaturaText
+                                      }
+                                    >
+                                      Escolha apenas um fluxo para este documento.
+                                    </Text>
+
+                                    <TouchableOpacity
+                                      style={[
+                                        styles.form03ModoButton,
+
+                                        modoAssinaturaForm03 ===
+                                          'manual_app' &&
+                                          styles.form03ModoButtonActive,
+                                      ]}
+                                      disabled={
+                                        definindoModoAssinatura
+                                      }
+                                      onPress={() =>
+                                        definirModoAssinaturaForm03(
+                                          'manual_app'
+                                        )
+                                      }
+                                    >
+                                      <Ionicons
+                                        name="create-outline"
+                                        size={21}
+                                        color={
+                                          modoAssinaturaForm03 ===
+                                          'manual_app'
+                                            ? '#FFFFFF'
+                                            : '#0B2447'
+                                        }
+                                      />
+
+                                      <View
+                                        style={{
+                                          flex: 1,
+                                        }}
+                                      >
+                                        <Text
+                                          style={[
+                                            styles.form03ModoButtonTitle,
+
+                                            modoAssinaturaForm03 ===
+                                              'manual_app' &&
+                                              styles.form03ModoButtonTitleActive,
+                                          ]}
+                                        >
+                                          Assinar no aplicativo
+                                        </Text>
+
+                                        <Text
+                                          style={[
+                                            styles.form03ModoButtonText,
+
+                                            modoAssinaturaForm03 ===
+                                              'manual_app' &&
+                                              styles.form03ModoButtonTextActive,
+                                          ]}
+                                        >
+                                          Cliente e responsável assinam manualmente na tela do EMAFE.
+                                        </Text>
+                                      </View>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                      style={[
+                                        styles.form03ModoButton,
+
+                                        modoAssinaturaForm03 ===
+                                          'externa_pdf' &&
+                                          styles.form03ModoButtonActive,
+                                      ]}
+                                      disabled={
+                                        definindoModoAssinatura
+                                      }
+                                      onPress={() =>
+                                        definirModoAssinaturaForm03(
+                                          'externa_pdf'
+                                        )
+                                      }
+                                    >
+                                      <Ionicons
+                                        name="cloud-upload-outline"
+                                        size={21}
+                                        color={
+                                          modoAssinaturaForm03 ===
+                                          'externa_pdf'
+                                            ? '#FFFFFF'
+                                            : '#0B2447'
+                                        }
+                                      />
+
+                                      <View
+                                        style={{
+                                          flex: 1,
+                                        }}
+                                      >
+                                        <Text
+                                          style={[
+                                            styles.form03ModoButtonTitle,
+
+                                            modoAssinaturaForm03 ===
+                                              'externa_pdf' &&
+                                              styles.form03ModoButtonTitleActive,
+                                          ]}
+                                        >
+                                          Assinar eletronicamente / externamente
+                                        </Text>
+
+                                        <Text
+                                          style={[
+                                            styles.form03ModoButtonText,
+
+                                            modoAssinaturaForm03 ===
+                                              'externa_pdf' &&
+                                              styles.form03ModoButtonTextActive,
+                                          ]}
+                                        >
+                                          Salve o PDF, assine no GOV.BR ou outro serviço e depois envie o PDF final ao protocolo.
+                                        </Text>
+                                      </View>
+                                    </TouchableOpacity>
+
+                                    {definindoModoAssinatura ? (
+                                      <View
+                                        style={
+                                          styles.form03ModoLoading
+                                        }
+                                      >
+                                        <ActivityIndicator
+                                          size="small"
+                                          color="#0B5EA8"
+                                        />
+
+                                        <Text
+                                          style={
+                                            styles.form03ModoLoadingText
+                                          }
+                                        >
+                                          Salvando escolha...
+                                        </Text>
+                                      </View>
+                                    ) : null}
+
+                                    {modoAssinaturaForm03 ===
+                                    'manual_app' ? (
+                                      <View
+                                        style={
+                                          styles.assinaturasManuaisBox
+                                        }
+                                      >
+                                        <Text
+                                          style={
+                                            styles.assinaturasManuaisTitle
+                                          }
+                                        >
+                                          Assinaturas do FORM 03
+                                        </Text>
+
+                                        <Text
+                                          style={
+                                            styles.assinaturasManuaisText
+                                          }
+                                        >
+                                          Cada pessoa assina na sua própria área. O cliente assina na Área do Cliente e o responsável pela execução assina aqui na Área do Funcionário.
+                                        </Text>
+
+                                        <View
+                                          style={
+                                            styles.assinaturaManualCard
+                                          }
+                                        >
+                                          <Text
+                                            style={
+                                              styles.assinaturaManualCardTitle
+                                            }
+                                          >
+                                            Assinatura do cliente
+                                          </Text>
+
+                                          {estadoAssinaturasForm03
+                                            ?.assinatura_cliente_svg ? (
+                                            <View
+                                              style={
+                                                styles.assinaturaSalvaBox
+                                              }
+                                            >
+                                              <Ionicons
+                                                name="checkmark-circle"
+                                                size={22}
+                                                color="#287A46"
+                                              />
+
+                                              <View
+                                                style={{
+                                                  flex: 1,
+                                                }}
+                                              >
+                                                <Text
+                                                  style={
+                                                    styles.assinaturaSalvaTitle
+                                                  }
+                                                >
+                                                  Cliente já assinou
+                                                </Text>
+
+                                                <Text
+                                                  style={
+                                                    styles.assinaturaSalvaText
+                                                  }
+                                                >
+                                                  {estadoAssinaturasForm03
+                                                    .assinatura_cliente_nome ??
+                                                    'Assinatura registrada na Área do Cliente'}
+                                                </Text>
+                                              </View>
+                                            </View>
+                                          ) : (
+                                            <View
+                                              style={
+                                                styles.assinaturaPendenteBox
+                                              }
+                                            >
+                                              <Ionicons
+                                                name="time-outline"
+                                                size={22}
+                                                color="#9A6A00"
+                                              />
+
+                                              <View
+                                                style={{
+                                                  flex: 1,
+                                                }}
+                                              >
+                                                <Text
+                                                  style={
+                                                    styles.assinaturaPendenteTitle
+                                                  }
+                                                >
+                                                  Aguardando o cliente
+                                                </Text>
+
+                                                <Text
+                                                  style={
+                                                    styles.assinaturaPendenteText
+                                                  }
+                                                >
+                                                  O cliente deve abrir este protocolo na Área do Cliente e assinar o FORM 03 por lá.
+                                                </Text>
+                                              </View>
+                                            </View>
+                                          )}
+                                        </View>
+
+                                        <View
+                                          style={
+                                            styles.assinaturaManualCard
+                                          }
+                                        >
+                                          <Text
+                                            style={
+                                              styles.assinaturaManualCardTitle
+                                            }
+                                          >
+                                            Assinatura do responsável pela execução
+                                          </Text>
+
+                                          {estadoAssinaturasForm03
+                                            ?.assinatura_funcionario_svg ? (
+                                            <View
+                                              style={
+                                                styles.assinaturaSalvaBox
+                                              }
+                                            >
+                                              <Ionicons
+                                                name="checkmark-circle"
+                                                size={22}
+                                                color="#287A46"
+                                              />
+
+                                              <View
+                                                style={{
+                                                  flex: 1,
+                                                }}
+                                              >
+                                                <Text
+                                                  style={
+                                                    styles.assinaturaSalvaTitle
+                                                  }
+                                                >
+                                                  Sua assinatura foi salva
+                                                </Text>
+
+                                                <Text
+                                                  style={
+                                                    styles.assinaturaSalvaText
+                                                  }
+                                                >
+                                                  {estadoAssinaturasForm03
+                                                    .assinatura_funcionario_nome}
+                                                </Text>
+                                              </View>
+                                            </View>
+                                          ) : (
+                                            <>
+                                              <Text
+                                                style={
+                                                  styles.assinaturaResponsavelNome
+                                                }
+                                              >
+                                                Responsável:{' '}
+                                                {dadosForm03.responsavel_servico ??
+                                                  '-'}
+                                              </Text>
+
+                                              <SignaturePad
+                                                titulo="Assine com o dedo, mouse ou caneta"
+                                                salvando={
+                                                  salvandoAssinaturaManual ===
+                                                  'funcionario'
+                                                }
+                                                onSave={
+                                                  salvarAssinaturaFuncionarioForm03
+                                                }
+                                              />
+                                            </>
+                                          )}
+                                        </View>
+
+                                        {estadoAssinaturasForm03
+                                          ?.assinatura_cliente_svg &&
+                                        estadoAssinaturasForm03
+                                          ?.assinatura_funcionario_svg ? (
+                                          <View
+                                            style={
+                                              styles.messageSuccess
+                                            }
+                                          >
+                                            <Ionicons
+                                              name="checkmark-done-circle-outline"
+                                              size={21}
+                                              color="#287A46"
+                                            />
+
+                                            <Text
+                                              style={
+                                                styles.messageSuccessText
+                                              }
+                                            >
+                                              As duas assinaturas foram coletadas. Agora o FORM 03 pode ser gerado com as assinaturas.
+                                            </Text>
+                                          </View>
+                                        ) : null}
+                                      </View>
+                                    ) : null}
+                                  </View>
+                                ) : null}
+
+                                {mensagemAssinaturaForm03 ? (
+                                  <View
+                                    style={
+                                      styles.messageSuccess
+                                    }
+                                  >
+                                    <Ionicons
+                                      name="checkmark-circle-outline"
+                                      size={20}
+                                      color="#287A46"
+                                    />
+
+                                    <Text
+                                      style={
+                                        styles.messageSuccessText
+                                      }
+                                    >
+                                      {
+                                        mensagemAssinaturaForm03
+                                      }
+                                    </Text>
+                                  </View>
+                                ) : null}
+                              </>
+                            )}
+
+                            {erroForm03 ? (
+                              <View
+                                style={
+                                  styles.messageError
+                                }
+                              >
+                                <Ionicons
+                                  name="alert-circle-outline"
+                                  size={19}
+                                  color="#9A3232"
+                                />
+
+                                <Text
+                                  style={
+                                    styles.messageErrorText
+                                  }
+                                >
+                                  {
+                                    erroForm03
+                                  }
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        ) : null}
                       </View>
                     ) : null}
 
@@ -5665,6 +10080,380 @@ function TimelineItem({
         >
           {subtitle}
         </Text>
+      </View>
+    </View>
+  );
+}
+
+// ============================================================
+// CAMPO DE ASSINATURA MANUAL
+// ============================================================
+
+function SignaturePad({
+  titulo,
+  onSave,
+  salvando,
+}: {
+  titulo: string;
+  onSave: (
+    assinaturaSvg: string
+  ) => void;
+  salvando: boolean;
+}) {
+  const larguraSvg = 600;
+  const alturaSvg = 180;
+
+  const [
+    caminhos,
+    setCaminhos,
+  ] = useState<string[]>([]);
+
+  const [
+    caminhoAtual,
+    setCaminhoAtual,
+  ] = useState('');
+
+  const [
+    tamanho,
+    setTamanho,
+  ] = useState({
+    width: 1,
+    height: 1,
+  });
+
+  const caminhoRef =
+    useRef('');
+
+  function converterPonto(
+    x: number,
+    y: number
+  ) {
+    return {
+      x:
+        (x /
+          Math.max(
+            tamanho.width,
+            1
+          )) *
+        larguraSvg,
+
+      y:
+        (y /
+          Math.max(
+            tamanho.height,
+            1
+          )) *
+        alturaSvg,
+    };
+  }
+
+  const panResponder =
+    useMemo(
+      () =>
+        PanResponder.create({
+          onStartShouldSetPanResponder:
+            () => true,
+
+          onMoveShouldSetPanResponder:
+            () => true,
+
+          onPanResponderGrant: (
+            evento
+          ) => {
+            const {
+              locationX,
+              locationY,
+            } =
+              evento.nativeEvent;
+
+            const ponto =
+              converterPonto(
+                locationX,
+                locationY
+              );
+
+            const novo =
+              `M ${ponto.x.toFixed(
+                2
+              )} ${ponto.y.toFixed(
+                2
+              )}`;
+
+            caminhoRef.current =
+              novo;
+
+            setCaminhoAtual(
+              novo
+            );
+          },
+
+          onPanResponderMove: (
+            evento
+          ) => {
+            const {
+              locationX,
+              locationY,
+            } =
+              evento.nativeEvent;
+
+            const ponto =
+              converterPonto(
+                locationX,
+                locationY
+              );
+
+            caminhoRef.current +=
+              ` L ${ponto.x.toFixed(
+                2
+              )} ${ponto.y.toFixed(
+                2
+              )}`;
+
+            setCaminhoAtual(
+              caminhoRef.current
+            );
+          },
+
+          onPanResponderRelease:
+            () => {
+              const caminhoFinal =
+                caminhoRef.current;
+
+              if (
+                caminhoFinal
+              ) {
+                setCaminhos(
+                  (atuais) => [
+                    ...atuais,
+                    caminhoFinal,
+                  ]
+                );
+              }
+
+              caminhoRef.current =
+                '';
+
+              setCaminhoAtual(
+                ''
+              );
+            },
+
+          onPanResponderTerminate:
+            () => {
+              const caminhoFinal =
+                caminhoRef.current;
+
+              if (
+                caminhoFinal
+              ) {
+                setCaminhos(
+                  (atuais) => [
+                    ...atuais,
+                    caminhoFinal,
+                  ]
+                );
+              }
+
+              caminhoRef.current =
+                '';
+
+              setCaminhoAtual(
+                ''
+              );
+            },
+        }),
+      [
+        tamanho.width,
+        tamanho.height,
+      ]
+    );
+
+  function limpar() {
+    setCaminhos([]);
+    setCaminhoAtual('');
+    caminhoRef.current = '';
+  }
+
+  function salvar() {
+    const todos = [
+      ...caminhos,
+      ...(caminhoAtual
+        ? [caminhoAtual]
+        : []),
+    ];
+
+    if (
+      todos.length === 0
+    ) {
+      return;
+    }
+
+    const paths =
+      todos
+        .map(
+          (caminho) =>
+            `<path d="${caminho}" fill="none" stroke="#0B2447" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />`
+        )
+        .join('');
+
+    const assinatura =
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${larguraSvg} ${alturaSvg}" preserveAspectRatio="xMidYMid meet">${paths}</svg>`;
+
+    onSave(
+      assinatura
+    );
+  }
+
+  const possuiAssinatura =
+    caminhos.length > 0 ||
+    caminhoAtual.length > 0;
+
+  return (
+    <View
+      style={
+        styles.signaturePadContainer
+      }
+    >
+      <Text
+        style={
+          styles.signaturePadTitle
+        }
+      >
+        {titulo}
+      </Text>
+
+      <Text
+        style={
+          styles.signaturePadHelp
+        }
+      >
+        Desenhe sua assinatura dentro do quadro.
+      </Text>
+
+      <View
+        style={
+          styles.signaturePadArea
+        }
+        onLayout={(
+          evento
+        ) => {
+          const {
+            width,
+            height,
+          } =
+            evento.nativeEvent
+              .layout;
+
+          setTamanho({
+            width,
+            height,
+          });
+        }}
+        {...panResponder.panHandlers}
+      >
+        <Svg
+          width="100%"
+          height="100%"
+          viewBox={`0 0 ${larguraSvg} ${alturaSvg}`}
+        >
+          {caminhos.map(
+            (
+              caminho,
+              index
+            ) => (
+              <SvgPath
+                key={`${index}-${caminho.length}`}
+                d={caminho}
+                fill="none"
+                stroke="#0B2447"
+                strokeWidth={3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )
+          )}
+
+          {caminhoAtual ? (
+            <SvgPath
+              d={
+                caminhoAtual
+              }
+              fill="none"
+              stroke="#0B2447"
+              strokeWidth={3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          ) : null}
+        </Svg>
+      </View>
+
+      <View
+        style={
+          styles.signaturePadActions
+        }
+      >
+        <TouchableOpacity
+          style={
+            styles.signatureClearButton
+          }
+          onPress={limpar}
+          disabled={
+            salvando
+          }
+        >
+          <Ionicons
+            name="trash-outline"
+            size={17}
+            color="#9A3232"
+          />
+
+          <Text
+            style={
+              styles.signatureClearButtonText
+            }
+          >
+            Limpar
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.signatureSaveButton,
+
+            (!possuiAssinatura ||
+              salvando) &&
+              styles.buttonDisabled,
+          ]}
+          onPress={salvar}
+          disabled={
+            !possuiAssinatura ||
+            salvando
+          }
+        >
+          {salvando ? (
+            <ActivityIndicator
+              size="small"
+              color="#FFFFFF"
+            />
+          ) : (
+            <Ionicons
+              name="checkmark-outline"
+              size={18}
+              color="#FFFFFF"
+            />
+          )}
+
+          <Text
+            style={
+              styles.signatureSaveButtonText
+            }
+          >
+            {salvando
+              ? 'Salvando...'
+              : 'Salvar assinatura'}
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -6667,6 +11456,714 @@ const styles = StyleSheet.create({
   iniciarExecucaoButtonText: {
     color: '#FFFFFF',
     fontSize: 13,
+    fontWeight: '800',
+  },
+
+  formularioExecucaoBox: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CCD7E3',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 14,
+  },
+
+  formularioExecucaoHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 17,
+  },
+
+  formularioExecucaoTitle: {
+    color: '#0B2447',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  formularioExecucaoText: {
+    color: '#697789',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 3,
+  },
+
+  fotosExecucaoAjuda: {
+    color: '#697789',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: -2,
+    marginBottom: 10,
+  },
+
+  adicionarFotosExecucaoButton: {
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BFCBDA',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingHorizontal: 16,
+    marginBottom: 14,
+  },
+
+  adicionarFotosExecucaoButtonText: {
+    color: '#0B5EA8',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  fotosExecucaoSection: {
+    marginBottom: 16,
+  },
+
+  fotosExecucaoSubtitulo: {
+    color: '#42566D',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 9,
+  },
+
+  fotosExecucaoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+
+  fotoExecucaoCard: {
+    width: 145,
+    height: 120,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#EAF0F6',
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    position: 'relative',
+  },
+
+  fotoExecucaoImagem: {
+    width: '100%',
+    height: '100%',
+  },
+
+  fotoExecucaoSemImagem: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  removerFotoExecucaoButton: {
+    position: 'absolute',
+    top: 7,
+    right: 7,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(154, 50, 50, 0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  fotoExecucaoPendenteBadge: {
+    position: 'absolute',
+    left: 7,
+    bottom: 7,
+    backgroundColor: 'rgba(11, 36, 71, 0.90)',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+  },
+
+  fotoExecucaoPendenteText: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontWeight: '700',
+  },
+
+  fotoExecucaoSalvaBadge: {
+    position: 'absolute',
+    left: 7,
+    bottom: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(234, 246, 238, 0.94)',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+  },
+
+  fotoExecucaoSalvaText: {
+    color: '#287A46',
+    fontSize: 8,
+    fontWeight: '800',
+  },
+
+  fotosExecucaoLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginBottom: 14,
+  },
+
+  fotosExecucaoLoadingText: {
+    color: '#697789',
+    fontSize: 10,
+  },
+
+  salvarExecucaoButton: {
+    minHeight: 54,
+    borderRadius: 13,
+    backgroundColor: '#0B2447',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+
+  salvarExecucaoButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  finalizarExecucaoBox: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CCD7E3',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 18,
+  },
+
+  finalizarExecucaoHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 16,
+  },
+
+  finalizarExecucaoTitle: {
+    color: '#0B2447',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  finalizarExecucaoText: {
+    color: '#697789',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 3,
+  },
+
+  conclusaoExecucaoRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 16,
+  },
+
+  conclusaoExecucaoButton: {
+    flexGrow: 1,
+    flexBasis: 180,
+    minHeight: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CCD7E3',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+  },
+
+  conclusaoExecucaoButtonTotal: {
+    backgroundColor: '#287A46',
+    borderColor: '#287A46',
+  },
+
+  conclusaoExecucaoButtonImprocedente: {
+    backgroundColor: '#9A3232',
+    borderColor: '#9A3232',
+  },
+
+  conclusaoExecucaoButtonText: {
+    color: '#24364B',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  conclusaoExecucaoButtonTextActive: {
+    color: '#FFFFFF',
+  },
+
+  finalizarExecucaoButton: {
+    minHeight: 55,
+    borderRadius: 13,
+    backgroundColor: '#0B2447',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+
+  finalizarExecucaoButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  execucaoConcluidaBox: {
+    backgroundColor: '#EAF6EE',
+    borderWidth: 1,
+    borderColor: '#AED7BA',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+
+  execucaoConcluidaTitle: {
+    color: '#287A46',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  execucaoConcluidaText: {
+    color: '#567362',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 3,
+  },
+
+  execucaoConcluidaInfo: {
+    color: '#42566D',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+
+  form03Box: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CCD7E3',
+    borderRadius: 16,
+    padding: 18,
+    marginTop: 18,
+  },
+
+  form03Header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 11,
+    marginBottom: 16,
+  },
+
+  form03Icon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#0B2447',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  form03Title: {
+    color: '#0B2447',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+
+  form03Text: {
+    color: '#697789',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 3,
+  },
+
+  form03Button: {
+    minHeight: 54,
+    borderRadius: 13,
+    backgroundColor: '#0B2447',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+
+  form03ButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  form03Grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+
+  form03InfoCard: {
+    flexGrow: 1,
+    flexBasis: 235,
+    minHeight: 78,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    borderRadius: 12,
+    padding: 12,
+  },
+
+  form03WideCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 10,
+  },
+
+  form03Label: {
+    color: '#8995A5',
+    fontSize: 9,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+
+  form03Value: {
+    color: '#24364B',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+
+  form03SubValue: {
+    color: '#697789',
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 4,
+  },
+
+  form03SectionTitle: {
+    color: '#0B2447',
+    fontSize: 14,
+    fontWeight: '800',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+
+  form03SignatureCard: {
+    flexGrow: 1,
+    flexBasis: 235,
+    minHeight: 72,
+    backgroundColor: '#FFF8E6',
+    borderWidth: 1,
+    borderColor: '#E8D29A',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 10,
+  },
+
+  form03PendingText: {
+    color: '#9A6A00',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  form03FotosResumo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: '#EAF0F6',
+    borderRadius: 11,
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 12,
+  },
+
+  form03FotosResumoText: {
+    color: '#42566D',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  form03SecondaryButton: {
+    minHeight: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BFCBDA',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    marginTop: 10,
+  },
+
+  form03SecondaryButtonText: {
+    color: '#0B5EA8',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  form03GerarPdfButton: {
+    minHeight: 56,
+    borderRadius: 13,
+    backgroundColor: '#0B2447',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+
+  form03GerarPdfButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  form03AssinaturaBox: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    borderRadius: 14,
+    padding: 15,
+    marginTop: 14,
+  },
+
+  form03AssinaturaTitle: {
+    color: '#0B2447',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  form03AssinaturaText: {
+    color: '#697789',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 3,
+    marginBottom: 12,
+  },
+
+  form03ModoButton: {
+    minHeight: 72,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CCD7E3',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    padding: 13,
+    marginTop: 9,
+  },
+
+  form03ModoButtonActive: {
+    backgroundColor: '#0B2447',
+    borderColor: '#0B2447',
+  },
+
+  form03ModoButtonTitle: {
+    color: '#0B2447',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  form03ModoButtonTitleActive: {
+    color: '#FFFFFF',
+  },
+
+  form03ModoButtonText: {
+    color: '#697789',
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 3,
+  },
+
+  form03ModoButtonTextActive: {
+    color: '#DDE7F2',
+  },
+
+  form03ModoLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginTop: 12,
+  },
+
+  form03ModoLoadingText: {
+    color: '#697789',
+    fontSize: 10,
+  },
+
+  assinaturasManuaisBox: {
+    marginTop: 18,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+
+  assinaturasManuaisTitle: {
+    color: '#0B2447',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  assinaturasManuaisText: {
+    color: '#697789',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+
+  assinaturaManualCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    borderRadius: 13,
+    padding: 14,
+    marginTop: 10,
+  },
+
+  assinaturaManualCardTitle: {
+    color: '#0B2447',
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 12,
+  },
+
+  assinaturaResponsavelNome: {
+    color: '#42566D',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+
+  assinaturaSalvaBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    padding: 12,
+    backgroundColor: '#EAF6EE',
+    borderWidth: 1,
+    borderColor: '#AED7BA',
+    borderRadius: 11,
+  },
+
+  assinaturaPendenteBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+    padding: 12,
+    backgroundColor: '#FFF8E6',
+    borderWidth: 1,
+    borderColor: '#E8D29A',
+    borderRadius: 11,
+  },
+
+  assinaturaPendenteTitle: {
+    color: '#9A6A00',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  assinaturaPendenteText: {
+    color: '#7A6540',
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 3,
+  },
+
+  assinaturaSalvaTitle: {
+    color: '#287A46',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  assinaturaSalvaText: {
+    color: '#567362',
+    fontSize: 10,
+    marginTop: 3,
+  },
+
+  signaturePadContainer: {
+    marginTop: 4,
+  },
+
+  signaturePadTitle: {
+    color: '#24364B',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  signaturePadHelp: {
+    color: '#8995A5',
+    fontSize: 10,
+    marginTop: 3,
+    marginBottom: 8,
+  },
+
+  signaturePadArea: {
+    height: 180,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#9EABB8',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+
+  signaturePadActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+
+  signatureClearButton: {
+    minHeight: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#D9B0B0',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+  },
+
+  signatureClearButtonText: {
+    color: '#9A3232',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  signatureSaveButton: {
+    minHeight: 42,
+    borderRadius: 10,
+    backgroundColor: '#0B2447',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 15,
+  },
+
+  signatureSaveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 10,
     fontWeight: '800',
   },
 

@@ -1,19 +1,30 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import {
   ActivityIndicator,
   Image,
   Modal,
+  PanResponder,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+
+import Svg, {
+  Path as SvgPath,
+} from 'react-native-svg';
 
 import { supabase } from '../lib/supabase';
 
@@ -57,6 +68,27 @@ type AgendamentoVistoria = {
   hora_vistoria: string | null;
   observacao_vistoria: string | null;
   responsavel_vistoria_nome: string | null;
+};
+
+type Form03Cliente = {
+  form03_id: string;
+  protocolo: string;
+
+  modo_assinatura:
+    | 'manual_app'
+    | 'externa_pdf'
+    | null;
+
+  status: string;
+
+  cliente_nome: string;
+
+  assinatura_cliente_ok: boolean;
+  assinatura_cliente_nome: string | null;
+  assinado_cliente_em: string | null;
+
+  assinatura_funcionario_ok: boolean;
+  assinado_funcionario_em: string | null;
 };
 
 export default function DetalhesSolicitacaoScreen() {
@@ -106,6 +138,38 @@ export default function DetalhesSolicitacaoScreen() {
     setErroAgendamento,
   ] = useState('');
 
+  const [
+    form03Cliente,
+    setForm03Cliente,
+  ] = useState<Form03Cliente | null>(
+    null
+  );
+
+  const [
+    carregandoForm03Cliente,
+    setCarregandoForm03Cliente,
+  ] = useState(false);
+
+  const [
+    erroForm03Cliente,
+    setErroForm03Cliente,
+  ] = useState('');
+
+  const [
+    nomeAssinanteCliente,
+    setNomeAssinanteCliente,
+  ] = useState('');
+
+  const [
+    salvandoAssinaturaCliente,
+    setSalvandoAssinaturaCliente,
+  ] = useState(false);
+
+  const [
+    sucessoAssinaturaCliente,
+    setSucessoAssinaturaCliente,
+  ] = useState('');
+
   useEffect(() => {
     if (!solicitacaoId) {
       setErro(
@@ -124,6 +188,7 @@ export default function DetalhesSolicitacaoScreen() {
     await carregarSolicitacao();
     await carregarFotos();
     await carregarAgendamentoVistoria();
+    await carregarForm03Cliente();
   }
 
   async function carregarSolicitacao() {
@@ -376,6 +441,158 @@ export default function DetalhesSolicitacaoScreen() {
         minute: '2-digit',
       }
     );
+  }
+
+  async function carregarForm03Cliente() {
+    try {
+      setCarregandoForm03Cliente(
+        true
+      );
+
+      setErroForm03Cliente('');
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'buscar_form03_cliente',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao buscar FORM 03 do cliente:',
+          error
+        );
+
+        setErroForm03Cliente(
+          error.message ||
+            'Não foi possível verificar o FORM 03.'
+        );
+
+        return;
+      }
+
+      const registro =
+        data?.[0] as
+          | Form03Cliente
+          | undefined;
+
+      if (!registro) {
+        setForm03Cliente(null);
+        return;
+      }
+
+      setForm03Cliente(
+        registro
+      );
+
+      setNomeAssinanteCliente(
+        registro.assinatura_cliente_nome ??
+          registro.cliente_nome ??
+          ''
+      );
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao buscar FORM 03:',
+        error
+      );
+
+      setErroForm03Cliente(
+        'Ocorreu um erro ao verificar o FORM 03.'
+      );
+    } finally {
+      setCarregandoForm03Cliente(
+        false
+      );
+    }
+  }
+
+  async function salvarAssinaturaCliente(
+    assinaturaSvg: string
+  ) {
+    setErroForm03Cliente('');
+    setSucessoAssinaturaCliente('');
+
+    if (
+      !nomeAssinanteCliente.trim()
+    ) {
+      setErroForm03Cliente(
+        'Informe o nome do cliente ou representante.'
+      );
+
+      return;
+    }
+
+    try {
+      setSalvandoAssinaturaCliente(
+        true
+      );
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'salvar_assinatura_cliente_form03',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+
+          p_assinatura_svg:
+            assinaturaSvg,
+
+          p_nome_assinante:
+            nomeAssinanteCliente.trim(),
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao salvar assinatura do cliente:',
+          error
+        );
+
+        setErroForm03Cliente(
+          error.message ||
+            'Não foi possível salvar sua assinatura.'
+        );
+
+        return;
+      }
+
+      if (
+        !data ||
+        data.length === 0
+      ) {
+        setErroForm03Cliente(
+          'O sistema não confirmou sua assinatura.'
+        );
+
+        return;
+      }
+
+      setSucessoAssinaturaCliente(
+        'Assinatura registrada com sucesso.'
+      );
+
+      await carregarForm03Cliente();
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao salvar assinatura:',
+        error
+      );
+
+      setErroForm03Cliente(
+        'Ocorreu um erro ao salvar sua assinatura.'
+      );
+    } finally {
+      setSalvandoAssinaturaCliente(
+        false
+      );
+    }
   }
 
   function textoStatus(
@@ -1351,6 +1568,239 @@ export default function DetalhesSolicitacaoScreen() {
                 </>
               ) : null}
 
+              {/* FORM 03 - ASSINATURA DO CLIENTE */}
+
+              {form03Cliente?.modo_assinatura ===
+              'manual_app' ? (
+                <>
+                  <Text
+                    style={
+                      styles.sectionTitle
+                    }
+                  >
+                    FORM 03
+                  </Text>
+
+                  <View
+                    style={
+                      styles.form03ClienteBox
+                    }
+                  >
+                    <View
+                      style={
+                        styles.form03ClienteHeader
+                      }
+                    >
+                      <View
+                        style={
+                          styles.form03ClienteIcon
+                        }
+                      >
+                        <Ionicons
+                          name="document-text-outline"
+                          size={22}
+                          color="#FFFFFF"
+                        />
+                      </View>
+
+                      <View
+                        style={{
+                          flex: 1,
+                        }}
+                      >
+                        <Text
+                          style={
+                            styles.form03ClienteTitle
+                          }
+                        >
+                          Termo de Vistoria e Execução
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.form03ClienteText
+                          }
+                        >
+                          O serviço deste protocolo foi concluído. Assine abaixo para registrar o recebimento do serviço.
+                        </Text>
+                      </View>
+                    </View>
+
+                    {form03Cliente.assinatura_cliente_ok ? (
+                      <View
+                        style={
+                          styles.form03ClienteAssinado
+                        }
+                      >
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={24}
+                          color="#287A46"
+                        />
+
+                        <View
+                          style={{
+                            flex: 1,
+                          }}
+                        >
+                          <Text
+                            style={
+                              styles.form03ClienteAssinadoTitle
+                            }
+                          >
+                            Sua assinatura já foi registrada
+                          </Text>
+
+                          <Text
+                            style={
+                              styles.form03ClienteAssinadoText
+                            }
+                          >
+                            {form03Cliente.assinatura_cliente_nome ??
+                              form03Cliente.cliente_nome}
+                          </Text>
+
+                          {form03Cliente.assinado_cliente_em ? (
+                            <Text
+                              style={
+                                styles.form03ClienteAssinadoText
+                              }
+                            >
+                              {formatarDataHora(
+                                form03Cliente.assinado_cliente_em
+                              )}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+                    ) : (
+                      <>
+                        <Text
+                          style={
+                            styles.form03ClienteLabel
+                          }
+                        >
+                          NOME DO CLIENTE OU REPRESENTANTE
+                        </Text>
+
+                        <TextInput
+                          style={
+                            styles.form03ClienteInput
+                          }
+                          value={
+                            nomeAssinanteCliente
+                          }
+                          placeholder="Nome de quem está assinando"
+                          placeholderTextColor="#8995A5"
+                          onChangeText={
+                            setNomeAssinanteCliente
+                          }
+                          editable={
+                            !salvandoAssinaturaCliente
+                          }
+                        />
+
+                        <SignaturePadCliente
+                          salvando={
+                            salvandoAssinaturaCliente
+                          }
+                          onSave={
+                            salvarAssinaturaCliente
+                          }
+                        />
+                      </>
+                    )}
+
+                    <View
+                      style={
+                        styles.form03ResponsavelStatus
+                      }
+                    >
+                      <Ionicons
+                        name={
+                          form03Cliente.assinatura_funcionario_ok
+                            ? 'checkmark-circle-outline'
+                            : 'time-outline'
+                        }
+                        size={20}
+                        color={
+                          form03Cliente.assinatura_funcionario_ok
+                            ? '#287A46'
+                            : '#9A6A00'
+                        }
+                      />
+
+                      <Text
+                        style={
+                          form03Cliente.assinatura_funcionario_ok
+                            ? styles.form03ResponsavelOk
+                            : styles.form03ResponsavelPendente
+                        }
+                      >
+                        {form03Cliente.assinatura_funcionario_ok
+                          ? 'O responsável da EMAFE também já assinou.'
+                          : 'Aguardando assinatura do responsável da EMAFE.'}
+                      </Text>
+                    </View>
+
+                    {erroForm03Cliente ? (
+                      <View
+                        style={
+                          styles.form03ClienteErro
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.form03ClienteErroText
+                          }
+                        >
+                          {
+                            erroForm03Cliente
+                          }
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    {sucessoAssinaturaCliente ? (
+                      <View
+                        style={
+                          styles.form03ClienteSucesso
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.form03ClienteSucessoText
+                          }
+                        >
+                          {
+                            sucessoAssinaturaCliente
+                          }
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </>
+              ) : carregandoForm03Cliente ? (
+                <View
+                  style={
+                    styles.form03ClienteLoading
+                  }
+                >
+                  <ActivityIndicator
+                    size="small"
+                    color="#0B5EA8"
+                  />
+
+                  <Text
+                    style={
+                      styles.form03ClienteLoadingText
+                    }
+                  >
+                    Verificando FORM 03...
+                  </Text>
+                </View>
+              ) : null}
+
               {/* ANDAMENTO */}
 
               <Text
@@ -1691,8 +2141,587 @@ export default function DetalhesSolicitacaoScreen() {
   );
 }
 
+function SignaturePadCliente({
+  onSave,
+  salvando,
+}: {
+  onSave: (
+    assinaturaSvg: string
+  ) => void;
+  salvando: boolean;
+}) {
+  const larguraSvg = 600;
+  const alturaSvg = 180;
+
+  const [
+    caminhos,
+    setCaminhos,
+  ] = useState<string[]>([]);
+
+  const [
+    caminhoAtual,
+    setCaminhoAtual,
+  ] = useState('');
+
+  const [
+    tamanho,
+    setTamanho,
+  ] = useState({
+    width: 1,
+    height: 1,
+  });
+
+  const caminhoRef =
+    useRef('');
+
+  function converterPonto(
+    x: number,
+    y: number
+  ) {
+    return {
+      x:
+        (x /
+          Math.max(
+            tamanho.width,
+            1
+          )) *
+        larguraSvg,
+
+      y:
+        (y /
+          Math.max(
+            tamanho.height,
+            1
+          )) *
+        alturaSvg,
+    };
+  }
+
+  const panResponder =
+    useMemo(
+      () =>
+        PanResponder.create({
+          onStartShouldSetPanResponder:
+            () => true,
+
+          onMoveShouldSetPanResponder:
+            () => true,
+
+          onPanResponderGrant: (
+            evento
+          ) => {
+            const {
+              locationX,
+              locationY,
+            } =
+              evento.nativeEvent;
+
+            const ponto =
+              converterPonto(
+                locationX,
+                locationY
+              );
+
+            const novo =
+              `M ${ponto.x.toFixed(
+                2
+              )} ${ponto.y.toFixed(
+                2
+              )}`;
+
+            caminhoRef.current =
+              novo;
+
+            setCaminhoAtual(
+              novo
+            );
+          },
+
+          onPanResponderMove: (
+            evento
+          ) => {
+            const {
+              locationX,
+              locationY,
+            } =
+              evento.nativeEvent;
+
+            const ponto =
+              converterPonto(
+                locationX,
+                locationY
+              );
+
+            const atualizado =
+              `${caminhoRef.current} L ${ponto.x.toFixed(
+                2
+              )} ${ponto.y.toFixed(
+                2
+              )}`;
+
+            caminhoRef.current =
+              atualizado;
+
+            setCaminhoAtual(
+              atualizado
+            );
+          },
+
+          onPanResponderRelease:
+            () => {
+              const finalizado =
+                caminhoRef.current;
+
+              if (finalizado) {
+                setCaminhos(
+                  (atuais) => [
+                    ...atuais,
+                    finalizado,
+                  ]
+                );
+              }
+
+              caminhoRef.current =
+                '';
+
+              setCaminhoAtual(
+                ''
+              );
+            },
+
+          onPanResponderTerminate:
+            () => {
+              const finalizado =
+                caminhoRef.current;
+
+              if (finalizado) {
+                setCaminhos(
+                  (atuais) => [
+                    ...atuais,
+                    finalizado,
+                  ]
+                );
+              }
+
+              caminhoRef.current =
+                '';
+
+              setCaminhoAtual(
+                ''
+              );
+            },
+        }),
+      [
+        tamanho.width,
+        tamanho.height,
+      ]
+    );
+
+  function limpar() {
+    setCaminhos([]);
+    setCaminhoAtual('');
+    caminhoRef.current = '';
+  }
+
+  function salvar() {
+    const todos = [
+      ...caminhos,
+      ...(caminhoAtual
+        ? [caminhoAtual]
+        : []),
+    ];
+
+    if (
+      todos.length === 0
+    ) {
+      return;
+    }
+
+    const paths =
+      todos
+        .map(
+          (caminho) =>
+            `<path d="${caminho}" fill="none" stroke="#0B2447" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />`
+        )
+        .join('');
+
+    const assinatura =
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${larguraSvg} ${alturaSvg}" preserveAspectRatio="xMidYMid meet">${paths}</svg>`;
+
+    onSave(
+      assinatura
+    );
+  }
+
+  const possuiAssinatura =
+    caminhos.length > 0 ||
+    caminhoAtual.length > 0;
+
+  return (
+    <View
+      style={
+        styles.form03SignatureContainer
+      }
+    >
+      <Text
+        style={
+          styles.form03ClienteLabel
+        }
+      >
+        ASSINATURA
+      </Text>
+
+      <Text
+        style={
+          styles.form03SignatureHelp
+        }
+      >
+        Assine dentro do quadro usando o dedo, mouse ou caneta.
+      </Text>
+
+      <View
+        style={
+          styles.form03SignatureArea
+        }
+        onLayout={(
+          evento
+        ) => {
+          const {
+            width,
+            height,
+          } =
+            evento.nativeEvent
+              .layout;
+
+          setTamanho({
+            width,
+            height,
+          });
+        }}
+        {...panResponder.panHandlers}
+      >
+        <Svg
+          width="100%"
+          height="100%"
+          viewBox={`0 0 ${larguraSvg} ${alturaSvg}`}
+        >
+          {caminhos.map(
+            (
+              caminho,
+              index
+            ) => (
+              <SvgPath
+                key={`${index}-${caminho.length}`}
+                d={caminho}
+                fill="none"
+                stroke="#0B2447"
+                strokeWidth={3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )
+          )}
+
+          {caminhoAtual ? (
+            <SvgPath
+              d={
+                caminhoAtual
+              }
+              fill="none"
+              stroke="#0B2447"
+              strokeWidth={3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          ) : null}
+        </Svg>
+      </View>
+
+      <View
+        style={
+          styles.form03SignatureActions
+        }
+      >
+        <TouchableOpacity
+          style={
+            styles.form03SignatureClear
+          }
+          onPress={limpar}
+          disabled={
+            salvando
+          }
+        >
+          <Ionicons
+            name="trash-outline"
+            size={17}
+            color="#9A3232"
+          />
+
+          <Text
+            style={
+              styles.form03SignatureClearText
+            }
+          >
+            Limpar
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.form03SignatureSave,
+
+            (!possuiAssinatura ||
+              salvando) &&
+              styles.form03SignatureDisabled,
+          ]}
+          onPress={salvar}
+          disabled={
+            !possuiAssinatura ||
+            salvando
+          }
+        >
+          {salvando ? (
+            <ActivityIndicator
+              size="small"
+              color="#FFFFFF"
+            />
+          ) : (
+            <Ionicons
+              name="checkmark-outline"
+              size={18}
+              color="#FFFFFF"
+            />
+          )}
+
+          <Text
+            style={
+              styles.form03SignatureSaveText
+            }
+          >
+            {salvando
+              ? 'Salvando...'
+              : 'Salvar assinatura'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 const styles =
   StyleSheet.create({
+    form03ClienteBox: {
+      backgroundColor: '#F8FAFC',
+      borderWidth: 1,
+      borderColor: '#CCD7E3',
+      borderRadius: 16,
+      padding: 18,
+      marginBottom: 22,
+    },
+
+    form03ClienteHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 11,
+      marginBottom: 18,
+    },
+
+    form03ClienteIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      backgroundColor: '#0B2447',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    form03ClienteTitle: {
+      color: '#0B2447',
+      fontSize: 16,
+      fontWeight: '800',
+    },
+
+    form03ClienteText: {
+      color: '#697789',
+      fontSize: 12,
+      lineHeight: 18,
+      marginTop: 4,
+    },
+
+    form03ClienteLabel: {
+      color: '#42566D',
+      fontSize: 10,
+      fontWeight: '800',
+      marginBottom: 8,
+    },
+
+    form03ClienteInput: {
+      minHeight: 52,
+      borderWidth: 1,
+      borderColor: '#CCD7E3',
+      borderRadius: 12,
+      backgroundColor: '#FFFFFF',
+      paddingHorizontal: 14,
+      color: '#24364B',
+      fontSize: 13,
+      marginBottom: 14,
+    },
+
+    form03ClienteAssinado: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: '#AED7BA',
+      borderRadius: 12,
+      backgroundColor: '#EAF6EE',
+    },
+
+    form03ClienteAssinadoTitle: {
+      color: '#287A46',
+      fontSize: 12,
+      fontWeight: '800',
+    },
+
+    form03ClienteAssinadoText: {
+      color: '#567362',
+      fontSize: 10,
+      lineHeight: 15,
+      marginTop: 3,
+    },
+
+    form03ResponsavelStatus: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 14,
+      padding: 12,
+      borderRadius: 11,
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1,
+      borderColor: '#D8DEE7',
+    },
+
+    form03ResponsavelOk: {
+      flex: 1,
+      color: '#287A46',
+      fontSize: 11,
+      fontWeight: '700',
+    },
+
+    form03ResponsavelPendente: {
+      flex: 1,
+      color: '#9A6A00',
+      fontSize: 11,
+      fontWeight: '700',
+    },
+
+    form03ClienteErro: {
+      backgroundColor: '#FCEEEE',
+      borderRadius: 10,
+      padding: 11,
+      marginTop: 12,
+    },
+
+    form03ClienteErroText: {
+      color: '#9A3232',
+      fontSize: 11,
+    },
+
+    form03ClienteSucesso: {
+      backgroundColor: '#EAF6EE',
+      borderRadius: 10,
+      padding: 11,
+      marginTop: 12,
+    },
+
+    form03ClienteSucessoText: {
+      color: '#287A46',
+      fontSize: 11,
+      fontWeight: '700',
+    },
+
+    form03ClienteLoading: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 18,
+    },
+
+    form03ClienteLoadingText: {
+      color: '#697789',
+      fontSize: 11,
+    },
+
+    form03SignatureContainer: {
+      marginTop: 4,
+    },
+
+    form03SignatureHelp: {
+      color: '#8995A5',
+      fontSize: 10,
+      marginTop: -4,
+      marginBottom: 8,
+    },
+
+    form03SignatureArea: {
+      height: 180,
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1,
+      borderColor: '#9EABB8',
+      borderRadius: 10,
+      overflow: 'hidden',
+    },
+
+    form03SignatureActions: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginTop: 10,
+    },
+
+    form03SignatureClear: {
+      minHeight: 42,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: '#D9B0B0',
+      backgroundColor: '#FFFFFF',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingHorizontal: 14,
+    },
+
+    form03SignatureClearText: {
+      color: '#9A3232',
+      fontSize: 10,
+      fontWeight: '800',
+    },
+
+    form03SignatureSave: {
+      minHeight: 42,
+      borderRadius: 10,
+      backgroundColor: '#0B2447',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingHorizontal: 15,
+    },
+
+    form03SignatureSaveText: {
+      color: '#FFFFFF',
+      fontSize: 10,
+      fontWeight: '800',
+    },
+
+    form03SignatureDisabled: {
+      opacity: 0.55,
+    },
+
     container: {
       flex: 1,
       backgroundColor: '#F5F7FA',
