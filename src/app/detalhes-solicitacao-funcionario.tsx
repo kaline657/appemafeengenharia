@@ -9145,7 +9145,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         styles.form03AssinaturaTitle
                                       }
                                     >
-                                      Como deseja coletar as assinaturas?
+                                      Assinaturas do FORM 03
                                     </Text>
 
                                     <Text
@@ -9153,7 +9153,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         styles.form03AssinaturaText
                                       }
                                     >
-                                      Escolha apenas um fluxo para este documento.
+                                      As assinaturas serão realizadas manualmente no aplicativo EMAFE.
                                     </Text>
 
                                     <TouchableOpacity
@@ -9211,65 +9211,6 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                           ]}
                                         >
                                           Cliente e responsável assinam manualmente na tela do EMAFE.
-                                        </Text>
-                                      </View>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                      style={[
-                                        styles.form03ModoButton,
-
-                                        modoAssinaturaForm03 ===
-                                          'externa_pdf' &&
-                                          styles.form03ModoButtonActive,
-                                      ]}
-                                      disabled={
-                                        definindoModoAssinatura
-                                      }
-                                      onPress={() =>
-                                        definirModoAssinaturaForm03(
-                                          'externa_pdf'
-                                        )
-                                      }
-                                    >
-                                      <Ionicons
-                                        name="cloud-upload-outline"
-                                        size={21}
-                                        color={
-                                          modoAssinaturaForm03 ===
-                                          'externa_pdf'
-                                            ? '#FFFFFF'
-                                            : '#0B2447'
-                                        }
-                                      />
-
-                                      <View
-                                        style={{
-                                          flex: 1,
-                                        }}
-                                      >
-                                        <Text
-                                          style={[
-                                            styles.form03ModoButtonTitle,
-
-                                            modoAssinaturaForm03 ===
-                                              'externa_pdf' &&
-                                              styles.form03ModoButtonTitleActive,
-                                          ]}
-                                        >
-                                          Assinar eletronicamente / externamente
-                                        </Text>
-
-                                        <Text
-                                          style={[
-                                            styles.form03ModoButtonText,
-
-                                            modoAssinaturaForm03 ===
-                                              'externa_pdf' &&
-                                              styles.form03ModoButtonTextActive,
-                                          ]}
-                                        >
-                                          Salve o PDF, assine no GOV.BR ou outro serviço e depois envie o PDF final ao protocolo.
                                         </Text>
                                       </View>
                                     </TouchableOpacity>

@@ -50,6 +50,27 @@ type SolicitacaoCriada = {
   solicitacao_id: string;
   protocolo: string;
   status: string;
+
+  agendamento_id: string;
+  data_vistoria: string;
+  hora_inicio: string;
+  hora_fim: string;
+};
+
+type HorarioVistoriaDisponivel = {
+  data_vistoria: string;
+  dia_semana: number;
+  nome_dia: string;
+  horario_vistoria_id: string;
+  hora_inicio: string;
+  hora_fim: string;
+};
+
+type DiaCalendario = {
+  iso: string;
+  dia: number;
+  pertenceAoMes: boolean;
+  disponivel: boolean;
 };
 
 export default function NovaSolicitacaoScreen() {
@@ -104,9 +125,38 @@ export default function NovaSolicitacaoScreen() {
   ] = useState('');
 
   const [
-    disponibilidadeVisita,
-    setDisponibilidadeVisita,
+    horariosVistoria,
+    setHorariosVistoria,
+  ] = useState<HorarioVistoriaDisponivel[]>(
+    []
+  );
+
+  const [
+    carregandoAgenda,
+    setCarregandoAgenda,
+  ] = useState(false);
+
+  const [
+    erroAgenda,
+    setErroAgenda,
   ] = useState('');
+
+  const [
+    dataVistoriaSelecionada,
+    setDataVistoriaSelecionada,
+  ] = useState('');
+
+  const [
+    horarioVistoriaSelecionadoId,
+    setHorarioVistoriaSelecionadoId,
+  ] = useState('');
+
+  const [
+    mesCalendario,
+    setMesCalendario,
+  ] = useState<Date | null>(
+    null
+  );
 
   const [
     solicitacaoCriada,
@@ -163,6 +213,8 @@ export default function NovaSolicitacaoScreen() {
     try {
       setCarregando(true);
       setErro('');
+
+      await carregarAgendaVistoria();
 
       // ------------------------------------------------------
       // IMÓVEIS VINCULADOS AO CLIENTE
@@ -257,6 +309,456 @@ export default function NovaSolicitacaoScreen() {
     } finally {
       setCarregando(false);
     }
+  }
+
+  // ==========================================================
+  // AGENDA DE VISTORIA
+  // ==========================================================
+
+  function dataIsoParaLocal(
+    iso: string
+  ) {
+    const [
+      ano,
+      mes,
+      dia,
+    ] = iso
+      .split('-')
+      .map(Number);
+
+    return new Date(
+      ano,
+      mes - 1,
+      dia
+    );
+  }
+
+  function dataLocalParaIso(
+    data: Date
+  ) {
+    const ano =
+      data.getFullYear();
+
+    const mes =
+      String(
+        data.getMonth() + 1
+      ).padStart(2, '0');
+
+    const dia =
+      String(
+        data.getDate()
+      ).padStart(2, '0');
+
+    return `${ano}-${mes}-${dia}`;
+  }
+
+  function formatarDataAgenda(
+    iso: string
+  ) {
+    if (!iso) {
+      return '-';
+    }
+
+    const data =
+      dataIsoParaLocal(iso);
+
+    return data.toLocaleDateString(
+      'pt-BR',
+      {
+        weekday: 'long',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      }
+    );
+  }
+
+  function formatarHoraAgenda(
+    hora: string
+  ) {
+    return hora
+      ? hora.substring(0, 5)
+      : '-';
+  }
+
+  async function carregarAgendaVistoria() {
+    try {
+      setCarregandoAgenda(
+        true
+      );
+
+      setErroAgenda('');
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'listar_horarios_vistoria_disponiveis',
+        {
+          p_data_inicio:
+            null,
+
+          p_quantidade_dias:
+            60,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao carregar agenda de vistoria:',
+          error
+        );
+
+        setErroAgenda(
+          'Não foi possível carregar os horários disponíveis.'
+        );
+
+        return;
+      }
+
+      const agenda =
+        (data ?? []) as
+          HorarioVistoriaDisponivel[];
+
+      setHorariosVistoria(
+        agenda
+      );
+
+      if (
+        agenda.length === 0
+      ) {
+        setErroAgenda(
+          'Não há horários de vistoria disponíveis no momento.'
+        );
+
+        setDataVistoriaSelecionada(
+          ''
+        );
+
+        setHorarioVistoriaSelecionadoId(
+          ''
+        );
+
+        return;
+      }
+
+      const primeiraData =
+        dataIsoParaLocal(
+          agenda[0].data_vistoria
+        );
+
+      setMesCalendario(
+        (mesAtual) =>
+          mesAtual ??
+          new Date(
+            primeiraData.getFullYear(),
+            primeiraData.getMonth(),
+            1
+          )
+      );
+
+      if (
+        dataVistoriaSelecionada
+      ) {
+        const dataAindaDisponivel =
+          agenda.some(
+            (item) =>
+              item.data_vistoria ===
+              dataVistoriaSelecionada
+          );
+
+        if (
+          !dataAindaDisponivel
+        ) {
+          setDataVistoriaSelecionada(
+            ''
+          );
+
+          setHorarioVistoriaSelecionadoId(
+            ''
+          );
+        } else if (
+          horarioVistoriaSelecionadoId
+        ) {
+          const horarioAindaDisponivel =
+            agenda.some(
+              (item) =>
+                item.data_vistoria ===
+                  dataVistoriaSelecionada &&
+                item.horario_vistoria_id ===
+                  horarioVistoriaSelecionadoId
+            );
+
+          if (
+            !horarioAindaDisponivel
+          ) {
+            setHorarioVistoriaSelecionadoId(
+              ''
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao carregar agenda:',
+        error
+      );
+
+      setErroAgenda(
+        'Ocorreu um erro ao carregar a agenda de vistoria.'
+      );
+    } finally {
+      setCarregandoAgenda(
+        false
+      );
+    }
+  }
+
+  const datasComHorario =
+    useMemo(
+      () =>
+        new Set(
+          horariosVistoria.map(
+            (item) =>
+              item.data_vistoria
+          )
+        ),
+      [horariosVistoria]
+    );
+
+  const horariosDaDataSelecionada =
+    useMemo(
+      () =>
+        horariosVistoria.filter(
+          (item) =>
+            item.data_vistoria ===
+            dataVistoriaSelecionada
+        ),
+      [
+        horariosVistoria,
+        dataVistoriaSelecionada,
+      ]
+    );
+
+  const limiteMesAnterior =
+    useMemo(() => {
+      if (
+        horariosVistoria.length ===
+        0
+      ) {
+        return null;
+      }
+
+      const data =
+        dataIsoParaLocal(
+          horariosVistoria[0]
+            .data_vistoria
+        );
+
+      return new Date(
+        data.getFullYear(),
+        data.getMonth(),
+        1
+      );
+    }, [horariosVistoria]);
+
+  const limiteMesPosterior =
+    useMemo(() => {
+      if (
+        horariosVistoria.length ===
+        0
+      ) {
+        return null;
+      }
+
+      const data =
+        dataIsoParaLocal(
+          horariosVistoria[
+            horariosVistoria.length - 1
+          ].data_vistoria
+        );
+
+      return new Date(
+        data.getFullYear(),
+        data.getMonth(),
+        1
+      );
+    }, [horariosVistoria]);
+
+  const diasDoCalendario =
+    useMemo<DiaCalendario[]>(
+      () => {
+        if (!mesCalendario) {
+          return [];
+        }
+
+        const ano =
+          mesCalendario
+            .getFullYear();
+
+        const mes =
+          mesCalendario
+            .getMonth();
+
+        const primeiroDiaMes =
+          new Date(
+            ano,
+            mes,
+            1
+          );
+
+        const inicioGrade =
+          new Date(
+            ano,
+            mes,
+            1 -
+              primeiroDiaMes
+                .getDay()
+          );
+
+        const dias:
+          DiaCalendario[] = [];
+
+        for (
+          let indice = 0;
+          indice < 42;
+          indice++
+        ) {
+          const data =
+            new Date(
+              inicioGrade
+            );
+
+          data.setDate(
+            inicioGrade
+              .getDate() +
+              indice
+          );
+
+          const iso =
+            dataLocalParaIso(
+              data
+            );
+
+          dias.push({
+            iso,
+            dia:
+              data.getDate(),
+
+            pertenceAoMes:
+              data.getMonth() ===
+                mes &&
+              data.getFullYear() ===
+                ano,
+
+            disponivel:
+              datasComHorario.has(
+                iso
+              ),
+          });
+        }
+
+        return dias;
+      },
+      [
+        mesCalendario,
+        datasComHorario,
+      ]
+    );
+
+  const tituloMesCalendario =
+    useMemo(() => {
+      if (!mesCalendario) {
+        return '';
+      }
+
+      const texto =
+        mesCalendario
+          .toLocaleDateString(
+            'pt-BR',
+            {
+              month: 'long',
+              year: 'numeric',
+            }
+          );
+
+      return (
+        texto.charAt(0)
+          .toUpperCase() +
+        texto.slice(1)
+      );
+    }, [mesCalendario]);
+
+  function compararMeses(
+    primeiro: Date,
+    segundo: Date
+  ) {
+    return (
+      primeiro.getFullYear() *
+        12 +
+      primeiro.getMonth() -
+      (
+        segundo.getFullYear() *
+          12 +
+        segundo.getMonth()
+      )
+    );
+  }
+
+  const podeVoltarMes =
+    !!mesCalendario &&
+    !!limiteMesAnterior &&
+    compararMeses(
+      mesCalendario,
+      limiteMesAnterior
+    ) > 0;
+
+  const podeAvancarMes =
+    !!mesCalendario &&
+    !!limiteMesPosterior &&
+    compararMeses(
+      mesCalendario,
+      limiteMesPosterior
+    ) < 0;
+
+  function mudarMesCalendario(
+    quantidade: number
+  ) {
+    if (!mesCalendario) {
+      return;
+    }
+
+    setMesCalendario(
+      new Date(
+        mesCalendario
+          .getFullYear(),
+        mesCalendario
+          .getMonth() +
+          quantidade,
+        1
+      )
+    );
+  }
+
+  function selecionarDataVistoria(
+    dia: DiaCalendario
+  ) {
+    if (
+      !dia.pertenceAoMes ||
+      !dia.disponivel
+    ) {
+      return;
+    }
+
+    setDataVistoriaSelecionada(
+      dia.iso
+    );
+
+    setHorarioVistoriaSelecionadoId(
+      ''
+    );
+
+    setErro('');
   }
 
   // ==========================================================
@@ -822,9 +1324,8 @@ export default function NovaSolicitacaoScreen() {
     emailValido(
       emailContato
     ) &&
-    disponibilidadeVisita
-      .trim()
-      .length > 0 &&
+    !!dataVistoriaSelecionada &&
+    !!horarioVistoriaSelecionadoId &&
     !enviando;
 
   // ==========================================================
@@ -904,10 +1405,20 @@ export default function NovaSolicitacaoScreen() {
     }
 
     if (
-      !disponibilidadeVisita.trim()
+      !dataVistoriaSelecionada
     ) {
       setErro(
-        'Informe sua disponibilidade para receber a equipe.'
+        'Escolha uma data disponível para a vistoria.'
+      );
+
+      return;
+    }
+
+    if (
+      !horarioVistoriaSelecionadoId
+    ) {
+      setErro(
+        'Escolha um horário disponível para a vistoria.'
       );
 
       return;
@@ -937,7 +1448,7 @@ export default function NovaSolicitacaoScreen() {
         error,
       } =
         await supabase.rpc(
-          'abrir_solicitacao_cliente',
+          'abrir_solicitacao_com_vistoria_cliente',
           {
             p_unidade_id:
               unidadeSelecionada
@@ -959,9 +1470,11 @@ export default function NovaSolicitacaoScreen() {
                 .trim()
                 .toLowerCase(),
 
-            p_disponibilidade_visita:
-              disponibilidadeVisita
-                .trim(),
+            p_data_vistoria:
+              dataVistoriaSelecionada,
+
+            p_horario_vistoria_id:
+              horarioVistoriaSelecionadoId,
           }
         );
 
@@ -975,6 +1488,12 @@ export default function NovaSolicitacaoScreen() {
           error.message ||
             'Não foi possível enviar a solicitação.'
         );
+
+        setHorarioVistoriaSelecionadoId(
+          ''
+        );
+
+        await carregarAgendaVistoria();
 
         return;
       }
@@ -1149,9 +1668,33 @@ export default function NovaSolicitacaoScreen() {
 
     setFotos([]);
 
-    setDisponibilidadeVisita(
+    setDataVistoriaSelecionada(
       ''
     );
+
+    setHorarioVistoriaSelecionadoId(
+      ''
+    );
+
+    if (
+      horariosVistoria.length > 0
+    ) {
+      const primeiraData =
+        dataIsoParaLocal(
+          horariosVistoria[0]
+            .data_vistoria
+        );
+
+      setMesCalendario(
+        new Date(
+          primeiraData
+            .getFullYear(),
+          primeiraData
+            .getMonth(),
+          1
+        )
+      );
+    }
 
     setSolicitacaoCriada(
       null
@@ -1309,6 +1852,67 @@ export default function NovaSolicitacaoScreen() {
                   }
                 >
                   Aguardando análise
+                </Text>
+              </View>
+            </View>
+
+            {/* VISTORIA RESERVADA */}
+
+            <View
+              style={
+                styles.appointmentSuccessCard
+              }
+            >
+              <View
+                style={
+                  styles.appointmentSuccessIcon
+                }
+              >
+                <Ionicons
+                  name="calendar-outline"
+                  size={24}
+                  color="#0B5EA8"
+                />
+              </View>
+
+              <View
+                style={{
+                  flex: 1,
+                }}
+              >
+                <Text
+                  style={
+                    styles.appointmentSuccessTitle
+                  }
+                >
+                  Vistoria reservada
+                </Text>
+
+                <Text
+                  style={
+                    styles.appointmentSuccessDate
+                  }
+                >
+                  {formatarDataAgenda(
+                    solicitacaoCriada
+                      .data_vistoria
+                  )}
+                </Text>
+
+                <Text
+                  style={
+                    styles.appointmentSuccessTime
+                  }
+                >
+                  {formatarHoraAgenda(
+                    solicitacaoCriada
+                      .hora_inicio
+                  )}{' '}
+                  às{' '}
+                  {formatarHoraAgenda(
+                    solicitacaoCriada
+                      .hora_fim
+                  )}
                 </Text>
               </View>
             </View>
@@ -2342,14 +2946,14 @@ export default function NovaSolicitacaoScreen() {
                 />
               </View>
 
-              {/* DISPONIBILIDADE */}
+              {/* AGENDA DE VISTORIA */}
 
               <Text
                 style={
                   styles.sectionTitle
                 }
               >
-                8. Disponibilidade para visita
+                8. Escolha a vistoria
               </Text>
 
               <Text
@@ -2357,25 +2961,439 @@ export default function NovaSolicitacaoScreen() {
                   styles.helperText
                 }
               >
-                Informe os melhores dias e horários para receber a equipe da EMAFE.
+                Selecione uma data liberada no calendário e, em seguida, escolha um dos horários disponíveis. Datas e horários já reservados por outros clientes não ficam disponíveis.
               </Text>
 
-              <TextInput
-                style={
-                  styles.availabilityInput
-                }
-                placeholder="Ex.: Segunda e quarta-feira, das 14h às 17h."
-                placeholderTextColor="#8995A5"
-                multiline
-                textAlignVertical="top"
-                value={
-                  disponibilidadeVisita
-                }
-                onChangeText={
-                  setDisponibilidadeVisita
-                }
-                maxLength={500}
-              />
+              {carregandoAgenda ? (
+                <View
+                  style={
+                    styles.agendaLoadingBox
+                  }
+                >
+                  <ActivityIndicator
+                    color="#0B2447"
+                  />
+
+                  <Text
+                    style={
+                      styles.agendaLoadingText
+                    }
+                  >
+                    Carregando agenda disponível...
+                  </Text>
+                </View>
+              ) : null}
+
+              {erroAgenda &&
+              !carregandoAgenda ? (
+                <View
+                  style={
+                    styles.agendaErrorBox
+                  }
+                >
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={20}
+                    color="#9A3232"
+                  />
+
+                  <View
+                    style={{
+                      flex: 1,
+                    }}
+                  >
+                    <Text
+                      style={
+                        styles.agendaErrorText
+                      }
+                    >
+                      {erroAgenda}
+                    </Text>
+
+                    <TouchableOpacity
+                      style={
+                        styles.agendaReloadButton
+                      }
+                      onPress={
+                        carregarAgendaVistoria
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.agendaReloadButtonText
+                        }
+                      >
+                        Tentar novamente
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : null}
+
+              {!carregandoAgenda &&
+              horariosVistoria.length >
+                0 &&
+              mesCalendario ? (
+                <>
+                  <View
+                    style={
+                      styles.calendarCard
+                    }
+                  >
+                    <View
+                      style={
+                        styles.calendarHeader
+                      }
+                    >
+                      <TouchableOpacity
+                        style={[
+                          styles.calendarArrowButton,
+
+                          !podeVoltarMes &&
+                            styles.calendarArrowButtonDisabled,
+                        ]}
+                        disabled={
+                          !podeVoltarMes
+                        }
+                        onPress={() =>
+                          mudarMesCalendario(
+                            -1
+                          )
+                        }
+                      >
+                        <Ionicons
+                          name="chevron-back"
+                          size={20}
+                          color={
+                            podeVoltarMes
+                              ? '#0B2447'
+                              : '#B7C0CB'
+                          }
+                        />
+                      </TouchableOpacity>
+
+                      <Text
+                        style={
+                          styles.calendarMonthTitle
+                        }
+                      >
+                        {tituloMesCalendario}
+                      </Text>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.calendarArrowButton,
+
+                          !podeAvancarMes &&
+                            styles.calendarArrowButtonDisabled,
+                        ]}
+                        disabled={
+                          !podeAvancarMes
+                        }
+                        onPress={() =>
+                          mudarMesCalendario(
+                            1
+                          )
+                        }
+                      >
+                        <Ionicons
+                          name="chevron-forward"
+                          size={20}
+                          color={
+                            podeAvancarMes
+                              ? '#0B2447'
+                              : '#B7C0CB'
+                          }
+                        />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View
+                      style={
+                        styles.calendarWeekRow
+                      }
+                    >
+                      {[
+                        'DOM',
+                        'SEG',
+                        'TER',
+                        'QUA',
+                        'QUI',
+                        'SEX',
+                        'SÁB',
+                      ].map(
+                        (diaSemana) => (
+                          <Text
+                            key={
+                              diaSemana
+                            }
+                            style={
+                              styles.calendarWeekText
+                            }
+                          >
+                            {diaSemana}
+                          </Text>
+                        )
+                      )}
+                    </View>
+
+                    <View
+                      style={
+                        styles.calendarGrid
+                      }
+                    >
+                      {diasDoCalendario.map(
+                        (dia) => {
+                          const selecionado =
+                            dataVistoriaSelecionada ===
+                            dia.iso;
+
+                          const podeSelecionar =
+                            dia.pertenceAoMes &&
+                            dia.disponivel;
+
+                          return (
+                            <View
+                              key={
+                                dia.iso
+                              }
+                              style={
+                                styles.calendarDayWrapper
+                              }
+                            >
+                              <TouchableOpacity
+                                style={[
+                                  styles.calendarDay,
+
+                                  !dia.pertenceAoMes &&
+                                    styles.calendarDayOutside,
+
+                                  dia.pertenceAoMes &&
+                                    !dia.disponivel &&
+                                    styles.calendarDayUnavailable,
+
+                                  podeSelecionar &&
+                                    styles.calendarDayAvailable,
+
+                                  selecionado &&
+                                    styles.calendarDaySelected,
+                                ]}
+                                disabled={
+                                  !podeSelecionar
+                                }
+                                onPress={() =>
+                                  selecionarDataVistoria(
+                                    dia
+                                  )
+                                }
+                              >
+                                <Text
+                                  style={[
+                                    styles.calendarDayText,
+
+                                    !dia.pertenceAoMes &&
+                                      styles.calendarDayTextOutside,
+
+                                    dia.pertenceAoMes &&
+                                      !dia.disponivel &&
+                                      styles.calendarDayTextUnavailable,
+
+                                    podeSelecionar &&
+                                      styles.calendarDayTextAvailable,
+
+                                    selecionado &&
+                                      styles.calendarDayTextSelected,
+                                  ]}
+                                >
+                                  {dia.dia}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          );
+                        }
+                      )}
+                    </View>
+
+                    <View
+                      style={
+                        styles.calendarLegend
+                      }
+                    >
+                      <View
+                        style={
+                          styles.calendarLegendItem
+                        }
+                      >
+                        <View
+                          style={
+                            styles.calendarLegendAvailable
+                          }
+                        />
+
+                        <Text
+                          style={
+                            styles.calendarLegendText
+                          }
+                        >
+                          Data disponível
+                        </Text>
+                      </View>
+
+                      <View
+                        style={
+                          styles.calendarLegendItem
+                        }
+                      >
+                        <View
+                          style={
+                            styles.calendarLegendUnavailable
+                          }
+                        />
+
+                        <Text
+                          style={
+                            styles.calendarLegendText
+                          }
+                        >
+                          Indisponível
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {dataVistoriaSelecionada ? (
+                    <View
+                      style={
+                        styles.timeSelectionCard
+                      }
+                    >
+                      <View
+                        style={
+                          styles.timeSelectionHeader
+                        }
+                      >
+                        <Ionicons
+                          name="time-outline"
+                          size={21}
+                          color="#0B2447"
+                        />
+
+                        <View
+                          style={{
+                            flex: 1,
+                          }}
+                        >
+                          <Text
+                            style={
+                              styles.timeSelectionTitle
+                            }
+                          >
+                            Escolha o horário
+                          </Text>
+
+                          <Text
+                            style={
+                              styles.timeSelectionDate
+                            }
+                          >
+                            {formatarDataAgenda(
+                              dataVistoriaSelecionada
+                            )}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View
+                        style={
+                          styles.timeButtonsContainer
+                        }
+                      >
+                        {horariosDaDataSelecionada.map(
+                          (horario) => {
+                            const selecionado =
+                              horarioVistoriaSelecionadoId ===
+                              horario.horario_vistoria_id;
+
+                            return (
+                              <TouchableOpacity
+                                key={
+                                  horario.horario_vistoria_id
+                                }
+                                style={[
+                                  styles.timeButton,
+
+                                  selecionado &&
+                                    styles.timeButtonSelected,
+                                ]}
+                                onPress={() => {
+                                  setHorarioVistoriaSelecionadoId(
+                                    horario.horario_vistoria_id
+                                  );
+
+                                  setErro(
+                                    ''
+                                  );
+                                }}
+                              >
+                                <Ionicons
+                                  name={
+                                    selecionado
+                                      ? 'checkmark-circle'
+                                      : 'time-outline'
+                                  }
+                                  size={20}
+                                  color={
+                                    selecionado
+                                      ? '#FFFFFF'
+                                      : '#0B2447'
+                                  }
+                                />
+
+                                <Text
+                                  style={[
+                                    styles.timeButtonText,
+
+                                    selecionado &&
+                                      styles.timeButtonTextSelected,
+                                  ]}
+                                >
+                                  {formatarHoraAgenda(
+                                    horario.hora_inicio
+                                  )}{' '}
+                                  às{' '}
+                                  {formatarHoraAgenda(
+                                    horario.hora_fim
+                                  )}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          }
+                        )}
+                      </View>
+                    </View>
+                  ) : (
+                    <View
+                      style={
+                        styles.agendaHintBox
+                      }
+                    >
+                      <Ionicons
+                        name="calendar-outline"
+                        size={19}
+                        color="#0B5EA8"
+                      />
+
+                      <Text
+                        style={
+                          styles.agendaHintText
+                        }
+                      >
+                        Toque em uma data disponível para ver os horários livres.
+                      </Text>
+                    </View>
+                  )}
+                </>
+              ) : null}
 
               {/* ENVIAR */}
 
@@ -2432,7 +3450,7 @@ export default function NovaSolicitacaoScreen() {
                     styles.requiredInfo
                   }
                 >
-                  Preencha todos os campos e adicione pelo menos 3 fotos para liberar o envio.
+                  Preencha todos os campos, adicione pelo menos 3 fotos e escolha a data e o horário da vistoria para liberar o envio.
                 </Text>
               ) : null}
             </>
@@ -2693,18 +3711,310 @@ const styles =
       lineHeight: 21,
     },
 
-    availabilityInput: {
-      minHeight: 105,
+    // AGENDA DE VISTORIA
+
+    agendaLoadingBox: {
+      minHeight: 78,
       backgroundColor:
         '#FFFFFF',
       borderWidth: 1,
       borderColor:
         '#D8DEE7',
       borderRadius: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
       padding: 16,
-      color: '#24364B',
-      fontSize: 14,
-      lineHeight: 21,
+    },
+
+    agendaLoadingText: {
+      color: '#697789',
+      fontSize: 12,
+    },
+
+    agendaErrorBox: {
+      backgroundColor:
+        '#FCEEEE',
+      borderWidth: 1,
+      borderColor:
+        '#E8C4C4',
+      borderRadius: 14,
+      padding: 14,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+    },
+
+    agendaErrorText: {
+      color: '#9A3232',
+      fontSize: 12,
+      lineHeight: 18,
+    },
+
+    agendaReloadButton: {
+      alignSelf: 'flex-start',
+      marginTop: 9,
+      backgroundColor:
+        '#FFFFFF',
+      borderWidth: 1,
+      borderColor:
+        '#D9AFAF',
+      borderRadius: 9,
+      paddingVertical: 8,
+      paddingHorizontal: 11,
+    },
+
+    agendaReloadButtonText: {
+      color: '#9A3232',
+      fontSize: 11,
+      fontWeight: '700',
+    },
+
+    calendarCard: {
+      backgroundColor:
+        '#FFFFFF',
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+      borderRadius: 16,
+      padding: 14,
+    },
+
+    calendarHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent:
+        'space-between',
+      marginBottom: 13,
+    },
+
+    calendarArrowButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 11,
+      backgroundColor:
+        '#F1F5F9',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    calendarArrowButtonDisabled: {
+      opacity: 0.45,
+    },
+
+    calendarMonthTitle: {
+      color: '#0B2447',
+      fontSize: 15,
+      fontWeight: '800',
+    },
+
+    calendarWeekRow: {
+      flexDirection: 'row',
+      marginBottom: 5,
+    },
+
+    calendarWeekText: {
+      width: '14.2857%',
+      textAlign: 'center',
+      color: '#7B8795',
+      fontSize: 9,
+      fontWeight: '800',
+    },
+
+    calendarGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+    },
+
+    calendarDayWrapper: {
+      width: '14.2857%',
+      alignItems: 'center',
+      paddingVertical: 3,
+    },
+
+    calendarDay: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    calendarDayOutside: {
+      opacity: 0.18,
+    },
+
+    calendarDayUnavailable: {
+      backgroundColor:
+        '#F3F5F7',
+    },
+
+    calendarDayAvailable: {
+      backgroundColor:
+        '#FFFFFF',
+      borderWidth: 1.5,
+      borderColor:
+        '#0B5EA8',
+    },
+
+    calendarDaySelected: {
+      backgroundColor:
+        '#0B2447',
+      borderColor:
+        '#0B2447',
+    },
+
+    calendarDayText: {
+      color: '#42566D',
+      fontSize: 12,
+      fontWeight: '600',
+    },
+
+    calendarDayTextOutside: {
+      color: '#AAB3BE',
+    },
+
+    calendarDayTextUnavailable: {
+      color: '#B0B8C2',
+    },
+
+    calendarDayTextAvailable: {
+      color: '#0B5EA8',
+      fontWeight: '800',
+    },
+
+    calendarDayTextSelected: {
+      color: '#FFFFFF',
+      fontWeight: '800',
+    },
+
+    calendarLegend: {
+      marginTop: 13,
+      paddingTop: 11,
+      borderTopWidth: 1,
+      borderTopColor:
+        '#EEF1F4',
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 14,
+    },
+
+    calendarLegendItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+
+    calendarLegendAvailable: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      backgroundColor:
+        '#FFFFFF',
+      borderWidth: 1.5,
+      borderColor:
+        '#0B5EA8',
+    },
+
+    calendarLegendUnavailable: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      backgroundColor:
+        '#F3F5F7',
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+    },
+
+    calendarLegendText: {
+      color: '#697789',
+      fontSize: 10,
+    },
+
+    timeSelectionCard: {
+      marginTop: 12,
+      backgroundColor:
+        '#FFFFFF',
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+      borderRadius: 16,
+      padding: 15,
+    },
+
+    timeSelectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 9,
+      marginBottom: 12,
+    },
+
+    timeSelectionTitle: {
+      color: '#0B2447',
+      fontSize: 13,
+      fontWeight: '800',
+    },
+
+    timeSelectionDate: {
+      color: '#697789',
+      fontSize: 10,
+      lineHeight: 15,
+      marginTop: 2,
+    },
+
+    timeButtonsContainer: {
+      gap: 8,
+    },
+
+    timeButton: {
+      minHeight: 50,
+      borderWidth: 1,
+      borderColor:
+        '#C8D3DF',
+      borderRadius: 12,
+      backgroundColor:
+        '#F8FAFC',
+      paddingHorizontal: 15,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 9,
+    },
+
+    timeButtonSelected: {
+      backgroundColor:
+        '#0B2447',
+      borderColor:
+        '#0B2447',
+    },
+
+    timeButtonText: {
+      color: '#0B2447',
+      fontSize: 12,
+      fontWeight: '700',
+    },
+
+    timeButtonTextSelected: {
+      color: '#FFFFFF',
+    },
+
+    agendaHintBox: {
+      marginTop: 10,
+      backgroundColor:
+        '#EDF5FC',
+      borderRadius: 12,
+      padding: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+
+    agendaHintText: {
+      flex: 1,
+      color: '#0B5EA8',
+      fontSize: 11,
+      lineHeight: 16,
     },
 
     counterText: {
@@ -3092,6 +4402,53 @@ const styles =
       color: '#0B2447',
       fontSize: 11,
       fontWeight: '700',
+    },
+
+    appointmentSuccessCard: {
+      width: '100%',
+      backgroundColor:
+        '#EDF5FC',
+      borderWidth: 1,
+      borderColor:
+        '#C5DAEE',
+      borderRadius: 15,
+      padding: 15,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginTop: 14,
+    },
+
+    appointmentSuccessIcon: {
+      width: 46,
+      height: 46,
+      borderRadius: 14,
+      backgroundColor:
+        '#FFFFFF',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    appointmentSuccessTitle: {
+      color: '#0B2447',
+      fontSize: 13,
+      fontWeight: '800',
+    },
+
+    appointmentSuccessDate: {
+      color: '#42566D',
+      fontSize: 11,
+      fontWeight: '700',
+      marginTop: 3,
+      textTransform:
+        'capitalize',
+    },
+
+    appointmentSuccessTime: {
+      color: '#0B5EA8',
+      fontSize: 12,
+      fontWeight: '800',
+      marginTop: 3,
     },
 
     analysisInfoBox: {
