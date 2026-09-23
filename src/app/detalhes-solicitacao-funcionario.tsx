@@ -120,11 +120,29 @@ type ResultadoGarantia = {
 };
 
 type AgendamentoVistoria = {
-  data_vistoria: string | null;
-  hora_vistoria: string | null;
-  observacao_vistoria: string | null;
-  responsavel_vistoria_id: string | null;
-  responsavel_vistoria_nome: string | null;
+  agendamento_id: string;
+  solicitacao_id: string;
+  data_vistoria: string;
+  hora_inicio: string;
+  hora_fim: string;
+  status: string;
+  eh_agendamento_atual: boolean;
+  agendado_em: string;
+  agendado_por_tipo: string | null;
+  agendado_por_nome: string | null;
+  cancelado_em: string | null;
+  cancelado_por_tipo: string | null;
+  cancelado_por_nome: string | null;
+  motivo_cancelamento: string | null;
+};
+
+type HorarioVistoriaDisponivel = {
+  data_vistoria: string;
+  dia_semana: number;
+  nome_dia: string;
+  horario_vistoria_id: string;
+  hora_inicio: string;
+  hora_fim: string;
 };
 
 type VistoriaTecnica = {
@@ -317,21 +335,6 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   ] = useState<AgendamentoVistoria | null>(null);
 
   const [
-    dataVistoria,
-    setDataVistoria,
-  ] = useState('');
-
-  const [
-    horaVistoria,
-    setHoraVistoria,
-  ] = useState('');
-
-  const [
-    observacaoVistoria,
-    setObservacaoVistoria,
-  ] = useState('');
-
-  const [
     salvandoVistoria,
     setSalvandoVistoria,
   ] = useState(false);
@@ -344,6 +347,41 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   const [
     sucessoVistoria,
     setSucessoVistoria,
+  ] = useState('');
+
+  const [
+    horariosVistoriaDisponiveis,
+    setHorariosVistoriaDisponiveis,
+  ] = useState<HorarioVistoriaDisponivel[]>([]);
+
+  const [
+    carregandoAgendaVistoria,
+    setCarregandoAgendaVistoria,
+  ] = useState(false);
+
+  const [
+    mostrarAgendaVistoria,
+    setMostrarAgendaVistoria,
+  ] = useState(false);
+
+  const [
+    mostrarCancelamentoVistoria,
+    setMostrarCancelamentoVistoria,
+  ] = useState(false);
+
+  const [
+    novaDataVistoria,
+    setNovaDataVistoria,
+  ] = useState('');
+
+  const [
+    novoHorarioVistoriaId,
+    setNovoHorarioVistoriaId,
+  ] = useState('');
+
+  const [
+    motivoCancelamentoVistoria,
+    setMotivoCancelamentoVistoria,
   ] = useState('');
 
   const [
@@ -1049,7 +1087,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         data,
         error,
       } = await supabase.rpc(
-        'buscar_agendamento_vistoria_funcionario',
+        'buscar_historico_vistoria',
         {
           p_solicitacao_id:
             solicitacaoId,
@@ -1065,41 +1103,23 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         return null;
       }
 
-      const registro =
-        data?.[0] as
-          | AgendamentoVistoria
-          | undefined;
+      const historico =
+        (data ?? []) as
+          AgendamentoVistoria[];
 
-      if (
-        !registro ||
-        !registro.data_vistoria
-      ) {
+      const registro =
+        historico.find(
+          (item) =>
+            item.eh_agendamento_atual
+        );
+
+      if (!registro) {
         setAgendamento(null);
 
         return null;
       }
 
       setAgendamento(registro);
-
-      setDataVistoria(
-        formatarData(
-          registro.data_vistoria
-        )
-      );
-
-      setHoraVistoria(
-        registro.hora_vistoria
-          ? registro.hora_vistoria.substring(
-              0,
-              5
-            )
-          : ''
-      );
-
-      setObservacaoVistoria(
-        registro.observacao_vistoria ??
-          ''
-      );
 
       return registro;
     } catch (error) {
@@ -1497,155 +1517,81 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   }
 
   // ==========================================================
-  // MÁSCARA DATA
-  // ==========================================================
-
-  function alterarDataVistoria(
-    texto: string
-  ) {
-    let valor =
-      texto.replace(
-        /\D/g,
-        ''
-      );
-
-    valor =
-      valor.substring(0, 8);
-
-    if (valor.length > 4) {
-      valor =
-        `${valor.substring(
-          0,
-          2
-        )}/${valor.substring(
-          2,
-          4
-        )}/${valor.substring(4)}`;
-    } else if (
-      valor.length > 2
-    ) {
-      valor =
-        `${valor.substring(
-          0,
-          2
-        )}/${valor.substring(2)}`;
-    }
-
-    setDataVistoria(valor);
-
-    setErroVistoria('');
-    setSucessoVistoria('');
-  }
-
-  // ==========================================================
-  // MÁSCARA HORÁRIO
-  // ==========================================================
-
-  function alterarHoraVistoria(
-    texto: string
-  ) {
-    let valor =
-      texto.replace(
-        /\D/g,
-        ''
-      );
-
-    valor =
-      valor.substring(0, 4);
-
-    if (valor.length > 2) {
-      valor =
-        `${valor.substring(
-          0,
-          2
-        )}:${valor.substring(2)}`;
-    }
-
-    setHoraVistoria(valor);
-
-    setErroVistoria('');
-    setSucessoVistoria('');
-  }
-
-  // ==========================================================
-  // CONVERTER DATA PARA ISO
-  // ==========================================================
-
-  function converterDataParaISO(
-    valor: string
-  ) {
-    const partes =
-      valor.split('/');
-
-    if (
-      partes.length !== 3
-    ) {
-      return null;
-    }
-
-    const dia =
-      Number(partes[0]);
-
-    const mes =
-      Number(partes[1]);
-
-    const ano =
-      Number(partes[2]);
-
-    if (
-      !dia ||
-      !mes ||
-      !ano
-    ) {
-      return null;
-    }
-
-    const data =
-      new Date(
-        ano,
-        mes - 1,
-        dia
-      );
-
-    if (
-      data.getFullYear() !== ano ||
-      data.getMonth() !== mes - 1 ||
-      data.getDate() !== dia
-    ) {
-      return null;
-    }
-
-    const mesTexto =
-      String(mes).padStart(
-        2,
-        '0'
-      );
-
-    const diaTexto =
-      String(dia).padStart(
-        2,
-        '0'
-      );
-
-    return `${ano}-${mesTexto}-${diaTexto}`;
-  }
-
-  // ==========================================================
-  // VALIDAR HORA
-  // ==========================================================
-
-  function horaValida(
-    valor: string
-  ) {
-    const regex =
-      /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-    return regex.test(valor);
-  }
-
-  // ==========================================================
   // AGENDAR / REAGENDAR
   // ==========================================================
+
+  async function carregarAgendaVistoria() {
+    try {
+      setCarregandoAgendaVistoria(
+        true
+      );
+
+      setErroVistoria('');
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'listar_horarios_vistoria_disponiveis',
+        {
+          p_data_inicio:
+            null,
+
+          p_quantidade_dias:
+            60,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao carregar horários disponíveis:',
+          error
+        );
+
+        setErroVistoria(
+          'Não foi possível carregar os horários disponíveis.'
+        );
+
+        return;
+      }
+
+      setHorariosVistoriaDisponiveis(
+        (data ?? []) as
+          HorarioVistoriaDisponivel[]
+      );
+    } catch (error) {
+      console.error(
+        'Erro ao carregar agenda:',
+        error
+      );
+
+      setErroVistoria(
+        'Ocorreu um erro ao carregar a agenda.'
+      );
+    } finally {
+      setCarregandoAgendaVistoria(
+        false
+      );
+    }
+  }
+
+  async function abrirAgendaVistoria() {
+    setErroVistoria('');
+    setSucessoVistoria('');
+
+    setMostrarCancelamentoVistoria(
+      false
+    );
+
+    setMostrarAgendaVistoria(
+      true
+    );
+
+    setNovaDataVistoria('');
+    setNovoHorarioVistoriaId('');
+
+    await carregarAgendaVistoria();
+  }
 
   async function salvarAgendamentoVistoria() {
     setErroVistoria('');
@@ -1653,32 +1599,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
     if (!analiseConfirmada) {
       setErroVistoria(
-        'Confirme a análise técnica antes de agendar a vistoria.'
-      );
-
-      return;
-    }
-
-    const dataISO =
-      converterDataParaISO(
-        dataVistoria
-      );
-
-    if (!dataISO) {
-      setErroVistoria(
-        'Informe uma data válida no formato DD/MM/AAAA.'
+        'Confirme a análise técnica antes de alterar a vistoria.'
       );
 
       return;
     }
 
     if (
-      !horaValida(
-        horaVistoria
-      )
+      !novaDataVistoria ||
+      !novoHorarioVistoriaId
     ) {
       setErroVistoria(
-        'Informe um horário válido no formato HH:MM.'
+        'Escolha uma data e um horário disponíveis.'
       );
 
       return;
@@ -1691,33 +1623,48 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         data,
         error,
       } = await supabase.rpc(
-        'agendar_vistoria_funcionario',
-        {
-          p_solicitacao_id:
-            solicitacaoId,
+        agendamento
+          ? 'reagendar_vistoria_funcionario'
+          : 'reservar_horario_vistoria_funcionario',
+        agendamento
+          ? {
+              p_solicitacao_id:
+                solicitacaoId,
 
-          p_data_vistoria:
-            dataISO,
+              p_nova_data:
+                novaDataVistoria,
 
-          p_hora_vistoria:
-            `${horaVistoria}:00`,
+              p_novo_horario_vistoria_id:
+                novoHorarioVistoriaId,
+            }
+          : {
+              p_solicitacao_id:
+                solicitacaoId,
 
-          p_observacao_vistoria:
-            observacaoVistoria.trim() ||
-            null,
-        }
+              p_data_vistoria:
+                novaDataVistoria,
+
+              p_horario_vistoria_id:
+                novoHorarioVistoriaId,
+            }
       );
 
       if (error) {
         console.error(
-          'Erro ao agendar vistoria:',
+          'Erro ao salvar vistoria:',
           error
         );
 
         setErroVistoria(
           error.message ||
-            'Não foi possível agendar a vistoria.'
+            'Não foi possível salvar o agendamento.'
         );
+
+        setNovoHorarioVistoriaId(
+          ''
+        );
+
+        await carregarAgendaVistoria();
 
         return;
       }
@@ -1739,6 +1686,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           : 'Vistoria agendada com sucesso.'
       );
 
+      setMostrarAgendaVistoria(
+        false
+      );
+
+      setNovaDataVistoria('');
+      setNovoHorarioVistoriaId('');
+
       await carregarSolicitacao();
 
       await carregarAgendamentoVistoria();
@@ -1755,6 +1709,123 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       setSalvandoVistoria(false);
     }
   }
+
+  async function cancelarAgendamentoVistoria() {
+    setErroVistoria('');
+    setSucessoVistoria('');
+
+    if (
+      !motivoCancelamentoVistoria
+        .trim()
+    ) {
+      setErroVistoria(
+        'Informe o motivo do cancelamento.'
+      );
+
+      return;
+    }
+
+    try {
+      setSalvandoVistoria(true);
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'cancelar_vistoria_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+
+          p_motivo:
+            motivoCancelamentoVistoria
+              .trim(),
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao cancelar vistoria:',
+          error
+        );
+
+        setErroVistoria(
+          error.message ||
+            'Não foi possível cancelar a vistoria.'
+        );
+
+        return;
+      }
+
+      if (
+        !data ||
+        data.length === 0
+      ) {
+        setErroVistoria(
+          'Não foi possível cancelar a vistoria.'
+        );
+
+        return;
+      }
+
+      setSucessoVistoria(
+        'Vistoria cancelada com sucesso. O horário foi liberado.'
+      );
+
+      setMostrarCancelamentoVistoria(
+        false
+      );
+
+      setMotivoCancelamentoVistoria(
+        ''
+      );
+
+      await carregarSolicitacao();
+
+      await carregarAgendamentoVistoria();
+    } catch (error) {
+      console.error(
+        'Erro ao cancelar vistoria:',
+        error
+      );
+
+      setErroVistoria(
+        'Ocorreu um erro ao cancelar a vistoria.'
+      );
+    } finally {
+      setSalvandoVistoria(false);
+    }
+  }
+
+  const datasDisponiveisVistoria =
+    useMemo(() => {
+      const mapa = new Map<
+        string,
+        HorarioVistoriaDisponivel[]
+      >();
+
+      horariosVistoriaDisponiveis.forEach(
+        (item) => {
+          const horarios =
+            mapa.get(
+              item.data_vistoria
+            ) ?? [];
+
+          horarios.push(item);
+
+          mapa.set(
+            item.data_vistoria,
+            horarios
+          );
+        }
+      );
+
+      return Array.from(
+        mapa.entries()
+      );
+    }, [
+      horariosVistoriaDisponiveis,
+    ]);
 
   // ==========================================================
   // INICIAR VISTORIA
@@ -5142,45 +5213,6 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               </View>
 
               {/* ==============================================
-                  DISPONIBILIDADE
-              ============================================== */}
-
-              <Text
-                style={
-                  styles.sectionTitle
-                }
-              >
-                Disponibilidade para visita
-              </Text>
-
-              <View
-                style={styles.card}
-              >
-                <View
-                  style={
-                    styles.inlineInfo
-                  }
-                >
-                  <Ionicons
-                    name="time-outline"
-                    size={20}
-                    color="#0B2447"
-                  />
-
-                  <Text
-                    style={
-                      styles.descriptionText
-                    }
-                  >
-                    {
-                      solicitacao.disponibilidade_visita ||
-                      'Não informado'
-                    }
-                  </Text>
-                </View>
-              </View>
-
-              {/* ==============================================
                   FOTOS
               ============================================== */}
 
@@ -5861,77 +5893,6 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     }
                   >
                     {/* ===========================================
-                        DISPONIBILIDADE DO CLIENTE
-                    =========================================== */}
-
-                    <View
-                      style={
-                        styles.disponibilidadeClienteBox
-                      }
-                    >
-                      <View
-                        style={
-                          styles.disponibilidadeClienteHeader
-                        }
-                      >
-                        <View
-                          style={
-                            styles.disponibilidadeIcon
-                          }
-                        >
-                          <Ionicons
-                            name="time-outline"
-                            size={22}
-                            color="#0B2447"
-                          />
-                        </View>
-
-                        <View
-                          style={{
-                            flex: 1,
-                          }}
-                        >
-                          <Text
-                            style={
-                              styles.disponibilidadeClienteLabel
-                            }
-                          >
-                            DISPONIBILIDADE INFORMADA PELO CLIENTE
-                          </Text>
-
-                          <Text
-                            style={
-                              styles.disponibilidadeClienteTexto
-                            }
-                          >
-                            {solicitacao.disponibilidade_visita ||
-                              'O cliente não informou uma disponibilidade específica.'}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View
-                        style={
-                          styles.disponibilidadeAviso
-                        }
-                      >
-                        <Ionicons
-                          name="information-circle-outline"
-                          size={17}
-                          color="#0B5EA8"
-                        />
-
-                        <Text
-                          style={
-                            styles.disponibilidadeAvisoTexto
-                          }
-                        >
-                          Utilize a disponibilidade informada pelo cliente como referência para definir a data e o horário da vistoria.
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* ===========================================
                         AGENDAMENTO ATUAL
                     =========================================== */}
 
@@ -5997,47 +5958,22 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
                           <WarrantyInfo
                             label="Horário"
-                            value={
-                              formatarHora(
-                                agendamento.hora_vistoria
-                              )
-                            }
+                            value={`${formatarHora(
+                              agendamento.hora_inicio
+                            )} às ${formatarHora(
+                              agendamento.hora_fim
+                            )}`}
                           />
 
                           <WarrantyInfo
-                            label="Responsável"
+                            label="Agendado por"
                             value={
-                              agendamento.responsavel_vistoria_nome ||
+                              agendamento.agendado_por_nome ||
+                              agendamento.agendado_por_tipo ||
                               '-'
                             }
                           />
                         </View>
-
-                        {agendamento.observacao_vistoria ? (
-                          <View
-                            style={
-                              styles.observacaoAtual
-                            }
-                          >
-                            <Text
-                              style={
-                                styles.inputLabel
-                              }
-                            >
-                              OBSERVAÇÃO DO AGENDAMENTO
-                            </Text>
-
-                            <Text
-                              style={
-                                styles.observacaoAtualText
-                              }
-                            >
-                              {
-                                agendamento.observacao_vistoria
-                              }
-                            </Text>
-                          </View>
-                        ) : null}
                       </View>
                     ) : null}
 
@@ -6046,7 +5982,8 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     =========================================== */}
 
                     {solicitacao.status ===
-                    'vistoria_agendada' ? (
+                    'vistoria_agendada' &&
+                    agendamento ? (
                       <View
                         style={
                           styles.iniciarVistoriaBox
@@ -9505,7 +9442,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     ) : null}
 
                     {/* ===========================================
-                        DEFINIR DATA E HORÁRIO
+                        GERENCIAR AGENDAMENTO
                     =========================================== */}
 
                     {[
@@ -9515,268 +9452,523 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       solicitacao.status
                     ) ? (
                       <>
-                    <View
-                      style={
-                        styles.definirAgendamentoHeader
-                      }
-                    >
-                      <Ionicons
-                        name={
-                          agendamento
-                            ? 'refresh-outline'
-                            : 'calendar-outline'
-                        }
-                        size={21}
-                        color="#0B2447"
-                      />
-
-                      <View
-                        style={{
-                          flex: 1,
-                        }}
-                      >
-                        <Text
-                          style={
-                            styles.definirAgendamentoTitulo
-                          }
-                        >
-                          {agendamento
-                            ? 'Reagendar vistoria'
-                            : 'Definir data e horário'}
-                        </Text>
-
-                        <Text
-                          style={
-                            styles.definirAgendamentoTexto
-                          }
-                        >
-                          {agendamento
-                            ? 'Altere os dados abaixo somente se for necessário mudar o agendamento.'
-                            : 'Escolha uma data e um horário compatíveis com a disponibilidade do cliente.'}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* DATA E HORÁRIO */}
-
-                    <View
-                      style={
-                        styles.inputRow
-                      }
-                    >
-                      <View
-                        style={
-                          styles.inputColumn
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.inputLabel
-                          }
-                        >
-                          DATA DA VISTORIA
-                        </Text>
-
                         <View
                           style={
-                            styles.inputComIcone
+                            styles.definirAgendamentoHeader
                           }
                         >
                           <Ionicons
-                            name="calendar-outline"
-                            size={18}
-                            color="#697789"
+                            name={
+                              agendamento
+                                ? 'refresh-outline'
+                                : 'calendar-outline'
+                            }
+                            size={21}
+                            color="#0B2447"
                           />
 
-                          <TextInput
-                            style={
-                              styles.inputInterno
-                            }
-                            value={
-                              dataVistoria
-                            }
-                            placeholder="DD/MM/AAAA"
-                            placeholderTextColor="#9AA6B4"
-                            keyboardType="numeric"
-                            maxLength={10}
-                            onChangeText={
-                              alterarDataVistoria
-                            }
-                          />
+                          <View
+                            style={{
+                              flex: 1,
+                            }}
+                          >
+                            <Text
+                              style={
+                                styles.definirAgendamentoTitulo
+                              }
+                            >
+                              {agendamento
+                                ? 'Gerenciar vistoria'
+                                : 'Agendar vistoria'}
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.definirAgendamentoTexto
+                              }
+                            >
+                              {agendamento
+                                ? 'Use as opções abaixo para reagendar ou cancelar a vistoria.'
+                                : 'Escolha uma data e um horário ainda disponíveis na agenda da EMAFE.'}
+                            </Text>
+                          </View>
                         </View>
-                      </View>
-
-                      <View
-                        style={
-                          styles.inputColumn
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.inputLabel
-                          }
-                        >
-                          HORÁRIO
-                        </Text>
 
                         <View
                           style={
-                            styles.inputComIcone
+                            styles.acoesAgendaFuncionario
                           }
                         >
-                          <Ionicons
-                            name="time-outline"
-                            size={18}
-                            color="#697789"
-                          />
-
-                          <TextInput
+                          <TouchableOpacity
                             style={
-                              styles.inputInterno
+                              styles.reagendarFuncionarioButton
                             }
-                            value={
-                              horaVistoria
+                            onPress={
+                              abrirAgendaVistoria
                             }
-                            placeholder="HH:MM"
-                            placeholderTextColor="#9AA6B4"
-                            keyboardType="numeric"
-                            maxLength={5}
-                            onChangeText={
-                              alterarHoraVistoria
+                            disabled={
+                              salvandoVistoria
                             }
-                          />
+                          >
+                            <Ionicons
+                              name={
+                                agendamento
+                                  ? 'refresh-outline'
+                                  : 'calendar-outline'
+                              }
+                              size={19}
+                              color="#0B5EA8"
+                            />
+
+                            <Text
+                              style={
+                                styles.reagendarFuncionarioButtonText
+                              }
+                            >
+                              {agendamento
+                                ? 'Reagendar vistoria'
+                                : 'Agendar vistoria'}
+                            </Text>
+                          </TouchableOpacity>
+
+                          {agendamento ? (
+                            <TouchableOpacity
+                              style={
+                                styles.cancelarFuncionarioButton
+                              }
+                              onPress={() => {
+                                setMostrarAgendaVistoria(
+                                  false
+                                );
+
+                                setMostrarCancelamentoVistoria(
+                                  !mostrarCancelamentoVistoria
+                                );
+
+                                setErroVistoria('');
+                                setSucessoVistoria('');
+                              }}
+                              disabled={
+                                salvandoVistoria
+                              }
+                            >
+                              <Ionicons
+                                name="close-circle-outline"
+                                size={19}
+                                color="#9A3232"
+                              />
+
+                              <Text
+                                style={
+                                  styles.cancelarFuncionarioButtonText
+                                }
+                              >
+                                Cancelar vistoria
+                              </Text>
+                            </TouchableOpacity>
+                          ) : null}
                         </View>
-                      </View>
-                    </View>
 
-                    {/* OBSERVAÇÃO */}
+                        {mostrarCancelamentoVistoria ? (
+                          <View
+                            style={
+                              styles.boxGerenciarAgendaFuncionario
+                            }
+                          >
+                            <Text
+                              style={
+                                styles.tituloGerenciarAgendaFuncionario
+                              }
+                            >
+                              Cancelar vistoria
+                            </Text>
 
-                    <Text
-                      style={
-                        styles.inputLabel
-                      }
-                    >
-                      OBSERVAÇÃO
-                    </Text>
+                            <Text
+                              style={
+                                styles.textoGerenciarAgendaFuncionario
+                              }
+                            >
+                              Informe o motivo do cancelamento. O horário será liberado automaticamente para outro cliente.
+                            </Text>
 
-                    <TextInput
-                      style={[
-                        styles.input,
-                        styles.textArea,
-                      ]}
-                      value={
-                        observacaoVistoria
-                      }
-                      placeholder="Ex.: Entrar em contato com o cliente 30 minutos antes da chegada."
-                      placeholderTextColor="#9AA6B4"
-                      multiline
-                      numberOfLines={4}
-                      textAlignVertical="top"
-                      onChangeText={(
-                        texto
-                      ) => {
-                        setObservacaoVistoria(
-                          texto
-                        );
+                            <TextInput
+                              style={[
+                                styles.input,
+                                styles.textArea,
+                              ]}
+                              value={
+                                motivoCancelamentoVistoria
+                              }
+                              placeholder="Motivo do cancelamento"
+                              placeholderTextColor="#9AA6B4"
+                              multiline
+                              numberOfLines={3}
+                              textAlignVertical="top"
+                              onChangeText={
+                                setMotivoCancelamentoVistoria
+                              }
+                            />
 
-                        setErroVistoria('');
-                        setSucessoVistoria('');
-                      }}
-                    />
+                            <View
+                              style={
+                                styles.acoesConfirmacaoAgendaFuncionario
+                              }
+                            >
+                              <TouchableOpacity
+                                style={
+                                  styles.voltarAgendaFuncionarioButton
+                                }
+                                onPress={() =>
+                                  setMostrarCancelamentoVistoria(
+                                    false
+                                  )
+                                }
+                              >
+                                <Text
+                                  style={
+                                    styles.voltarAgendaFuncionarioButtonText
+                                  }
+                                >
+                                  Voltar
+                                </Text>
+                              </TouchableOpacity>
 
-                    {/* ERRO */}
+                              <TouchableOpacity
+                                style={
+                                  styles.confirmarCancelamentoFuncionarioButton
+                                }
+                                onPress={
+                                  cancelarAgendamentoVistoria
+                                }
+                                disabled={
+                                  salvandoVistoria
+                                }
+                              >
+                                {salvandoVistoria ? (
+                                  <ActivityIndicator
+                                    size="small"
+                                    color="#FFFFFF"
+                                  />
+                                ) : (
+                                  <Text
+                                    style={
+                                      styles.confirmarCancelamentoFuncionarioButtonText
+                                    }
+                                  >
+                                    Confirmar cancelamento
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ) : null}
 
-                    {erroVistoria ? (
-                      <View
-                        style={
-                          styles.messageError
-                        }
-                      >
-                        <Ionicons
-                          name="alert-circle-outline"
-                          size={19}
-                          color="#9A3232"
-                        />
+                        {mostrarAgendaVistoria ? (
+                          <View
+                            style={
+                              styles.boxGerenciarAgendaFuncionario
+                            }
+                          >
+                            <Text
+                              style={
+                                styles.tituloGerenciarAgendaFuncionario
+                              }
+                            >
+                              {agendamento
+                                ? 'Escolha o novo horário'
+                                : 'Escolha o horário'}
+                            </Text>
 
-                        <Text
-                          style={
-                            styles.messageErrorText
-                          }
-                        >
-                          {erroVistoria}
-                        </Text>
-                      </View>
-                    ) : null}
+                            <Text
+                              style={
+                                styles.textoGerenciarAgendaFuncionario
+                              }
+                            >
+                              Só aparecem datas e horários que continuam livres na agenda.
+                            </Text>
 
-                    {/* SUCESSO */}
+                            {carregandoAgendaVistoria ? (
+                              <View
+                                style={
+                                  styles.carregandoAgendaFuncionario
+                                }
+                              >
+                                <ActivityIndicator
+                                  color="#0B2447"
+                                />
 
-                    {sucessoVistoria ? (
-                      <View
-                        style={
-                          styles.messageSuccess
-                        }
-                      >
-                        <Ionicons
-                          name="checkmark-circle-outline"
-                          size={20}
-                          color="#287A46"
-                        />
+                                <Text
+                                  style={
+                                    styles.textoGerenciarAgendaFuncionario
+                                  }
+                                >
+                                  Carregando agenda...
+                                </Text>
+                              </View>
+                            ) : null}
 
-                        <Text
-                          style={
-                            styles.messageSuccessText
-                          }
-                        >
-                          {sucessoVistoria}
-                        </Text>
-                      </View>
-                    ) : null}
+                            {!carregandoAgendaVistoria &&
+                            datasDisponiveisVistoria.length ===
+                              0 ? (
+                              <View
+                                style={
+                                  styles.semHorarioFuncionario
+                                }
+                              >
+                                <Ionicons
+                                  name="calendar-outline"
+                                  size={20}
+                                  color="#7B5A12"
+                                />
 
-                    {/* BOTÃO */}
+                                <Text
+                                  style={
+                                    styles.semHorarioFuncionarioText
+                                  }
+                                >
+                                  Não há horários disponíveis no período consultado.
+                                </Text>
+                              </View>
+                            ) : null}
 
-                    <TouchableOpacity
-                      style={[
-                        styles.agendarButton,
+                            {!carregandoAgendaVistoria &&
+                              datasDisponiveisVistoria.map(
+                                ([
+                                  data,
+                                  horarios,
+                                ]) => (
+                                  <View
+                                    key={data}
+                                    style={
+                                      styles.dataAgendaFuncionarioBox
+                                    }
+                                  >
+                                    <TouchableOpacity
+                                      style={[
+                                        styles.dataAgendaFuncionarioButton,
 
-                        salvandoVistoria &&
-                          styles.buttonDisabled,
-                      ]}
-                      disabled={
-                        salvandoVistoria
-                      }
-                      onPress={
-                        salvarAgendamentoVistoria
-                      }
-                    >
-                      {salvandoVistoria ? (
-                        <ActivityIndicator
-                          size="small"
-                          color="#FFFFFF"
-                        />
-                      ) : (
-                        <Ionicons
-                          name={
-                            agendamento
-                              ? 'refresh-outline'
-                              : 'calendar-outline'
-                          }
-                          size={20}
-                          color="#FFFFFF"
-                        />
-                      )}
+                                        novaDataVistoria ===
+                                          data &&
+                                          styles.dataAgendaFuncionarioButtonSelected,
+                                      ]}
+                                      onPress={() => {
+                                        setNovaDataVistoria(
+                                          data
+                                        );
 
-                      <Text
-                        style={
-                          styles.agendarButtonText
-                        }
-                      >
-                        {salvandoVistoria
-                          ? 'Salvando...'
-                          : agendamento
-                          ? 'Confirmar novo agendamento'
-                          : 'Agendar vistoria'}
-                      </Text>
-                    </TouchableOpacity>
+                                        setNovoHorarioVistoriaId(
+                                          ''
+                                        );
+
+                                        setErroVistoria('');
+                                      }}
+                                    >
+                                      <Ionicons
+                                        name="calendar-outline"
+                                        size={18}
+                                        color={
+                                          novaDataVistoria ===
+                                          data
+                                            ? '#FFFFFF'
+                                            : '#0B2447'
+                                        }
+                                      />
+
+                                      <Text
+                                        style={[
+                                          styles.dataAgendaFuncionarioText,
+
+                                          novaDataVistoria ===
+                                            data &&
+                                            styles.dataAgendaFuncionarioTextSelected,
+                                        ]}
+                                      >
+                                        {formatarData(
+                                          data
+                                        )}
+                                      </Text>
+                                    </TouchableOpacity>
+
+                                    {novaDataVistoria ===
+                                    data ? (
+                                      <View
+                                        style={
+                                          styles.horariosAgendaFuncionario
+                                        }
+                                      >
+                                        {horarios.map(
+                                          (
+                                            horario
+                                          ) => {
+                                            const selecionado =
+                                              novoHorarioVistoriaId ===
+                                              horario.horario_vistoria_id;
+
+                                            return (
+                                              <TouchableOpacity
+                                                key={
+                                                  horario.horario_vistoria_id
+                                                }
+                                                style={[
+                                                  styles.horarioAgendaFuncionarioButton,
+
+                                                  selecionado &&
+                                                    styles.horarioAgendaFuncionarioButtonSelected,
+                                                ]}
+                                                onPress={() => {
+                                                  setNovoHorarioVistoriaId(
+                                                    horario.horario_vistoria_id
+                                                  );
+
+                                                  setErroVistoria('');
+                                                }}
+                                              >
+                                                <Ionicons
+                                                  name={
+                                                    selecionado
+                                                      ? 'checkmark-circle'
+                                                      : 'time-outline'
+                                                  }
+                                                  size={18}
+                                                  color={
+                                                    selecionado
+                                                      ? '#FFFFFF'
+                                                      : '#0B2447'
+                                                  }
+                                                />
+
+                                                <Text
+                                                  style={[
+                                                    styles.horarioAgendaFuncionarioText,
+
+                                                    selecionado &&
+                                                      styles.horarioAgendaFuncionarioTextSelected,
+                                                  ]}
+                                                >
+                                                  {formatarHora(
+                                                    horario.hora_inicio
+                                                  )}{' '}
+                                                  às{' '}
+                                                  {formatarHora(
+                                                    horario.hora_fim
+                                                  )}
+                                                </Text>
+                                              </TouchableOpacity>
+                                            );
+                                          }
+                                        )}
+                                      </View>
+                                    ) : null}
+                                  </View>
+                                )
+                              )}
+
+                            <View
+                              style={
+                                styles.acoesConfirmacaoAgendaFuncionario
+                              }
+                            >
+                              <TouchableOpacity
+                                style={
+                                  styles.voltarAgendaFuncionarioButton
+                                }
+                                onPress={() =>
+                                  setMostrarAgendaVistoria(
+                                    false
+                                  )
+                                }
+                              >
+                                <Text
+                                  style={
+                                    styles.voltarAgendaFuncionarioButtonText
+                                  }
+                                >
+                                  Voltar
+                                </Text>
+                              </TouchableOpacity>
+
+                              <TouchableOpacity
+                                style={[
+                                  styles.confirmarAgendaFuncionarioButton,
+
+                                  (!novaDataVistoria ||
+                                    !novoHorarioVistoriaId ||
+                                    salvandoVistoria) &&
+                                    styles.buttonDisabled,
+                                ]}
+                                onPress={
+                                  salvarAgendamentoVistoria
+                                }
+                                disabled={
+                                  !novaDataVistoria ||
+                                  !novoHorarioVistoriaId ||
+                                  salvandoVistoria
+                                }
+                              >
+                                {salvandoVistoria ? (
+                                  <ActivityIndicator
+                                    size="small"
+                                    color="#FFFFFF"
+                                  />
+                                ) : (
+                                  <Text
+                                    style={
+                                      styles.confirmarAgendaFuncionarioButtonText
+                                    }
+                                  >
+                                    {agendamento
+                                      ? 'Confirmar reagendamento'
+                                      : 'Confirmar agendamento'}
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ) : null}
+
+                        {erroVistoria ? (
+                          <View
+                            style={
+                              styles.messageError
+                            }
+                          >
+                            <Ionicons
+                              name="alert-circle-outline"
+                              size={19}
+                              color="#9A3232"
+                            />
+
+                            <Text
+                              style={
+                                styles.messageErrorText
+                              }
+                            >
+                              {erroVistoria}
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        {sucessoVistoria ? (
+                          <View
+                            style={
+                              styles.messageSuccess
+                            }
+                          >
+                            <Ionicons
+                              name="checkmark-circle-outline"
+                              size={20}
+                              color="#287A46"
+                            />
+
+                            <Text
+                              style={
+                                styles.messageSuccessText
+                              }
+                            >
+                              {sucessoVistoria}
+                            </Text>
+                          </View>
+                        ) : null}
                       </>
                     ) : null}
                   </View>
@@ -9870,8 +10062,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     title="Vistoria agendada"
                     subtitle={`${formatarData(
                       agendamento.data_vistoria
+                    )} • ${formatarHora(
+                      agendamento.hora_inicio
                     )} às ${formatarHora(
-                      agendamento.hora_vistoria
+                      agendamento.hora_fim
                     )}`}
                     icon="calendar-outline"
                   />
@@ -11000,6 +11194,219 @@ const styles = StyleSheet.create({
   },
 
   // AGENDAMENTO SALVO
+
+  acoesAgendaFuncionario: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 12,
+  },
+
+  reagendarFuncionarioButton: {
+    flexGrow: 1,
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: '#B8C9DA',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+  },
+
+  reagendarFuncionarioButtonText: {
+    color: '#0B5EA8',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  cancelarFuncionarioButton: {
+    flexGrow: 1,
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: '#E2B8B8',
+    borderRadius: 12,
+    backgroundColor: '#FFF8F8',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+  },
+
+  cancelarFuncionarioButtonText: {
+    color: '#9A3232',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  boxGerenciarAgendaFuncionario: {
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    borderRadius: 14,
+    padding: 14,
+  },
+
+  tituloGerenciarAgendaFuncionario: {
+    color: '#0B2447',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  textoGerenciarAgendaFuncionario: {
+    color: '#697789',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 4,
+  },
+
+  carregandoAgendaFuncionario: {
+    minHeight: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+
+  semHorarioFuncionario: {
+    marginTop: 10,
+    backgroundColor: '#FFF8E6',
+    borderRadius: 11,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  semHorarioFuncionarioText: {
+    flex: 1,
+    color: '#7B5A12',
+    fontSize: 11,
+    lineHeight: 16,
+  },
+
+  dataAgendaFuncionarioBox: {
+    marginTop: 9,
+  },
+
+  dataAgendaFuncionarioButton: {
+    minHeight: 46,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: '#C8D3DF',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  dataAgendaFuncionarioButtonSelected: {
+    backgroundColor: '#0B2447',
+    borderColor: '#0B2447',
+  },
+
+  dataAgendaFuncionarioText: {
+    color: '#0B2447',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  dataAgendaFuncionarioTextSelected: {
+    color: '#FFFFFF',
+  },
+
+  horariosAgendaFuncionario: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+
+  horarioAgendaFuncionarioButton: {
+    minHeight: 42,
+    borderWidth: 1,
+    borderColor: '#B8C9DA',
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+
+  horarioAgendaFuncionarioButtonSelected: {
+    backgroundColor: '#0B5EA8',
+    borderColor: '#0B5EA8',
+  },
+
+  horarioAgendaFuncionarioText: {
+    color: '#0B2447',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  horarioAgendaFuncionarioTextSelected: {
+    color: '#FFFFFF',
+  },
+
+  acoesConfirmacaoAgendaFuncionario: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+
+  voltarAgendaFuncionarioButton: {
+    minHeight: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#C8D3DF',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 15,
+  },
+
+  voltarAgendaFuncionarioButtonText: {
+    color: '#42566D',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  confirmarAgendaFuncionarioButton: {
+    minHeight: 42,
+    borderRadius: 10,
+    backgroundColor: '#0B2447',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 15,
+  },
+
+  confirmarAgendaFuncionarioButtonText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  confirmarCancelamentoFuncionarioButton: {
+    minHeight: 42,
+    borderRadius: 10,
+    backgroundColor: '#9A3232',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 15,
+  },
+
+  confirmarCancelamentoFuncionarioButtonText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
 
   agendamentoAtual: {
     backgroundColor:
