@@ -86,6 +86,781 @@ type HorarioVistoriaDisponivel = {
   hora_fim: string;
 };
 
+type DiaCalendarioAgenda = {
+  iso: string;
+  dia: number;
+  pertenceAoMes: boolean;
+  disponivel: boolean;
+};
+
+type AgendaCalendarPickerProps = {
+  horarios: HorarioVistoriaDisponivel[];
+  dataSelecionada: string;
+  horarioSelecionadoId: string;
+  onSelecionarData: (data: string) => void;
+  onSelecionarHorario: (
+    horario: HorarioVistoriaDisponivel
+  ) => void;
+};
+
+function AgendaCalendarPicker({
+  horarios,
+  dataSelecionada,
+  horarioSelecionadoId,
+  onSelecionarData,
+  onSelecionarHorario,
+}: AgendaCalendarPickerProps) {
+  const [
+    mesCalendario,
+    setMesCalendario,
+  ] = useState<Date | null>(null);
+
+  function dataIsoParaLocal(
+    iso: string
+  ) {
+    const [
+      ano,
+      mes,
+      dia,
+    ] = iso
+      .split('-')
+      .map(Number);
+
+    return new Date(
+      ano,
+      mes - 1,
+      dia
+    );
+  }
+
+  function dataLocalParaIso(
+    data: Date
+  ) {
+    const ano =
+      data.getFullYear();
+
+    const mes =
+      String(
+        data.getMonth() + 1
+      ).padStart(2, '0');
+
+    const dia =
+      String(
+        data.getDate()
+      ).padStart(2, '0');
+
+    return `${ano}-${mes}-${dia}`;
+  }
+
+  function formatarDataAgenda(
+    iso: string
+  ) {
+    if (!iso) {
+      return '-';
+    }
+
+    return dataIsoParaLocal(
+      iso
+    ).toLocaleDateString(
+      'pt-BR',
+      {
+        weekday: 'long',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      }
+    );
+  }
+
+  function formatarHoraAgenda(
+    hora: string
+  ) {
+    return hora
+      ? hora.substring(0, 5)
+      : '-';
+  }
+
+  useEffect(() => {
+    if (
+      horarios.length === 0
+    ) {
+      setMesCalendario(
+        null
+      );
+
+      return;
+    }
+
+    const referencia =
+      dataSelecionada ||
+      horarios[0].data_vistoria;
+
+    const data =
+      dataIsoParaLocal(
+        referencia
+      );
+
+    setMesCalendario(
+      new Date(
+        data.getFullYear(),
+        data.getMonth(),
+        1
+      )
+    );
+  }, [
+    horarios,
+  ]);
+
+  const datasComHorario =
+    useMemo(
+      () =>
+        new Set(
+          horarios.map(
+            (item) =>
+              item.data_vistoria
+          )
+        ),
+      [horarios]
+    );
+
+  const horariosDaData =
+    useMemo(
+      () =>
+        horarios.filter(
+          (item) =>
+            item.data_vistoria ===
+            dataSelecionada
+        ),
+      [
+        horarios,
+        dataSelecionada,
+      ]
+    );
+
+  const limiteMesAnterior =
+    useMemo(() => {
+      if (
+        horarios.length ===
+        0
+      ) {
+        return null;
+      }
+
+      const data =
+        dataIsoParaLocal(
+          horarios[0]
+            .data_vistoria
+        );
+
+      return new Date(
+        data.getFullYear(),
+        data.getMonth(),
+        1
+      );
+    }, [horarios]);
+
+  const limiteMesPosterior =
+    useMemo(() => {
+      if (
+        horarios.length ===
+        0
+      ) {
+        return null;
+      }
+
+      const data =
+        dataIsoParaLocal(
+          horarios[
+            horarios.length - 1
+          ].data_vistoria
+        );
+
+      return new Date(
+        data.getFullYear(),
+        data.getMonth(),
+        1
+      );
+    }, [horarios]);
+
+  const diasDoCalendario =
+    useMemo<
+      DiaCalendarioAgenda[]
+    >(() => {
+      if (!mesCalendario) {
+        return [];
+      }
+
+      const ano =
+        mesCalendario.getFullYear();
+
+      const mes =
+        mesCalendario.getMonth();
+
+      const primeiroDiaMes =
+        new Date(
+          ano,
+          mes,
+          1
+        );
+
+      const inicioGrade =
+        new Date(
+          ano,
+          mes,
+          1 -
+            primeiroDiaMes.getDay()
+        );
+
+      const dias:
+        DiaCalendarioAgenda[] =
+          [];
+
+      for (
+        let indice = 0;
+        indice < 42;
+        indice++
+      ) {
+        const data =
+          new Date(
+            inicioGrade
+          );
+
+        data.setDate(
+          inicioGrade.getDate() +
+            indice
+        );
+
+        const iso =
+          dataLocalParaIso(
+            data
+          );
+
+        dias.push({
+          iso,
+          dia:
+            data.getDate(),
+
+          pertenceAoMes:
+            data.getMonth() ===
+              mes &&
+            data.getFullYear() ===
+              ano,
+
+          disponivel:
+            datasComHorario.has(
+              iso
+            ),
+        });
+      }
+
+      return dias;
+    }, [
+      mesCalendario,
+      datasComHorario,
+    ]);
+
+  const tituloMesCalendario =
+    useMemo(() => {
+      if (!mesCalendario) {
+        return '';
+      }
+
+      const texto =
+        mesCalendario
+          .toLocaleDateString(
+            'pt-BR',
+            {
+              month: 'long',
+              year: 'numeric',
+            }
+          );
+
+      return (
+        texto.charAt(0)
+          .toUpperCase() +
+        texto.slice(1)
+      );
+    }, [mesCalendario]);
+
+  function compararMeses(
+    primeiro: Date,
+    segundo: Date
+  ) {
+    return (
+      primeiro.getFullYear() *
+        12 +
+      primeiro.getMonth() -
+      (
+        segundo.getFullYear() *
+          12 +
+        segundo.getMonth()
+      )
+    );
+  }
+
+  const podeVoltarMes =
+    !!mesCalendario &&
+    !!limiteMesAnterior &&
+    compararMeses(
+      mesCalendario,
+      limiteMesAnterior
+    ) > 0;
+
+  const podeAvancarMes =
+    !!mesCalendario &&
+    !!limiteMesPosterior &&
+    compararMeses(
+      mesCalendario,
+      limiteMesPosterior
+    ) < 0;
+
+  function mudarMes(
+    quantidade: number
+  ) {
+    if (!mesCalendario) {
+      return;
+    }
+
+    setMesCalendario(
+      new Date(
+        mesCalendario.getFullYear(),
+        mesCalendario.getMonth() +
+          quantidade,
+        1
+      )
+    );
+  }
+
+  if (
+    horarios.length === 0 ||
+    !mesCalendario
+  ) {
+    return (
+      <View
+        style={
+          styles.agendaHintBox
+        }
+      >
+        <Ionicons
+          name="calendar-outline"
+          size={19}
+          color="#0B5EA8"
+        />
+
+        <Text
+          style={
+            styles.agendaHintText
+          }
+        >
+          Não há horários disponíveis no período consultado.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <View
+        style={
+          styles.calendarCard
+        }
+      >
+        <View
+          style={
+            styles.calendarHeader
+          }
+        >
+          <TouchableOpacity
+            style={[
+              styles.calendarArrowButton,
+
+              !podeVoltarMes &&
+                styles.calendarArrowButtonDisabled,
+            ]}
+            disabled={
+              !podeVoltarMes
+            }
+            onPress={() =>
+              mudarMes(-1)
+            }
+          >
+            <Ionicons
+              name="chevron-back"
+              size={20}
+              color={
+                podeVoltarMes
+                  ? '#0B2447'
+                  : '#B7C0CB'
+              }
+            />
+          </TouchableOpacity>
+
+          <Text
+            style={
+              styles.calendarMonthTitle
+            }
+          >
+            {tituloMesCalendario}
+          </Text>
+
+          <TouchableOpacity
+            style={[
+              styles.calendarArrowButton,
+
+              !podeAvancarMes &&
+                styles.calendarArrowButtonDisabled,
+            ]}
+            disabled={
+              !podeAvancarMes
+            }
+            onPress={() =>
+              mudarMes(1)
+            }
+          >
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={
+                podeAvancarMes
+                  ? '#0B2447'
+                  : '#B7C0CB'
+              }
+            />
+          </TouchableOpacity>
+        </View>
+
+        <View
+          style={
+            styles.calendarWeekRow
+          }
+        >
+          {[
+            'DOM',
+            'SEG',
+            'TER',
+            'QUA',
+            'QUI',
+            'SEX',
+            'SÁB',
+          ].map(
+            (diaSemana) => (
+              <Text
+                key={
+                  diaSemana
+                }
+                style={
+                  styles.calendarWeekText
+                }
+              >
+                {diaSemana}
+              </Text>
+            )
+          )}
+        </View>
+
+        <View
+          style={
+            styles.calendarGrid
+          }
+        >
+          {diasDoCalendario.map(
+            (dia) => {
+              const selecionado =
+                dataSelecionada ===
+                dia.iso;
+
+              const podeSelecionar =
+                dia.pertenceAoMes &&
+                dia.disponivel;
+
+              return (
+                <View
+                  key={
+                    dia.iso
+                  }
+                  style={
+                    styles.calendarDayWrapper
+                  }
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.calendarDay,
+
+                      !dia.pertenceAoMes &&
+                        styles.calendarDayOutside,
+
+                      dia.pertenceAoMes &&
+                        !dia.disponivel &&
+                        styles.calendarDayUnavailable,
+
+                      podeSelecionar &&
+                        styles.calendarDayAvailable,
+
+                      selecionado &&
+                        styles.calendarDaySelected,
+                    ]}
+                    disabled={
+                      !podeSelecionar
+                    }
+                    onPress={() =>
+                      onSelecionarData(
+                        dia.iso
+                      )
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.calendarDayText,
+
+                        !dia.pertenceAoMes &&
+                          styles.calendarDayTextOutside,
+
+                        dia.pertenceAoMes &&
+                          !dia.disponivel &&
+                          styles.calendarDayTextUnavailable,
+
+                        podeSelecionar &&
+                          styles.calendarDayTextAvailable,
+
+                        selecionado &&
+                          styles.calendarDayTextSelected,
+                      ]}
+                    >
+                      {dia.dia}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            }
+          )}
+        </View>
+
+        <View
+          style={
+            styles.calendarLegend
+          }
+        >
+          <View
+            style={
+              styles.calendarLegendItem
+            }
+          >
+            <View
+              style={
+                styles.calendarLegendAvailable
+              }
+            />
+
+            <Text
+              style={
+                styles.calendarLegendText
+              }
+            >
+              Data disponível
+            </Text>
+          </View>
+
+          <View
+            style={
+              styles.calendarLegendItem
+            }
+          >
+            <View
+              style={
+                styles.calendarLegendUnavailable
+              }
+            />
+
+            <Text
+              style={
+                styles.calendarLegendText
+              }
+            >
+              Indisponível
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {dataSelecionada ? (
+        <View
+          style={
+            styles.timeSelectionCard
+          }
+        >
+          <View
+            style={
+              styles.timeSelectionHeader
+            }
+          >
+            <Ionicons
+              name="time-outline"
+              size={21}
+              color="#0B2447"
+            />
+
+            <View
+              style={{
+                flex: 1,
+              }}
+            >
+              <Text
+                style={
+                  styles.timeSelectionTitle
+                }
+              >
+                Escolha o horário
+              </Text>
+
+              <Text
+                style={
+                  styles.timeSelectionDate
+                }
+              >
+                {formatarDataAgenda(
+                  dataSelecionada
+                )}
+              </Text>
+            </View>
+          </View>
+
+          <View
+            style={
+              styles.timeButtonsContainer
+            }
+          >
+            {horariosDaData.map(
+              (horario) => {
+                const selecionado =
+                  horarioSelecionadoId ===
+                  horario.horario_vistoria_id;
+
+                return (
+                  <TouchableOpacity
+                    key={
+                      horario.horario_vistoria_id
+                    }
+                    style={[
+                      styles.timeButton,
+
+                      selecionado &&
+                        styles.timeButtonSelected,
+                    ]}
+                    onPress={() =>
+                      onSelecionarHorario(
+                        horario
+                      )
+                    }
+                  >
+                    <Ionicons
+                      name={
+                        selecionado
+                          ? 'checkmark-circle'
+                          : 'time-outline'
+                      }
+                      size={20}
+                      color={
+                        selecionado
+                          ? '#FFFFFF'
+                          : '#0B2447'
+                      }
+                    />
+
+                    <Text
+                      style={[
+                        styles.timeButtonText,
+
+                        selecionado &&
+                          styles.timeButtonTextSelected,
+                      ]}
+                    >
+                      {formatarHoraAgenda(
+                        horario.hora_inicio
+                      )}{' '}
+                      às{' '}
+                      {formatarHoraAgenda(
+                        horario.hora_fim
+                      )}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }
+            )}
+          </View>
+        </View>
+      ) : (
+        <View
+          style={
+            styles.agendaHintBox
+          }
+        >
+          <Ionicons
+            name="calendar-outline"
+            size={19}
+            color="#0B5EA8"
+          />
+
+          <Text
+            style={
+              styles.agendaHintText
+            }
+          >
+            Toque em uma data disponível para ver os horários livres.
+          </Text>
+        </View>
+      )}
+    </>
+  );
+}
+
+type VistoriaTecnica = {
+  vistoria_id: string;
+  solicitacao_id: string;
+  protocolo: string;
+  status: string;
+  funcionario_id: string;
+  funcionario_nome: string;
+  problema_constatado: boolean | null;
+  parecer_tecnico: string | null;
+  servico_necessario: string | null;
+  observacoes: string | null;
+  iniciada_em: string;
+  finalizada_em: string | null;
+};
+
+type FotoVistoriaSalva = {
+  id: string;
+  vistoria_id: string;
+  caminho_storage: string;
+  nome_arquivo: string | null;
+  descricao: string | null;
+  created_at: string;
+  url: string;
+};
+
+type AgendamentoExecucaoCliente = {
+  proposta_id: string;
+  solicitacao_id: string;
+
+  data_proposta: string;
+  hora_proposta: string;
+
+  data_confirmada: string | null;
+  hora_confirmada: string | null;
+
+  status:
+    | 'aguardando_cliente'
+    | 'confirmada'
+    | 'reagendamento_solicitado'
+    | 'cancelada'
+    | string;
+
+  motivo_reagendamento: string | null;
+
+  respondido_em: string | null;
+  created_at: string;
+};
+
 type Form03Cliente = {
   form03_id: string;
   protocolo: string;
@@ -204,6 +979,62 @@ export default function DetalhesSolicitacaoScreen() {
     setMensagemVistoria,
   ] = useState('');
 
+  // ==========================================================
+  // AGENDAMENTO DA EXECUÇÃO
+  // ==========================================================
+
+  const [
+    agendamentoExecucao,
+    setAgendamentoExecucao,
+  ] = useState<AgendamentoExecucaoCliente | null>(
+    null
+  );
+
+  const [
+    carregandoAgendamentoExecucao,
+    setCarregandoAgendamentoExecucao,
+  ] = useState(false);
+
+  const [
+    erroAgendamentoExecucao,
+    setErroAgendamentoExecucao,
+  ] = useState('');
+
+  const [
+    mensagemAgendamentoExecucao,
+    setMensagemAgendamentoExecucao,
+  ] = useState('');
+
+  const [
+    processandoAgendamentoExecucao,
+    setProcessandoAgendamentoExecucao,
+  ] = useState(false);
+
+  const [
+    mostrarReagendamentoExecucao,
+    setMostrarReagendamentoExecucao,
+  ] = useState(false);
+
+  const [
+    horariosExecucao,
+    setHorariosExecucao,
+  ] = useState<HorarioVistoriaDisponivel[]>([]);
+
+  const [
+    carregandoHorariosExecucao,
+    setCarregandoHorariosExecucao,
+  ] = useState(false);
+
+  const [
+    dataExecucaoSelecionada,
+    setDataExecucaoSelecionada,
+  ] = useState('');
+
+  const [
+    horarioExecucaoSelecionadoId,
+    setHorarioExecucaoSelecionadoId,
+  ] = useState('');
+
   const [
     form03Cliente,
     setForm03Cliente,
@@ -254,6 +1085,7 @@ export default function DetalhesSolicitacaoScreen() {
     await carregarSolicitacao();
     await carregarFotos();
     await carregarAgendamentoVistoria();
+    await carregarAgendamentoExecucaoCliente();
     await carregarForm03Cliente();
   }
 
@@ -690,6 +1522,271 @@ export default function DetalhesSolicitacaoScreen() {
     );
   }
 
+  async function carregarAgendamentoExecucaoCliente() {
+    try {
+      setCarregandoAgendamentoExecucao(
+        true
+      );
+
+      setErroAgendamentoExecucao('');
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'buscar_agendamento_execucao_cliente',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao buscar agendamento da execução:',
+          error
+        );
+
+        setErroAgendamentoExecucao(
+          error.message ||
+            'Não foi possível carregar o agendamento da execução.'
+        );
+
+        return;
+      }
+
+      const registro =
+        data?.[0] as
+          | AgendamentoExecucaoCliente
+          | undefined;
+
+      setAgendamentoExecucao(
+        registro ?? null
+      );
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao buscar agendamento da execução:',
+        error
+      );
+
+      setErroAgendamentoExecucao(
+        'Ocorreu um erro ao carregar o agendamento da execução.'
+      );
+    } finally {
+      setCarregandoAgendamentoExecucao(
+        false
+      );
+    }
+  }
+
+  async function carregarHorariosExecucaoCliente() {
+    try {
+      setCarregandoHorariosExecucao(
+        true
+      );
+
+      setErroAgendamentoExecucao('');
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'listar_horarios_execucao_disponiveis',
+        {
+          p_data_inicio:
+            null,
+
+          p_quantidade_dias:
+            60,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao carregar horários da execução:',
+          error
+        );
+
+        setErroAgendamentoExecucao(
+          error.message ||
+            'Não foi possível carregar os horários disponíveis.'
+        );
+
+        return;
+      }
+
+      setHorariosExecucao(
+        (data ?? []) as
+          HorarioVistoriaDisponivel[]
+      );
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao carregar horários da execução:',
+        error
+      );
+
+      setErroAgendamentoExecucao(
+        'Ocorreu um erro ao carregar os horários disponíveis.'
+      );
+    } finally {
+      setCarregandoHorariosExecucao(
+        false
+      );
+    }
+  }
+
+  async function confirmarAgendamentoExecucaoCliente() {
+    try {
+      setProcessandoAgendamentoExecucao(
+        true
+      );
+
+      setErroAgendamentoExecucao('');
+      setMensagemAgendamentoExecucao('');
+
+      const {
+        error,
+      } = await supabase.rpc(
+        'confirmar_agendamento_execucao_cliente',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao confirmar agendamento da execução:',
+          error
+        );
+
+        setErroAgendamentoExecucao(
+          error.message ||
+            'Não foi possível confirmar o agendamento.'
+        );
+
+        return;
+      }
+
+      setMostrarReagendamentoExecucao(
+        false
+      );
+
+      setMensagemAgendamentoExecucao(
+        'Agendamento da execução confirmado com sucesso.'
+      );
+
+      await carregarAgendamentoExecucaoCliente();
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao confirmar agendamento da execução:',
+        error
+      );
+
+      setErroAgendamentoExecucao(
+        'Ocorreu um erro ao confirmar o agendamento.'
+      );
+    } finally {
+      setProcessandoAgendamentoExecucao(
+        false
+      );
+    }
+  }
+
+  async function abrirReagendamentoExecucaoCliente() {
+    setErroAgendamentoExecucao('');
+    setMensagemAgendamentoExecucao('');
+
+    setDataExecucaoSelecionada('');
+    setHorarioExecucaoSelecionadoId('');
+
+    setMostrarReagendamentoExecucao(
+      true
+    );
+
+    await carregarHorariosExecucaoCliente();
+  }
+
+  async function confirmarReagendamentoExecucaoCliente() {
+    if (
+      !dataExecucaoSelecionada ||
+      !horarioExecucaoSelecionadoId
+    ) {
+      setErroAgendamentoExecucao(
+        'Escolha uma nova data e um novo horário.'
+      );
+
+      return;
+    }
+
+    try {
+      setProcessandoAgendamentoExecucao(
+        true
+      );
+
+      setErroAgendamentoExecucao('');
+      setMensagemAgendamentoExecucao('');
+
+      const {
+        error,
+      } = await supabase.rpc(
+        'reagendar_execucao_cliente',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+
+          p_nova_data:
+            dataExecucaoSelecionada,
+
+          p_horario_execucao_id:
+            horarioExecucaoSelecionadoId,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao reagendar execução:',
+          error
+        );
+
+        setErroAgendamentoExecucao(
+          error.message ||
+            'Não foi possível reagendar a execução.'
+        );
+
+        await carregarHorariosExecucaoCliente();
+
+        return;
+      }
+
+      setMostrarReagendamentoExecucao(
+        false
+      );
+
+      setDataExecucaoSelecionada('');
+      setHorarioExecucaoSelecionadoId('');
+
+      setMensagemAgendamentoExecucao(
+        'Nova data da execução selecionada e confirmada com sucesso.'
+      );
+
+      await carregarAgendamentoExecucaoCliente();
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao reagendar execução:',
+        error
+      );
+
+      setErroAgendamentoExecucao(
+        'Ocorreu um erro ao reagendar a execução.'
+      );
+    } finally {
+      setProcessandoAgendamentoExecucao(
+        false
+      );
+    }
+  }
+
   async function carregarForm03Cliente() {
     try {
       setCarregandoForm03Cliente(
@@ -912,6 +2009,9 @@ export default function DetalhesSolicitacaoScreen() {
 
       case 'em_vistoria':
         return 'A vistoria técnica está em andamento. As próximas atualizações serão registradas neste protocolo.';
+
+      case 'aprovada':
+        return 'A vistoria foi aprovada. Confira abaixo o agendamento proposto para a execução do serviço.';
 
       case 'em_execucao':
         return 'O atendimento está em execução. Você poderá acompanhar a conclusão por esta tela.';
@@ -2204,6 +3304,544 @@ export default function DetalhesSolicitacaoScreen() {
                       )
                     )}
                 </View>
+              ) : null}
+
+              {/* AGENDAMENTO DA EXECUÇÃO */}
+
+              {agendamentoExecucao &&
+              agendamentoExecucao.status !==
+                'cancelada' ? (
+                <>
+                  <Text
+                    style={
+                      styles.sectionTitle
+                    }
+                  >
+                    Agendamento da execução
+                  </Text>
+
+                  <View
+                    style={
+                      styles.execucaoAgendaCard
+                    }
+                  >
+                    <View
+                      style={
+                        styles.execucaoAgendaHeader
+                      }
+                    >
+                      <View
+                        style={
+                          styles.execucaoAgendaIcon
+                        }
+                      >
+                        <Ionicons
+                          name="construct-outline"
+                          size={22}
+                          color="#FFFFFF"
+                        />
+                      </View>
+
+                      <View
+                        style={{
+                          flex: 1,
+                        }}
+                      >
+                        <Text
+                          style={
+                            styles.execucaoAgendaTitle
+                          }
+                        >
+                          {agendamentoExecucao.status ===
+                          'confirmada'
+                            ? 'Execução agendada'
+                            : 'Confirme o agendamento'}
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.execucaoAgendaSubtitle
+                          }
+                        >
+                          {agendamentoExecucao.status ===
+                          'confirmada'
+                            ? 'A data da execução já está confirmada.'
+                            : 'A EMAFE propôs esta data para a execução. Confirme se o horário funciona para você ou escolha outra opção disponível.'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {carregandoAgendamentoExecucao ? (
+                      <View
+                        style={
+                          styles.execucaoAgendaLoading
+                        }
+                      >
+                        <ActivityIndicator
+                          color="#0B2447"
+                        />
+
+                        <Text
+                          style={
+                            styles.execucaoAgendaLoadingText
+                          }
+                        >
+                          Carregando agendamento...
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    {agendamentoExecucao.status ===
+                    'aguardando_cliente' ? (
+                      <>
+                        <View
+                          style={
+                            styles.execucaoAgendaProposta
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.execucaoAgendaPropostaLabel
+                            }
+                          >
+                            AGENDAMENTO PROPOSTO
+                          </Text>
+
+                          <View
+                            style={
+                              styles.execucaoAgendaDataRow
+                            }
+                          >
+                            <View
+                              style={
+                                styles.execucaoAgendaDataItem
+                              }
+                            >
+                              <Ionicons
+                                name="calendar-outline"
+                                size={19}
+                                color="#0B2447"
+                              />
+
+                              <View>
+                                <Text
+                                  style={
+                                    styles.execucaoAgendaInfoLabel
+                                  }
+                                >
+                                  DATA
+                                </Text>
+
+                                <Text
+                                  style={
+                                    styles.execucaoAgendaInfoValue
+                                  }
+                                >
+                                  {formatarData(
+                                    agendamentoExecucao.data_proposta
+                                  )}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <View
+                              style={
+                                styles.execucaoAgendaDataItem
+                              }
+                            >
+                              <Ionicons
+                                name="time-outline"
+                                size={19}
+                                color="#0B2447"
+                              />
+
+                              <View>
+                                <Text
+                                  style={
+                                    styles.execucaoAgendaInfoLabel
+                                  }
+                                >
+                                  HORÁRIO
+                                </Text>
+
+                                <Text
+                                  style={
+                                    styles.execucaoAgendaInfoValue
+                                  }
+                                >
+                                  {formatarHora(
+                                    agendamentoExecucao.hora_proposta
+                                  )}
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+                        </View>
+
+                        <Text
+                          style={
+                            styles.execucaoAgendaPergunta
+                          }
+                        >
+                          Esse agendamento funciona para você?
+                        </Text>
+
+                        <View
+                          style={
+                            styles.execucaoAgendaActions
+                          }
+                        >
+                          <TouchableOpacity
+                            style={[
+                              styles.execucaoAgendaConfirmButton,
+
+                              processandoAgendamentoExecucao &&
+                                styles.execucaoAgendaButtonDisabled,
+                            ]}
+                            disabled={
+                              processandoAgendamentoExecucao
+                            }
+                            onPress={
+                              confirmarAgendamentoExecucaoCliente
+                            }
+                          >
+                            {processandoAgendamentoExecucao ? (
+                              <ActivityIndicator
+                                size="small"
+                                color="#FFFFFF"
+                              />
+                            ) : (
+                              <Ionicons
+                                name="checkmark-circle-outline"
+                                size={19}
+                                color="#FFFFFF"
+                              />
+                            )}
+
+                            <Text
+                              style={
+                                styles.execucaoAgendaConfirmButtonText
+                              }
+                            >
+                              Confirmar agendamento
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={
+                              styles.execucaoAgendaReagendarButton
+                            }
+                            disabled={
+                              processandoAgendamentoExecucao
+                            }
+                            onPress={
+                              abrirReagendamentoExecucaoCliente
+                            }
+                          >
+                            <Ionicons
+                              name="refresh-outline"
+                              size={19}
+                              color="#0B5EA8"
+                            />
+
+                            <Text
+                              style={
+                                styles.execucaoAgendaReagendarButtonText
+                              }
+                            >
+                              Solicitar reagendamento
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        {mostrarReagendamentoExecucao ? (
+                          <View
+                            style={
+                              styles.execucaoAgendaReagendamentoBox
+                            }
+                          >
+                            <View
+                              style={
+                                styles.execucaoAgendaReagendamentoHeader
+                              }
+                            >
+                              <Ionicons
+                                name="calendar-outline"
+                                size={21}
+                                color="#0B2447"
+                              />
+
+                              <View
+                                style={{
+                                  flex: 1,
+                                }}
+                              >
+                                <Text
+                                  style={
+                                    styles.execucaoAgendaReagendamentoTitle
+                                  }
+                                >
+                                  Escolha uma nova data
+                                </Text>
+
+                                <Text
+                                  style={
+                                    styles.execucaoAgendaReagendamentoText
+                                  }
+                                >
+                                  O calendário mostra somente os dias e horários disponíveis para execução.
+                                </Text>
+                              </View>
+                            </View>
+
+                            {carregandoHorariosExecucao ? (
+                              <View
+                                style={
+                                  styles.execucaoAgendaLoading
+                                }
+                              >
+                                <ActivityIndicator
+                                  color="#0B2447"
+                                />
+
+                                <Text
+                                  style={
+                                    styles.execucaoAgendaLoadingText
+                                  }
+                                >
+                                  Carregando horários disponíveis...
+                                </Text>
+                              </View>
+                            ) : (
+                              <AgendaCalendarPicker
+                                horarios={
+                                  horariosExecucao
+                                }
+                                dataSelecionada={
+                                  dataExecucaoSelecionada
+                                }
+                                horarioSelecionadoId={
+                                  horarioExecucaoSelecionadoId
+                                }
+                                onSelecionarData={(
+                                  data
+                                ) => {
+                                  setDataExecucaoSelecionada(
+                                    data
+                                  );
+
+                                  setHorarioExecucaoSelecionadoId(
+                                    ''
+                                  );
+
+                                  setErroAgendamentoExecucao(
+                                    ''
+                                  );
+                                }}
+                                onSelecionarHorario={(
+                                  horario
+                                ) => {
+                                  setDataExecucaoSelecionada(
+                                    horario.data_vistoria
+                                  );
+
+                                  setHorarioExecucaoSelecionadoId(
+                                    horario.horario_vistoria_id
+                                  );
+
+                                  setErroAgendamentoExecucao(
+                                    ''
+                                  );
+                                }}
+                              />
+                            )}
+
+                            <View
+                              style={
+                                styles.execucaoAgendaReagendamentoActions
+                              }
+                            >
+                              <TouchableOpacity
+                                style={
+                                  styles.execucaoAgendaVoltarButton
+                                }
+                                onPress={() => {
+                                  setMostrarReagendamentoExecucao(
+                                    false
+                                  );
+
+                                  setDataExecucaoSelecionada(
+                                    ''
+                                  );
+
+                                  setHorarioExecucaoSelecionadoId(
+                                    ''
+                                  );
+                                }}
+                                disabled={
+                                  processandoAgendamentoExecucao
+                                }
+                              >
+                                <Text
+                                  style={
+                                    styles.execucaoAgendaVoltarButtonText
+                                  }
+                                >
+                                  Voltar
+                                </Text>
+                              </TouchableOpacity>
+
+                              <TouchableOpacity
+                                style={[
+                                  styles.execucaoAgendaNovaDataButton,
+
+                                  (!dataExecucaoSelecionada ||
+                                    !horarioExecucaoSelecionadoId ||
+                                    processandoAgendamentoExecucao) &&
+                                    styles.execucaoAgendaButtonDisabled,
+                                ]}
+                                disabled={
+                                  !dataExecucaoSelecionada ||
+                                  !horarioExecucaoSelecionadoId ||
+                                  processandoAgendamentoExecucao
+                                }
+                                onPress={
+                                  confirmarReagendamentoExecucaoCliente
+                                }
+                              >
+                                {processandoAgendamentoExecucao ? (
+                                  <ActivityIndicator
+                                    size="small"
+                                    color="#FFFFFF"
+                                  />
+                                ) : (
+                                  <Ionicons
+                                    name="checkmark-outline"
+                                    size={18}
+                                    color="#FFFFFF"
+                                  />
+                                )}
+
+                                <Text
+                                  style={
+                                    styles.execucaoAgendaNovaDataButtonText
+                                  }
+                                >
+                                  Confirmar nova data
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ) : null}
+                      </>
+                    ) : null}
+
+                    {agendamentoExecucao.status ===
+                    'confirmada' ? (
+                      <View
+                        style={
+                          styles.execucaoAgendaConfirmadaBox
+                        }
+                      >
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={25}
+                          color="#287A46"
+                        />
+
+                        <View
+                          style={{
+                            flex: 1,
+                          }}
+                        >
+                          <Text
+                            style={
+                              styles.execucaoAgendaConfirmadaTitle
+                            }
+                          >
+                            Agendamento confirmado
+                          </Text>
+
+                          <Text
+                            style={
+                              styles.execucaoAgendaConfirmadaDate
+                            }
+                          >
+                            {formatarData(
+                              agendamentoExecucao.data_confirmada
+                            )}{' '}
+                            às{' '}
+                            {formatarHora(
+                              agendamentoExecucao.hora_confirmada
+                            )}
+                          </Text>
+
+                          {agendamentoExecucao.motivo_reagendamento ? (
+                            <Text
+                              style={
+                                styles.execucaoAgendaConfirmadaText
+                              }
+                            >
+                              Você escolheu uma nova data entre os horários disponíveis.
+                            </Text>
+                          ) : (
+                            <Text
+                              style={
+                                styles.execucaoAgendaConfirmadaText
+                              }
+                            >
+                              Você confirmou a data proposta pela EMAFE.
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    ) : null}
+
+                    {erroAgendamentoExecucao ? (
+                      <View
+                        style={
+                          styles.execucaoAgendaError
+                        }
+                      >
+                        <Ionicons
+                          name="alert-circle-outline"
+                          size={19}
+                          color="#9A3232"
+                        />
+
+                        <Text
+                          style={
+                            styles.execucaoAgendaErrorText
+                          }
+                        >
+                          {erroAgendamentoExecucao}
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    {mensagemAgendamentoExecucao ? (
+                      <View
+                        style={
+                          styles.execucaoAgendaSuccess
+                        }
+                      >
+                        <Ionicons
+                          name="checkmark-circle-outline"
+                          size={19}
+                          color="#287A46"
+                        />
+
+                        <Text
+                          style={
+                            styles.execucaoAgendaSuccessText
+                          }
+                        >
+                          {mensagemAgendamentoExecucao}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </>
               ) : null}
 
               {/* FORM 03 - ASSINATURA DO CLIENTE */}
@@ -3636,6 +5274,528 @@ const styles =
       flex: 1,
       color: '#9A3232',
       fontSize: 11,
+    },
+
+    calendarCard: {
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1,
+      borderColor: '#D8DEE7',
+      borderRadius: 16,
+      padding: 14,
+      marginTop: 10,
+    },
+
+    calendarHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 13,
+    },
+
+    calendarArrowButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 11,
+      backgroundColor: '#F1F5F9',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    calendarArrowButtonDisabled: {
+      opacity: 0.45,
+    },
+
+    calendarMonthTitle: {
+      color: '#0B2447',
+      fontSize: 15,
+      fontWeight: '800',
+    },
+
+    calendarWeekRow: {
+      flexDirection: 'row',
+      marginBottom: 5,
+    },
+
+    calendarWeekText: {
+      width: '14.2857%',
+      textAlign: 'center',
+      color: '#7B8795',
+      fontSize: 9,
+      fontWeight: '800',
+    },
+
+    calendarGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+    },
+
+    calendarDayWrapper: {
+      width: '14.2857%',
+      alignItems: 'center',
+      paddingVertical: 3,
+    },
+
+    calendarDay: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    calendarDayOutside: {
+      opacity: 0.18,
+    },
+
+    calendarDayUnavailable: {
+      backgroundColor: '#F3F5F7',
+    },
+
+    calendarDayAvailable: {
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1.5,
+      borderColor: '#0B5EA8',
+    },
+
+    calendarDaySelected: {
+      backgroundColor: '#0B2447',
+      borderColor: '#0B2447',
+    },
+
+    calendarDayText: {
+      color: '#42566D',
+      fontSize: 12,
+      fontWeight: '600',
+    },
+
+    calendarDayTextOutside: {
+      color: '#AAB3BE',
+    },
+
+    calendarDayTextUnavailable: {
+      color: '#B0B8C2',
+    },
+
+    calendarDayTextAvailable: {
+      color: '#0B5EA8',
+      fontWeight: '800',
+    },
+
+    calendarDayTextSelected: {
+      color: '#FFFFFF',
+      fontWeight: '800',
+    },
+
+    calendarLegend: {
+      marginTop: 13,
+      paddingTop: 11,
+      borderTopWidth: 1,
+      borderTopColor: '#EEF1F4',
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 14,
+    },
+
+    calendarLegendItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+
+    calendarLegendAvailable: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1.5,
+      borderColor: '#0B5EA8',
+    },
+
+    calendarLegendUnavailable: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      backgroundColor: '#F3F5F7',
+      borderWidth: 1,
+      borderColor: '#D8DEE7',
+    },
+
+    calendarLegendText: {
+      color: '#697789',
+      fontSize: 10,
+    },
+
+    timeSelectionCard: {
+      marginTop: 12,
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1,
+      borderColor: '#D8DEE7',
+      borderRadius: 16,
+      padding: 15,
+    },
+
+    timeSelectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 9,
+      marginBottom: 12,
+    },
+
+    timeSelectionTitle: {
+      color: '#0B2447',
+      fontSize: 13,
+      fontWeight: '800',
+    },
+
+    timeSelectionDate: {
+      color: '#697789',
+      fontSize: 10,
+      lineHeight: 15,
+      marginTop: 2,
+    },
+
+    timeButtonsContainer: {
+      gap: 8,
+    },
+
+    timeButton: {
+      minHeight: 50,
+      borderWidth: 1,
+      borderColor: '#C8D3DF',
+      borderRadius: 12,
+      backgroundColor: '#F8FAFC',
+      paddingHorizontal: 15,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 9,
+    },
+
+    timeButtonSelected: {
+      backgroundColor: '#0B2447',
+      borderColor: '#0B2447',
+    },
+
+    timeButtonText: {
+      color: '#0B2447',
+      fontSize: 12,
+      fontWeight: '700',
+    },
+
+    timeButtonTextSelected: {
+      color: '#FFFFFF',
+    },
+
+    agendaHintBox: {
+      marginTop: 10,
+      backgroundColor: '#EDF5FC',
+      borderRadius: 12,
+      padding: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+
+    agendaHintText: {
+      flex: 1,
+      color: '#0B5EA8',
+      fontSize: 11,
+      lineHeight: 16,
+    },
+
+
+    // ======================================================
+    // AGENDAMENTO DA EXECUÇÃO - CLIENTE
+    // ======================================================
+
+    execucaoAgendaCard: {
+      backgroundColor: '#F8FBFF',
+      borderWidth: 1,
+      borderColor: '#C9D9E9',
+      borderRadius: 16,
+      padding: 16,
+    },
+
+    execucaoAgendaHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 11,
+      marginBottom: 14,
+    },
+
+    execucaoAgendaIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 13,
+      backgroundColor: '#0B2447',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    execucaoAgendaTitle: {
+      color: '#0B2447',
+      fontSize: 15,
+      fontWeight: '800',
+    },
+
+    execucaoAgendaSubtitle: {
+      color: '#697789',
+      fontSize: 11,
+      lineHeight: 17,
+      marginTop: 4,
+    },
+
+    execucaoAgendaLoading: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 10,
+    },
+
+    execucaoAgendaLoadingText: {
+      color: '#697789',
+      fontSize: 11,
+    },
+
+    execucaoAgendaProposta: {
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1,
+      borderColor: '#D8E2EC',
+      borderRadius: 13,
+      padding: 14,
+    },
+
+    execucaoAgendaPropostaLabel: {
+      color: '#697789',
+      fontSize: 9,
+      fontWeight: '800',
+      marginBottom: 10,
+    },
+
+    execucaoAgendaDataRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+
+    execucaoAgendaDataItem: {
+      flexGrow: 1,
+      flexBasis: 180,
+      minHeight: 62,
+      backgroundColor: '#F8FAFC',
+      borderRadius: 11,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 9,
+    },
+
+    execucaoAgendaInfoLabel: {
+      color: '#8995A5',
+      fontSize: 9,
+      fontWeight: '700',
+    },
+
+    execucaoAgendaInfoValue: {
+      color: '#0B2447',
+      fontSize: 13,
+      fontWeight: '800',
+      marginTop: 3,
+    },
+
+    execucaoAgendaPergunta: {
+      color: '#0B2447',
+      fontSize: 12,
+      fontWeight: '800',
+      marginTop: 15,
+      marginBottom: 10,
+    },
+
+    execucaoAgendaActions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 9,
+    },
+
+    execucaoAgendaConfirmButton: {
+      flexGrow: 1,
+      minHeight: 48,
+      borderRadius: 11,
+      backgroundColor: '#287A46',
+      paddingHorizontal: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 7,
+    },
+
+    execucaoAgendaConfirmButtonText: {
+      color: '#FFFFFF',
+      fontSize: 11,
+      fontWeight: '800',
+    },
+
+    execucaoAgendaReagendarButton: {
+      flexGrow: 1,
+      minHeight: 48,
+      borderRadius: 11,
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1,
+      borderColor: '#B8C9DA',
+      paddingHorizontal: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 7,
+    },
+
+    execucaoAgendaReagendarButtonText: {
+      color: '#0B5EA8',
+      fontSize: 11,
+      fontWeight: '800',
+    },
+
+    execucaoAgendaButtonDisabled: {
+      opacity: 0.55,
+    },
+
+    execucaoAgendaReagendamentoBox: {
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1,
+      borderColor: '#D8E2EC',
+      borderRadius: 14,
+      padding: 14,
+      marginTop: 14,
+    },
+
+    execucaoAgendaReagendamentoHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 9,
+      marginBottom: 4,
+    },
+
+    execucaoAgendaReagendamentoTitle: {
+      color: '#0B2447',
+      fontSize: 13,
+      fontWeight: '800',
+    },
+
+    execucaoAgendaReagendamentoText: {
+      color: '#697789',
+      fontSize: 10,
+      lineHeight: 16,
+      marginTop: 3,
+    },
+
+    execucaoAgendaReagendamentoActions: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginTop: 13,
+    },
+
+    execucaoAgendaVoltarButton: {
+      minHeight: 44,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: '#CCD7E3',
+      backgroundColor: '#FFFFFF',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 15,
+    },
+
+    execucaoAgendaVoltarButtonText: {
+      color: '#42566D',
+      fontSize: 10,
+      fontWeight: '800',
+    },
+
+    execucaoAgendaNovaDataButton: {
+      minHeight: 44,
+      borderRadius: 10,
+      backgroundColor: '#0B2447',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 15,
+      flexDirection: 'row',
+      gap: 7,
+    },
+
+    execucaoAgendaNovaDataButtonText: {
+      color: '#FFFFFF',
+      fontSize: 10,
+      fontWeight: '800',
+    },
+
+    execucaoAgendaConfirmadaBox: {
+      backgroundColor: '#EAF6EE',
+      borderWidth: 1,
+      borderColor: '#B7DCC2',
+      borderRadius: 13,
+      padding: 14,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+    },
+
+    execucaoAgendaConfirmadaTitle: {
+      color: '#287A46',
+      fontSize: 12,
+      fontWeight: '800',
+    },
+
+    execucaoAgendaConfirmadaDate: {
+      color: '#0B2447',
+      fontSize: 14,
+      fontWeight: '800',
+      marginTop: 4,
+    },
+
+    execucaoAgendaConfirmadaText: {
+      color: '#567362',
+      fontSize: 10,
+      lineHeight: 15,
+      marginTop: 4,
+    },
+
+    execucaoAgendaError: {
+      marginTop: 12,
+      backgroundColor: '#FCEEEE',
+      borderWidth: 1,
+      borderColor: '#D29A9A',
+      borderRadius: 11,
+      padding: 11,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+
+    execucaoAgendaErrorText: {
+      flex: 1,
+      color: '#9A3232',
+      fontSize: 10,
+      lineHeight: 15,
+    },
+
+    execucaoAgendaSuccess: {
+      marginTop: 12,
+      backgroundColor: '#EAF6EE',
+      borderRadius: 11,
+      padding: 11,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+
+    execucaoAgendaSuccessText: {
+      flex: 1,
+      color: '#287A46',
+      fontSize: 10,
+      fontWeight: '700',
+      lineHeight: 15,
     },
 
     // ======================================================

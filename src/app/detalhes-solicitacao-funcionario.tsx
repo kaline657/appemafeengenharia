@@ -104,6 +104,11 @@ type ItemGarantia = {
   ordem_exibicao: number | null;
 };
 
+type ResponsavelFuncionario = {
+  responsavel_id: string;
+  nome: string;
+};
+
 type ResultadoGarantia = {
   item_garantia_id: string;
   categoria: string;
@@ -145,6 +150,734 @@ type HorarioVistoriaDisponivel = {
   hora_fim: string;
 };
 
+
+type DiaCalendarioAgenda = {
+  iso: string;
+  dia: number;
+  pertenceAoMes: boolean;
+  disponivel: boolean;
+};
+
+type AgendaCalendarPickerProps = {
+  horarios: HorarioVistoriaDisponivel[];
+  dataSelecionada: string;
+  horarioSelecionadoId: string;
+  onSelecionarData: (data: string) => void;
+  onSelecionarHorario: (
+    horario: HorarioVistoriaDisponivel
+  ) => void;
+};
+
+function AgendaCalendarPicker({
+  horarios,
+  dataSelecionada,
+  horarioSelecionadoId,
+  onSelecionarData,
+  onSelecionarHorario,
+}: AgendaCalendarPickerProps) {
+  const [
+    mesCalendario,
+    setMesCalendario,
+  ] = useState<Date | null>(null);
+
+  function dataIsoParaLocal(
+    iso: string
+  ) {
+    const [
+      ano,
+      mes,
+      dia,
+    ] = iso
+      .split('-')
+      .map(Number);
+
+    return new Date(
+      ano,
+      mes - 1,
+      dia
+    );
+  }
+
+  function dataLocalParaIso(
+    data: Date
+  ) {
+    const ano =
+      data.getFullYear();
+
+    const mes =
+      String(
+        data.getMonth() + 1
+      ).padStart(2, '0');
+
+    const dia =
+      String(
+        data.getDate()
+      ).padStart(2, '0');
+
+    return `${ano}-${mes}-${dia}`;
+  }
+
+  function formatarDataAgenda(
+    iso: string
+  ) {
+    if (!iso) {
+      return '-';
+    }
+
+    return dataIsoParaLocal(
+      iso
+    ).toLocaleDateString(
+      'pt-BR',
+      {
+        weekday: 'long',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      }
+    );
+  }
+
+  function formatarHoraAgenda(
+    hora: string
+  ) {
+    return hora
+      ? hora.substring(0, 5)
+      : '-';
+  }
+
+  useEffect(() => {
+    if (
+      horarios.length === 0
+    ) {
+      setMesCalendario(
+        null
+      );
+
+      return;
+    }
+
+    const referencia =
+      dataSelecionada ||
+      horarios[0].data_vistoria;
+
+    const data =
+      dataIsoParaLocal(
+        referencia
+      );
+
+    setMesCalendario(
+      new Date(
+        data.getFullYear(),
+        data.getMonth(),
+        1
+      )
+    );
+  }, [
+    horarios,
+  ]);
+
+  const datasComHorario =
+    useMemo(
+      () =>
+        new Set(
+          horarios.map(
+            (item) =>
+              item.data_vistoria
+          )
+        ),
+      [horarios]
+    );
+
+  const horariosDaData =
+    useMemo(
+      () =>
+        horarios.filter(
+          (item) =>
+            item.data_vistoria ===
+            dataSelecionada
+        ),
+      [
+        horarios,
+        dataSelecionada,
+      ]
+    );
+
+  const limiteMesAnterior =
+    useMemo(() => {
+      if (
+        horarios.length ===
+        0
+      ) {
+        return null;
+      }
+
+      const data =
+        dataIsoParaLocal(
+          horarios[0]
+            .data_vistoria
+        );
+
+      return new Date(
+        data.getFullYear(),
+        data.getMonth(),
+        1
+      );
+    }, [horarios]);
+
+  const limiteMesPosterior =
+    useMemo(() => {
+      if (
+        horarios.length ===
+        0
+      ) {
+        return null;
+      }
+
+      const data =
+        dataIsoParaLocal(
+          horarios[
+            horarios.length - 1
+          ].data_vistoria
+        );
+
+      return new Date(
+        data.getFullYear(),
+        data.getMonth(),
+        1
+      );
+    }, [horarios]);
+
+  const diasDoCalendario =
+    useMemo<
+      DiaCalendarioAgenda[]
+    >(() => {
+      if (!mesCalendario) {
+        return [];
+      }
+
+      const ano =
+        mesCalendario.getFullYear();
+
+      const mes =
+        mesCalendario.getMonth();
+
+      const primeiroDiaMes =
+        new Date(
+          ano,
+          mes,
+          1
+        );
+
+      const inicioGrade =
+        new Date(
+          ano,
+          mes,
+          1 -
+            primeiroDiaMes.getDay()
+        );
+
+      const dias:
+        DiaCalendarioAgenda[] =
+          [];
+
+      for (
+        let indice = 0;
+        indice < 42;
+        indice++
+      ) {
+        const data =
+          new Date(
+            inicioGrade
+          );
+
+        data.setDate(
+          inicioGrade.getDate() +
+            indice
+        );
+
+        const iso =
+          dataLocalParaIso(
+            data
+          );
+
+        dias.push({
+          iso,
+          dia:
+            data.getDate(),
+
+          pertenceAoMes:
+            data.getMonth() ===
+              mes &&
+            data.getFullYear() ===
+              ano,
+
+          disponivel:
+            datasComHorario.has(
+              iso
+            ),
+        });
+      }
+
+      return dias;
+    }, [
+      mesCalendario,
+      datasComHorario,
+    ]);
+
+  const tituloMesCalendario =
+    useMemo(() => {
+      if (!mesCalendario) {
+        return '';
+      }
+
+      const texto =
+        mesCalendario
+          .toLocaleDateString(
+            'pt-BR',
+            {
+              month: 'long',
+              year: 'numeric',
+            }
+          );
+
+      return (
+        texto.charAt(0)
+          .toUpperCase() +
+        texto.slice(1)
+      );
+    }, [mesCalendario]);
+
+  function compararMeses(
+    primeiro: Date,
+    segundo: Date
+  ) {
+    return (
+      primeiro.getFullYear() *
+        12 +
+      primeiro.getMonth() -
+      (
+        segundo.getFullYear() *
+          12 +
+        segundo.getMonth()
+      )
+    );
+  }
+
+  const podeVoltarMes =
+    !!mesCalendario &&
+    !!limiteMesAnterior &&
+    compararMeses(
+      mesCalendario,
+      limiteMesAnterior
+    ) > 0;
+
+  const podeAvancarMes =
+    !!mesCalendario &&
+    !!limiteMesPosterior &&
+    compararMeses(
+      mesCalendario,
+      limiteMesPosterior
+    ) < 0;
+
+  function mudarMes(
+    quantidade: number
+  ) {
+    if (!mesCalendario) {
+      return;
+    }
+
+    setMesCalendario(
+      new Date(
+        mesCalendario.getFullYear(),
+        mesCalendario.getMonth() +
+          quantidade,
+        1
+      )
+    );
+  }
+
+  if (
+    horarios.length === 0 ||
+    !mesCalendario
+  ) {
+    return (
+      <View
+        style={
+          styles.agendaHintBox
+        }
+      >
+        <Ionicons
+          name="calendar-outline"
+          size={19}
+          color="#0B5EA8"
+        />
+
+        <Text
+          style={
+            styles.agendaHintText
+          }
+        >
+          Não há horários disponíveis no período consultado.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <View
+        style={
+          styles.calendarCard
+        }
+      >
+        <View
+          style={
+            styles.calendarHeader
+          }
+        >
+          <TouchableOpacity
+            style={[
+              styles.calendarArrowButton,
+
+              !podeVoltarMes &&
+                styles.calendarArrowButtonDisabled,
+            ]}
+            disabled={
+              !podeVoltarMes
+            }
+            onPress={() =>
+              mudarMes(-1)
+            }
+          >
+            <Ionicons
+              name="chevron-back"
+              size={20}
+              color={
+                podeVoltarMes
+                  ? '#0B2447'
+                  : '#B7C0CB'
+              }
+            />
+          </TouchableOpacity>
+
+          <Text
+            style={
+              styles.calendarMonthTitle
+            }
+          >
+            {tituloMesCalendario}
+          </Text>
+
+          <TouchableOpacity
+            style={[
+              styles.calendarArrowButton,
+
+              !podeAvancarMes &&
+                styles.calendarArrowButtonDisabled,
+            ]}
+            disabled={
+              !podeAvancarMes
+            }
+            onPress={() =>
+              mudarMes(1)
+            }
+          >
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={
+                podeAvancarMes
+                  ? '#0B2447'
+                  : '#B7C0CB'
+              }
+            />
+          </TouchableOpacity>
+        </View>
+
+        <View
+          style={
+            styles.calendarWeekRow
+          }
+        >
+          {[
+            'DOM',
+            'SEG',
+            'TER',
+            'QUA',
+            'QUI',
+            'SEX',
+            'SÁB',
+          ].map(
+            (diaSemana) => (
+              <Text
+                key={
+                  diaSemana
+                }
+                style={
+                  styles.calendarWeekText
+                }
+              >
+                {diaSemana}
+              </Text>
+            )
+          )}
+        </View>
+
+        <View
+          style={
+            styles.calendarGrid
+          }
+        >
+          {diasDoCalendario.map(
+            (dia) => {
+              const selecionado =
+                dataSelecionada ===
+                dia.iso;
+
+              const podeSelecionar =
+                dia.pertenceAoMes &&
+                dia.disponivel;
+
+              return (
+                <View
+                  key={
+                    dia.iso
+                  }
+                  style={
+                    styles.calendarDayWrapper
+                  }
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.calendarDay,
+
+                      !dia.pertenceAoMes &&
+                        styles.calendarDayOutside,
+
+                      dia.pertenceAoMes &&
+                        !dia.disponivel &&
+                        styles.calendarDayUnavailable,
+
+                      podeSelecionar &&
+                        styles.calendarDayAvailable,
+
+                      selecionado &&
+                        styles.calendarDaySelected,
+                    ]}
+                    disabled={
+                      !podeSelecionar
+                    }
+                    onPress={() =>
+                      onSelecionarData(
+                        dia.iso
+                      )
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.calendarDayText,
+
+                        !dia.pertenceAoMes &&
+                          styles.calendarDayTextOutside,
+
+                        dia.pertenceAoMes &&
+                          !dia.disponivel &&
+                          styles.calendarDayTextUnavailable,
+
+                        podeSelecionar &&
+                          styles.calendarDayTextAvailable,
+
+                        selecionado &&
+                          styles.calendarDayTextSelected,
+                      ]}
+                    >
+                      {dia.dia}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            }
+          )}
+        </View>
+
+        <View
+          style={
+            styles.calendarLegend
+          }
+        >
+          <View
+            style={
+              styles.calendarLegendItem
+            }
+          >
+            <View
+              style={
+                styles.calendarLegendAvailable
+              }
+            />
+
+            <Text
+              style={
+                styles.calendarLegendText
+              }
+            >
+              Data disponível
+            </Text>
+          </View>
+
+          <View
+            style={
+              styles.calendarLegendItem
+            }
+          >
+            <View
+              style={
+                styles.calendarLegendUnavailable
+              }
+            />
+
+            <Text
+              style={
+                styles.calendarLegendText
+              }
+            >
+              Indisponível
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {dataSelecionada ? (
+        <View
+          style={
+            styles.timeSelectionCard
+          }
+        >
+          <View
+            style={
+              styles.timeSelectionHeader
+            }
+          >
+            <Ionicons
+              name="time-outline"
+              size={21}
+              color="#0B2447"
+            />
+
+            <View
+              style={{
+                flex: 1,
+              }}
+            >
+              <Text
+                style={
+                  styles.timeSelectionTitle
+                }
+              >
+                Escolha o horário
+              </Text>
+
+              <Text
+                style={
+                  styles.timeSelectionDate
+                }
+              >
+                {formatarDataAgenda(
+                  dataSelecionada
+                )}
+              </Text>
+            </View>
+          </View>
+
+          <View
+            style={
+              styles.timeButtonsContainer
+            }
+          >
+            {horariosDaData.map(
+              (horario) => {
+                const selecionado =
+                  horarioSelecionadoId ===
+                  horario.horario_vistoria_id;
+
+                return (
+                  <TouchableOpacity
+                    key={
+                      horario.horario_vistoria_id
+                    }
+                    style={[
+                      styles.timeButton,
+
+                      selecionado &&
+                        styles.timeButtonSelected,
+                    ]}
+                    onPress={() =>
+                      onSelecionarHorario(
+                        horario
+                      )
+                    }
+                  >
+                    <Ionicons
+                      name={
+                        selecionado
+                          ? 'checkmark-circle'
+                          : 'time-outline'
+                      }
+                      size={20}
+                      color={
+                        selecionado
+                          ? '#FFFFFF'
+                          : '#0B2447'
+                      }
+                    />
+
+                    <Text
+                      style={[
+                        styles.timeButtonText,
+
+                        selecionado &&
+                          styles.timeButtonTextSelected,
+                      ]}
+                    >
+                      {formatarHoraAgenda(
+                        horario.hora_inicio
+                      )}{' '}
+                      às{' '}
+                      {formatarHoraAgenda(
+                        horario.hora_fim
+                      )}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }
+            )}
+          </View>
+        </View>
+      ) : (
+        <View
+          style={
+            styles.agendaHintBox
+          }
+        >
+          <Ionicons
+            name="calendar-outline"
+            size={19}
+            color="#0B5EA8"
+          />
+
+          <Text
+            style={
+              styles.agendaHintText
+            }
+          >
+            Toque em uma data disponível para ver os horários livres.
+          </Text>
+        </View>
+      )}
+    </>
+  );
+}
+
 type VistoriaTecnica = {
   vistoria_id: string;
   solicitacao_id: string;
@@ -168,6 +901,37 @@ type FotoVistoriaSalva = {
   descricao: string | null;
   created_at: string;
   url: string;
+};
+
+type PropostaAgendamentoExecucao = {
+  proposta_id: string;
+  solicitacao_id?: string;
+
+  opcao_1_data: string;
+  opcao_1_hora: string;
+
+  opcao_2_data: string;
+  opcao_2_hora: string;
+
+  opcao_confirmada: number | null;
+
+  data_confirmada: string | null;
+  hora_confirmada: string | null;
+
+  status:
+    | 'aguardando_cliente'
+    | 'confirmada'
+    | 'reagendamento_solicitado'
+    | 'cancelada'
+    | string;
+
+  motivo_reagendamento: string | null;
+
+  proposto_por?: string | null;
+  proposto_por_nome?: string | null;
+
+  respondido_em: string | null;
+  created_at: string;
 };
 
 type ExecucaoServico = {
@@ -311,6 +1075,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   ] = useState('');
 
   const [
+    categoriaDropdownAberto,
+    setCategoriaDropdownAberto,
+  ] = useState(false);
+
+  const [
+    buscaCategoria,
+    setBuscaCategoria,
+  ] = useState('');
+
+  const [
     elementoSelecionado,
     setElementoSelecionado,
   ] = useState('');
@@ -410,11 +1184,6 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   ] = useState('');
 
   const [
-    servicoNecessario,
-    setServicoNecessario,
-  ] = useState('');
-
-  const [
     observacoesTecnicas,
     setObservacoesTecnicas,
   ] = useState('');
@@ -481,6 +1250,120 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     sucessoFinalizacaoVistoria,
     setSucessoFinalizacaoVistoria,
   ] = useState('');
+
+  const [
+    mostrarDetalhesVistoriaFinalizada,
+    setMostrarDetalhesVistoriaFinalizada,
+  ] = useState(false);
+
+  // ==========================================================
+  // RESPONSÁVEIS DA VISTORIA E EXECUÇÃO
+  // ==========================================================
+
+  const [
+    responsaveisFuncionarios,
+    setResponsaveisFuncionarios,
+  ] = useState<ResponsavelFuncionario[]>([]);
+
+  const [
+    modoResponsavelVistoria,
+    setModoResponsavelVistoria,
+  ] = useState<'funcionario' | 'outro'>(
+    'funcionario'
+  );
+
+  const [
+    responsavelVistoriaId,
+    setResponsavelVistoriaId,
+  ] = useState('');
+
+  const [
+    responsavelVistoriaNomeManual,
+    setResponsavelVistoriaNomeManual,
+  ] = useState('');
+
+  const [
+    dropdownResponsavelVistoriaAberto,
+    setDropdownResponsavelVistoriaAberto,
+  ] = useState(false);
+
+  const [
+    modoResponsavelExecucao,
+    setModoResponsavelExecucao,
+  ] = useState<'funcionario' | 'outro'>(
+    'funcionario'
+  );
+
+  const [
+    responsavelExecucaoId,
+    setResponsavelExecucaoId,
+  ] = useState('');
+
+  const [
+    responsavelExecucaoNomeManual,
+    setResponsavelExecucaoNomeManual,
+  ] = useState('');
+
+  const [
+    dropdownResponsavelExecucaoAberto,
+    setDropdownResponsavelExecucaoAberto,
+  ] = useState(false);
+
+  // ==========================================================
+  // AGENDAMENTO DA EXECUÇÃO
+  // ==========================================================
+
+  const [
+    propostaAgendamentoExecucao,
+    setPropostaAgendamentoExecucao,
+  ] = useState<PropostaAgendamentoExecucao | null>(
+    null
+  );
+
+  const [
+    carregandoAgendamentoExecucao,
+    setCarregandoAgendamentoExecucao,
+  ] = useState(false);
+
+  const [
+    enviandoPropostaExecucao,
+    setEnviandoPropostaExecucao,
+  ] = useState(false);
+
+  const [
+    erroAgendamentoExecucao,
+    setErroAgendamentoExecucao,
+  ] = useState('');
+
+  const [
+    sucessoAgendamentoExecucao,
+    setSucessoAgendamentoExecucao,
+  ] = useState('');
+
+  const [
+    dataExecucaoSelecionada,
+    setDataExecucaoSelecionada,
+  ] = useState('');
+
+  const [
+    horaExecucaoSelecionada,
+    setHoraExecucaoSelecionada,
+  ] = useState('');
+
+  const [
+    horarioExecucaoSelecionadoId,
+    setHorarioExecucaoSelecionadoId,
+  ] = useState('');
+
+  const [
+    horariosExecucaoDisponiveis,
+    setHorariosExecucaoDisponiveis,
+  ] = useState<HorarioVistoriaDisponivel[]>([]);
+
+  const [
+    carregandoHorariosExecucao,
+    setCarregandoHorariosExecucao,
+  ] = useState(false);
 
   // ==========================================================
   // EXECUÇÃO DO SERVIÇO
@@ -737,6 +1620,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       await carregarVistoriaTecnica();
 
       await carregarExecucaoServico();
+
+      await carregarAgendamentoExecucao();
+
+      await carregarHorariosExecucao();
+
+      await carregarResponsaveisFuncionarios();
+
+      await carregarResponsaveisAtendimento();
 
       // ======================================================
       // SE JÁ EXISTIR ANÁLISE TÉCNICA
@@ -1136,6 +2027,250 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   // CARREGAR FICHA TÉCNICA DA VISTORIA
   // ==========================================================
 
+  async function carregarResponsaveisFuncionarios() {
+    try {
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'listar_responsaveis_funcionario'
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao carregar responsáveis:',
+          error
+        );
+
+        return;
+      }
+
+      setResponsaveisFuncionarios(
+        ((data ?? []) as any[]).map(
+          (item) => ({
+            responsavel_id:
+              item.responsavel_id,
+            nome:
+              item.nome,
+          })
+        )
+      );
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao carregar responsáveis:',
+        error
+      );
+    }
+  }
+
+  async function carregarResponsaveisAtendimento() {
+    try {
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'buscar_responsaveis_atendimento_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao carregar responsáveis do atendimento:',
+          error
+        );
+
+        return;
+      }
+
+      const registro =
+        data?.[0];
+
+      if (!registro) {
+        return;
+      }
+
+      if (
+        registro.responsavel_vistoria_id
+      ) {
+        setModoResponsavelVistoria(
+          'funcionario'
+        );
+
+        setResponsavelVistoriaId(
+          registro.responsavel_vistoria_id
+        );
+
+        setResponsavelVistoriaNomeManual(
+          ''
+        );
+      } else if (
+        registro.responsavel_vistoria_nome_manual
+      ) {
+        setModoResponsavelVistoria(
+          'outro'
+        );
+
+        setResponsavelVistoriaId('');
+
+        setResponsavelVistoriaNomeManual(
+          registro.responsavel_vistoria_nome_manual
+        );
+      }
+
+      if (
+        registro.responsavel_execucao_id
+      ) {
+        setModoResponsavelExecucao(
+          'funcionario'
+        );
+
+        setResponsavelExecucaoId(
+          registro.responsavel_execucao_id
+        );
+
+        setResponsavelExecucaoNomeManual(
+          ''
+        );
+      } else if (
+        registro.responsavel_execucao_nome_manual
+      ) {
+        setModoResponsavelExecucao(
+          'outro'
+        );
+
+        setResponsavelExecucaoId('');
+
+        setResponsavelExecucaoNomeManual(
+          registro.responsavel_execucao_nome_manual
+        );
+      }
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao carregar responsáveis do atendimento:',
+        error
+      );
+    }
+  }
+
+  function validarResponsavelVistoria() {
+    if (
+      modoResponsavelVistoria ===
+        'funcionario' &&
+      !responsavelVistoriaId
+    ) {
+      return 'Selecione o responsável pela vistoria.';
+    }
+
+    if (
+      modoResponsavelVistoria ===
+        'outro' &&
+      !responsavelVistoriaNomeManual.trim()
+    ) {
+      return 'Digite o nome do responsável pela vistoria.';
+    }
+
+    return '';
+  }
+
+  function validarResponsavelExecucao() {
+    if (
+      modoResponsavelExecucao ===
+        'funcionario' &&
+      !responsavelExecucaoId
+    ) {
+      return 'Selecione o responsável pela execução.';
+    }
+
+    if (
+      modoResponsavelExecucao ===
+        'outro' &&
+      !responsavelExecucaoNomeManual.trim()
+    ) {
+      return 'Digite o nome do responsável pela execução.';
+    }
+
+    return '';
+  }
+
+  async function salvarResponsavelVistoria() {
+    const {
+      error,
+    } = await supabase.rpc(
+      'salvar_responsavel_vistoria_funcionario',
+      {
+        p_solicitacao_id:
+          solicitacaoId,
+
+        p_responsavel_id:
+          modoResponsavelVistoria ===
+          'funcionario'
+            ? responsavelVistoriaId
+            : null,
+
+        p_responsavel_nome_manual:
+          modoResponsavelVistoria ===
+          'outro'
+            ? responsavelVistoriaNomeManual.trim()
+            : null,
+      }
+    );
+
+    if (error) {
+      console.error(
+        'Erro ao salvar responsável da vistoria:',
+        error
+      );
+
+      return (
+        error.message ||
+        'Não foi possível salvar o responsável pela vistoria.'
+      );
+    }
+
+    return '';
+  }
+
+  async function salvarResponsavelExecucao() {
+    const {
+      error,
+    } = await supabase.rpc(
+      'salvar_responsavel_execucao_funcionario',
+      {
+        p_solicitacao_id:
+          solicitacaoId,
+
+        p_responsavel_id:
+          modoResponsavelExecucao ===
+          'funcionario'
+            ? responsavelExecucaoId
+            : null,
+
+        p_responsavel_nome_manual:
+          modoResponsavelExecucao ===
+          'outro'
+            ? responsavelExecucaoNomeManual.trim()
+            : null,
+      }
+    );
+
+    if (error) {
+      console.error(
+        'Erro ao salvar responsável da execução:',
+        error
+      );
+
+      return (
+        error.message ||
+        'Não foi possível salvar o responsável pela execução.'
+      );
+    }
+
+    return '';
+  }
+
   async function carregarVistoriaTecnica() {
     try {
       const {
@@ -1184,11 +2319,6 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           ''
       );
 
-      setServicoNecessario(
-        registro.servico_necessario ??
-          ''
-      );
-
       setObservacoesTecnicas(
         registro.observacoes ??
           ''
@@ -1226,6 +2356,32 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         )
       );
     }, [itensGarantia]);
+
+  const categoriasFiltradas =
+    useMemo(() => {
+      const termo =
+        buscaCategoria
+          .trim()
+          .toLocaleLowerCase(
+            'pt-BR'
+          );
+
+      if (!termo) {
+        return categorias;
+      }
+
+      return categorias.filter(
+        (categoria) =>
+          categoria
+            .toLocaleLowerCase(
+              'pt-BR'
+            )
+            .includes(termo)
+      );
+    }, [
+      categorias,
+      buscaCategoria,
+    ]);
 
   const elementos =
     useMemo(() => {
@@ -1292,6 +2448,33 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     analiseConfirmada &&
     !dentroDaGarantia;
 
+  const nomeResponsavelVistoriaExibicao =
+    useMemo(() => {
+      if (
+        modoResponsavelVistoria ===
+        'outro'
+      ) {
+        return (
+          responsavelVistoriaNomeManual.trim() ||
+          '-'
+        );
+      }
+
+      return (
+        responsaveisFuncionarios.find(
+          (item) =>
+            item.responsavel_id ===
+            responsavelVistoriaId
+        )?.nome ||
+        '-'
+      );
+    }, [
+      modoResponsavelVistoria,
+      responsavelVistoriaNomeManual,
+      responsavelVistoriaId,
+      responsaveisFuncionarios,
+    ]);
+
   // ==========================================================
   // SELEÇÕES
   // ==========================================================
@@ -1306,6 +2489,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     setCategoriaSelecionada(
       categoria
     );
+
+    setCategoriaDropdownAberto(
+      false
+    );
+
+    setBuscaCategoria('');
 
     setElementoSelecionado('');
     setItemSelecionadoId('');
@@ -1532,7 +2721,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         data,
         error,
       } = await supabase.rpc(
-        'listar_horarios_vistoria_disponiveis',
+        'listar_horarios_execucao_disponiveis',
         {
           p_data_inicio:
             null,
@@ -1883,6 +3072,8 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       await carregarSolicitacao();
 
       await carregarVistoriaTecnica();
+
+      await carregarResponsaveisAtendimento();
     } catch (error) {
       console.error(
         'Erro ao iniciar vistoria:',
@@ -2307,10 +3498,32 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return;
     }
 
+    const erroResponsavel =
+      validarResponsavelVistoria();
+
+    if (erroResponsavel) {
+      setErroFormularioVistoria(
+        erroResponsavel
+      );
+
+      return;
+    }
+
     try {
       setSalvandoFormularioVistoria(
         true
       );
+
+      const erroAoSalvarResponsavel =
+        await salvarResponsavelVistoria();
+
+      if (erroAoSalvarResponsavel) {
+        setErroFormularioVistoria(
+          erroAoSalvarResponsavel
+        );
+
+        return;
+      }
 
       const {
         data,
@@ -2327,9 +3540,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_parecer_tecnico:
             parecerTecnico.trim(),
 
+          // Campo removido da tela, mas mantido internamente para compatibilidade
+          // com as funções antigas do Supabase que ainda exigem um valor.
           p_servico_necessario:
-            servicoNecessario.trim() ||
-            null,
+            'Não se aplica',
 
           p_observacoes:
             observacoesTecnicas.trim() ||
@@ -2396,6 +3610,336 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   // ==========================================================
   // EXECUÇÃO DO SERVIÇO
   // ==========================================================
+
+  function converterDataExecucaoParaISO(
+    valor: string
+  ) {
+    const texto =
+      valor.trim();
+
+    if (
+      /^\d{4}-\d{2}-\d{2}$/.test(
+        texto
+      )
+    ) {
+      const data =
+        new Date(
+          `${texto}T12:00:00`
+        );
+
+      if (
+        Number.isNaN(
+          data.getTime()
+        )
+      ) {
+        return null;
+      }
+
+      return texto;
+    }
+
+    const match =
+      texto.match(
+        /^(\d{2})\/(\d{2})\/(\d{4})$/
+      );
+
+    if (!match) {
+      return null;
+    }
+
+    const [
+      ,
+      dia,
+      mes,
+      ano,
+    ] = match;
+
+    const iso =
+      `${ano}-${mes}-${dia}`;
+
+    const data =
+      new Date(
+        `${iso}T12:00:00`
+      );
+
+    if (
+      Number.isNaN(
+        data.getTime()
+      ) ||
+      data.getFullYear() !==
+        Number(ano) ||
+      data.getMonth() + 1 !==
+        Number(mes) ||
+      data.getDate() !==
+        Number(dia)
+    ) {
+      return null;
+    }
+
+    return iso;
+  }
+
+  function normalizarHoraExecucao(
+    valor: string
+  ) {
+    const texto =
+      valor.trim();
+
+    const match =
+      texto.match(
+        /^(\d{1,2}):(\d{2})$/
+      );
+
+    if (!match) {
+      return null;
+    }
+
+    const hora =
+      Number(match[1]);
+
+    const minuto =
+      Number(match[2]);
+
+    if (
+      hora < 0 ||
+      hora > 23 ||
+      minuto < 0 ||
+      minuto > 59
+    ) {
+      return null;
+    }
+
+    return `${String(
+      hora
+    ).padStart(
+      2,
+      '0'
+    )}:${String(
+      minuto
+    ).padStart(
+      2,
+      '0'
+    )}:00`;
+  }
+
+  async function carregarHorariosExecucao() {
+    try {
+      setCarregandoHorariosExecucao(
+        true
+      );
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'listar_horarios_vistoria_disponiveis',
+        {
+          p_data_inicio:
+            null,
+
+          p_quantidade_dias:
+            60,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao carregar horários da execução:',
+          error
+        );
+
+        return;
+      }
+
+      setHorariosExecucaoDisponiveis(
+        (data ?? []) as
+          HorarioVistoriaDisponivel[]
+      );
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao carregar horários da execução:',
+        error
+      );
+    } finally {
+      setCarregandoHorariosExecucao(
+        false
+      );
+    }
+  }
+
+  function selecionarDataExecucao(
+    data: string
+  ) {
+    setErroAgendamentoExecucao('');
+
+    setDataExecucaoSelecionada(
+      data
+    );
+
+    setHoraExecucaoSelecionada(
+      ''
+    );
+
+    setHorarioExecucaoSelecionadoId(
+      ''
+    );
+  }
+
+  function selecionarHorarioExecucao(
+    horario: HorarioVistoriaDisponivel
+  ) {
+    setErroAgendamentoExecucao('');
+
+    setDataExecucaoSelecionada(
+      horario.data_vistoria
+    );
+
+    setHoraExecucaoSelecionada(
+      horario.hora_inicio.substring(
+        0,
+        5
+      )
+    );
+
+    setHorarioExecucaoSelecionadoId(
+      horario.horario_vistoria_id
+    );
+  }
+
+  async function carregarAgendamentoExecucao() {
+
+    try {
+      setCarregandoAgendamentoExecucao(
+        true
+      );
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'buscar_agendamento_execucao_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao carregar agendamento da execução:',
+          error
+        );
+
+        return null;
+      }
+
+      const registro =
+        data?.[0] as
+          | PropostaAgendamentoExecucao
+          | undefined;
+
+      setPropostaAgendamentoExecucao(
+        registro ?? null
+      );
+
+      return registro ?? null;
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao carregar agendamento da execução:',
+        error
+      );
+
+      return null;
+    } finally {
+      setCarregandoAgendamentoExecucao(
+        false
+      );
+    }
+  }
+
+  async function enviarPropostaAgendamentoExecucao() {
+    setErroAgendamentoExecucao('');
+    setSucessoAgendamentoExecucao('');
+
+    if (!dataExecucaoSelecionada) {
+      setErroAgendamentoExecucao(
+        'Selecione uma data disponível para a execução.'
+      );
+
+      return;
+    }
+
+    if (
+      !horarioExecucaoSelecionadoId ||
+      !horaExecucaoSelecionada
+    ) {
+      setErroAgendamentoExecucao(
+        'Selecione um horário disponível para a execução.'
+      );
+
+      return;
+    }
+
+    try {
+      setEnviandoPropostaExecucao(
+        true
+      );
+
+      const {
+        error,
+      } = await supabase.rpc(
+        'propor_agendamento_execucao_unico_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+
+          p_data:
+            dataExecucaoSelecionada,
+
+          p_horario_execucao_id:
+            horarioExecucaoSelecionadoId,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao enviar agendamento da execução:',
+          error
+        );
+
+        setErroAgendamentoExecucao(
+          error.message ||
+            'Não foi possível enviar o agendamento da execução.'
+        );
+
+        return;
+      }
+
+      setSucessoAgendamentoExecucao(
+        'Agendamento enviado ao cliente. Aguardando confirmação.'
+      );
+
+      setDataExecucaoSelecionada('');
+      setHoraExecucaoSelecionada('');
+      setHorarioExecucaoSelecionadoId('');
+
+      await carregarAgendamentoExecucao();
+      await carregarHorariosExecucao();
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao enviar agendamento da execução:',
+        error
+      );
+
+      setErroAgendamentoExecucao(
+        'Ocorreu um erro ao enviar o agendamento da execução.'
+      );
+    } finally {
+      setEnviandoPropostaExecucao(
+        false
+      );
+    }
+  }
 
   async function carregarExecucaoServico() {
     try {
@@ -2519,6 +4063,19 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     setErroFormularioExecucao('');
     setSucessoFormularioExecucao('');
 
+    if (
+      propostaAgendamentoExecucao?.status !==
+        'confirmada' ||
+      !propostaAgendamentoExecucao.data_confirmada ||
+      !propostaAgendamentoExecucao.hora_confirmada
+    ) {
+      setErroExecucao(
+        'A execução só pode ser iniciada depois que o cliente confirmar uma das opções de agendamento.'
+      );
+
+      return;
+    }
+
     try {
       setIniciandoExecucao(true);
 
@@ -2584,6 +4141,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
       await carregarSolicitacao();
       await carregarExecucaoServico();
+      await carregarResponsaveisAtendimento();
     } catch (error) {
       console.error(
         'Erro inesperado ao iniciar execução:',
@@ -2961,8 +4519,30 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return;
     }
 
+    const erroResponsavel =
+      validarResponsavelExecucao();
+
+    if (erroResponsavel) {
+      setErroFormularioExecucao(
+        erroResponsavel
+      );
+
+      return;
+    }
+
     try {
       setSalvandoExecucao(true);
+
+      const erroAoSalvarResponsavel =
+        await salvarResponsavelExecucao();
+
+      if (erroAoSalvarResponsavel) {
+        setErroFormularioExecucao(
+          erroAoSalvarResponsavel
+        );
+
+        return;
+      }
 
       const {
         data,
@@ -3065,10 +4645,32 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return;
     }
 
+    const erroResponsavel =
+      validarResponsavelExecucao();
+
+    if (erroResponsavel) {
+      setErroFinalizacaoExecucao(
+        erroResponsavel
+      );
+
+      return;
+    }
+
     try {
       setFinalizandoExecucao(
         true
       );
+
+      const erroAoSalvarResponsavel =
+        await salvarResponsavelExecucao();
+
+      if (erroAoSalvarResponsavel) {
+        setErroFinalizacaoExecucao(
+          erroAoSalvarResponsavel
+        );
+
+        return;
+      }
 
       // Salva os dados atuais antes de concluir.
       const {
@@ -4536,18 +6138,6 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
     if (
       resultadoVistoria ===
-        'aprovada' &&
-      !servicoNecessario.trim()
-    ) {
-      setErroFinalizacaoVistoria(
-        'Informe o serviço necessário antes de aprovar a vistoria.'
-      );
-
-      return;
-    }
-
-    if (
-      resultadoVistoria ===
         'nao_aprovada' &&
       !justificativaResultado.trim()
     ) {
@@ -4558,10 +6148,32 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return;
     }
 
+    const erroResponsavel =
+      validarResponsavelVistoria();
+
+    if (erroResponsavel) {
+      setErroFinalizacaoVistoria(
+        erroResponsavel
+      );
+
+      return;
+    }
+
     try {
       setFinalizandoVistoria(
         true
       );
+
+      const erroAoSalvarResponsavel =
+        await salvarResponsavelVistoria();
+
+      if (erroAoSalvarResponsavel) {
+        setErroFinalizacaoVistoria(
+          erroAoSalvarResponsavel
+        );
+
+        return;
+      }
 
       // Salva os dados atuais antes de finalizar.
       const {
@@ -4578,9 +6190,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_parecer_tecnico:
             parecerTecnico.trim(),
 
+          // Campo removido da tela, mas mantido internamente para compatibilidade
+          // com as funções antigas do Supabase que ainda exigem um valor.
           p_servico_necessario:
-            servicoNecessario.trim() ||
-            null,
+            'Não se aplica',
 
           p_observacoes:
             observacoesTecnicas.trim() ||
@@ -4669,6 +6282,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       await carregarSolicitacao();
       await carregarVistoriaTecnica();
       await carregarExecucaoServico();
+      await carregarAgendamentoExecucao();
     } catch (error) {
       console.error(
         'Erro inesperado ao finalizar vistoria:',
@@ -5416,66 +7030,158 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   1. Categoria
                 </Text>
 
-                <View
-                  style={
-                    styles.optionGrid
+                <TouchableOpacity
+                  disabled={
+                    analiseConfirmada
                   }
-                >
-                  {categorias.map(
-                    (categoria) => {
-                      const ativo =
-                        categoriaSelecionada ===
-                        categoria;
-
-                      return (
-                        <TouchableOpacity
-                          key={
-                            categoria
-                          }
-                          disabled={
-                            analiseConfirmada
-                          }
-                          onPress={() =>
-                            selecionarCategoria(
-                              categoria
-                            )
-                          }
-                          style={[
-                            styles.optionButton,
-
-                            ativo &&
-                              styles.optionButtonActive,
-
-                            analiseConfirmada &&
-                              !ativo &&
-                              styles.optionDisabled,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.optionText,
-
-                              ativo &&
-                                styles.optionTextActive,
-                            ]}
-                          >
-                            {
-                              categoria
-                            }
-                          </Text>
-
-                          {ativo ? (
-                            <Ionicons
-                              name="checkmark-circle"
-                              size={17}
-                              color="#FFFFFF"
-                            />
-                          ) : null}
-                        </TouchableOpacity>
-                      );
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    if (
+                      analiseConfirmada
+                    ) {
+                      return;
                     }
-                  )}
-                </View>
+
+                    setCategoriaDropdownAberto(
+                      (aberto) =>
+                        !aberto
+                    );
+
+                    setBuscaCategoria(
+                      ''
+                    );
+                  }}
+                  style={[
+                    styles.categorySelectButton,
+
+                    analiseConfirmada &&
+                      styles.optionDisabled,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.categorySelectText,
+
+                      !categoriaSelecionada &&
+                        styles.categoryPlaceholder,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {categoriaSelecionada ||
+                      'Selecione a categoria'}
+                  </Text>
+
+                  <Ionicons
+                    name={
+                      categoriaDropdownAberto
+                        ? 'chevron-up'
+                        : 'chevron-down'
+                    }
+                    size={20}
+                    color="#42566D"
+                  />
+                </TouchableOpacity>
+
+                {categoriaDropdownAberto &&
+                !analiseConfirmada ? (
+                  <View
+                    style={
+                      styles.categoryDropdownPanel
+                    }
+                  >
+                    <View
+                      style={
+                        styles.categorySearchRow
+                      }
+                    >
+                      <Ionicons
+                        name="search-outline"
+                        size={19}
+                        color="#8995A5"
+                      />
+
+                      <TextInput
+                        style={
+                          styles.categorySearchInput
+                        }
+                        value={
+                          buscaCategoria
+                        }
+                        onChangeText={
+                          setBuscaCategoria
+                        }
+                        placeholder="Buscar categoria..."
+                        placeholderTextColor="#8995A5"
+                        autoFocus={
+                          Platform.OS ===
+                          'web'
+                        }
+                      />
+                    </View>
+
+                    {categoriasFiltradas.length >
+                    0 ? (
+                      categoriasFiltradas.map(
+                        (categoria) => {
+                          const ativo =
+                            categoriaSelecionada ===
+                            categoria;
+
+                          return (
+                            <TouchableOpacity
+                              key={
+                                categoria
+                              }
+                              activeOpacity={
+                                0.8
+                              }
+                              onPress={() =>
+                                selecionarCategoria(
+                                  categoria
+                                )
+                              }
+                              style={[
+                                styles.categoryOption,
+
+                                ativo &&
+                                  styles.categoryOptionActive,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.categoryOptionText,
+
+                                  ativo &&
+                                    styles.categoryOptionTextActive,
+                                ]}
+                              >
+                                {
+                                  categoria
+                                }
+                              </Text>
+
+                              {ativo ? (
+                                <Ionicons
+                                  name="checkmark"
+                                  size={18}
+                                  color="#FFFFFF"
+                                />
+                              ) : null}
+                            </TouchableOpacity>
+                          );
+                        }
+                      )
+                    ) : (
+                      <Text
+                        style={
+                          styles.categoryEmptyText
+                        }
+                      >
+                        Nenhuma categoria encontrada.
+                      </Text>
+                    )}
+                  </View>
+                ) : null}
 
                 {/* ELEMENTO */}
 
@@ -6146,7 +7852,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 {formatarDataHora(
                                   vistoriaTecnica.iniciada_em
                                 )}
-                                {' • '}
+                                {' • Registrada por '}
                                 {
                                   vistoriaTecnica.funcionario_nome
                                 }
@@ -6154,6 +7860,273 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             ) : null}
                           </View>
                         </View>
+
+                        <Text
+                          style={
+                            styles.inputLabel
+                          }
+                        >
+                          RESPONSÁVEL PELA VISTORIA *
+                        </Text>
+
+                        <View
+                          style={
+                            styles.responsavelModoRow
+                          }
+                        >
+                          <TouchableOpacity
+                            style={[
+                              styles.responsavelModoButton,
+
+                              modoResponsavelVistoria ===
+                                'funcionario' &&
+                                styles.responsavelModoButtonActive,
+                            ]}
+                            onPress={() => {
+                              setModoResponsavelVistoria(
+                                'funcionario'
+                              );
+
+                              setResponsavelVistoriaNomeManual(
+                                ''
+                              );
+
+                              setDropdownResponsavelVistoriaAberto(
+                                false
+                              );
+
+                              setErroFormularioVistoria(
+                                ''
+                              );
+                            }}
+                          >
+                            <Ionicons
+                              name="person-outline"
+                              size={17}
+                              color={
+                                modoResponsavelVistoria ===
+                                'funcionario'
+                                  ? '#FFFFFF'
+                                  : '#0B5EA8'
+                              }
+                            />
+
+                            <Text
+                              style={[
+                                styles.responsavelModoText,
+
+                                modoResponsavelVistoria ===
+                                  'funcionario' &&
+                                  styles.responsavelModoTextActive,
+                              ]}
+                            >
+                              Funcionário cadastrado
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[
+                              styles.responsavelModoButton,
+
+                              modoResponsavelVistoria ===
+                                'outro' &&
+                                styles.responsavelModoButtonActive,
+                            ]}
+                            onPress={() => {
+                              setModoResponsavelVistoria(
+                                'outro'
+                              );
+
+                              setResponsavelVistoriaId(
+                                ''
+                              );
+
+                              setDropdownResponsavelVistoriaAberto(
+                                false
+                              );
+
+                              setErroFormularioVistoria(
+                                ''
+                              );
+                            }}
+                          >
+                            <Ionicons
+                              name="create-outline"
+                              size={17}
+                              color={
+                                modoResponsavelVistoria ===
+                                'outro'
+                                  ? '#FFFFFF'
+                                  : '#0B5EA8'
+                              }
+                            />
+
+                            <Text
+                              style={[
+                                styles.responsavelModoText,
+
+                                modoResponsavelVistoria ===
+                                  'outro' &&
+                                  styles.responsavelModoTextActive,
+                              ]}
+                            >
+                              Outro responsável
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        {modoResponsavelVistoria ===
+                        'funcionario' ? (
+                          <>
+                            <TouchableOpacity
+                              activeOpacity={
+                                0.85
+                              }
+                              onPress={() =>
+                                setDropdownResponsavelVistoriaAberto(
+                                  (aberto) =>
+                                    !aberto
+                                )
+                              }
+                              style={
+                                styles.categorySelectButton
+                              }
+                            >
+                              <Text
+                                style={[
+                                  styles.categorySelectText,
+
+                                  !responsavelVistoriaId &&
+                                    styles.categoryPlaceholder,
+                                ]}
+                                numberOfLines={
+                                  1
+                                }
+                              >
+                                {responsaveisFuncionarios.find(
+                                  (item) =>
+                                    item.responsavel_id ===
+                                    responsavelVistoriaId
+                                )?.nome ||
+                                  'Selecione o funcionário'}
+                              </Text>
+
+                              <Ionicons
+                                name={
+                                  dropdownResponsavelVistoriaAberto
+                                    ? 'chevron-up'
+                                    : 'chevron-down'
+                                }
+                                size={20}
+                                color="#42566D"
+                              />
+                            </TouchableOpacity>
+
+                            {dropdownResponsavelVistoriaAberto ? (
+                              <View
+                                style={
+                                  styles.categoryDropdownPanel
+                                }
+                              >
+                                {responsaveisFuncionarios.length >
+                                0 ? (
+                                  responsaveisFuncionarios.map(
+                                    (item) => {
+                                      const ativo =
+                                        responsavelVistoriaId ===
+                                        item.responsavel_id;
+
+                                      return (
+                                        <TouchableOpacity
+                                          key={
+                                            item.responsavel_id
+                                          }
+                                          activeOpacity={
+                                            0.8
+                                          }
+                                          onPress={() => {
+                                            setResponsavelVistoriaId(
+                                              item.responsavel_id
+                                            );
+
+                                            setResponsavelVistoriaNomeManual(
+                                              ''
+                                            );
+
+                                            setDropdownResponsavelVistoriaAberto(
+                                              false
+                                            );
+
+                                            setErroFormularioVistoria(
+                                              ''
+                                            );
+                                          }}
+                                          style={[
+                                            styles.categoryOption,
+
+                                            ativo &&
+                                              styles.categoryOptionActive,
+                                          ]}
+                                        >
+                                          <Text
+                                            style={[
+                                              styles.categoryOptionText,
+
+                                              ativo &&
+                                                styles.categoryOptionTextActive,
+                                            ]}
+                                          >
+                                            {
+                                              item.nome
+                                            }
+                                          </Text>
+
+                                          {ativo ? (
+                                            <Ionicons
+                                              name="checkmark"
+                                              size={18}
+                                              color="#FFFFFF"
+                                            />
+                                          ) : null}
+                                        </TouchableOpacity>
+                                      );
+                                    }
+                                  )
+                                ) : (
+                                  <Text
+                                    style={
+                                      styles.categoryEmptyText
+                                    }
+                                  >
+                                    Nenhum funcionário cadastrado disponível.
+                                  </Text>
+                                )}
+                              </View>
+                            ) : null}
+                          </>
+                        ) : (
+                          <TextInput
+                            style={
+                              styles.input
+                            }
+                            value={
+                              responsavelVistoriaNomeManual
+                            }
+                            onChangeText={(
+                              texto
+                            ) => {
+                              setResponsavelVistoriaNomeManual(
+                                texto
+                              );
+
+                              setErroFormularioVistoria(
+                                ''
+                              );
+                            }}
+                            placeholder="Digite o nome do responsável pela vistoria"
+                            placeholderTextColor="#8995A5"
+                          />
+                        )}
 
                         <Text
                           style={
@@ -6286,44 +8259,6 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             texto
                           ) => {
                             setParecerTecnico(
-                              texto
-                            );
-
-                            setErroFormularioVistoria(
-                              ''
-                            );
-
-                            setSucessoFormularioVistoria(
-                              ''
-                            );
-                          }}
-                        />
-
-                        <Text
-                          style={
-                            styles.inputLabel
-                          }
-                        >
-                          SERVIÇO NECESSÁRIO
-                        </Text>
-
-                        <TextInput
-                          style={[
-                            styles.input,
-                            styles.textArea,
-                          ]}
-                          value={
-                            servicoNecessario
-                          }
-                          placeholder="Descreva o serviço ou intervenção necessária."
-                          placeholderTextColor="#9AA6B4"
-                          multiline
-                          numberOfLines={4}
-                          textAlignVertical="top"
-                          onChangeText={(
-                            texto
-                          ) => {
-                            setServicoNecessario(
                               texto
                             );
 
@@ -6935,63 +8870,261 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       </View>
                     ) : null}
 
-                    {solicitacao.status ===
-                      'aprovada' ||
-                    solicitacao.status ===
-                      'nao_aprovada' ? (
+                    {vistoriaTecnica?.finalizada_em ? (
                       <View
-                        style={[
-                          styles.vistoriaFinalizadaBox,
-
-                          solicitacao.status ===
-                            'aprovada'
-                            ? styles.vistoriaFinalizadaAprovada
-                            : styles.vistoriaFinalizadaNaoAprovada,
-                        ]}
+                        style={
+                          styles.vistoriaHistoricoWrapper
+                        }
                       >
-                        <Ionicons
-                          name={
-                            solicitacao.status ===
-                            'aprovada'
-                              ? 'checkmark-circle'
-                              : 'close-circle'
+                        <TouchableOpacity
+                          activeOpacity={
+                            0.85
                           }
-                          size={24}
-                          color={
-                            solicitacao.status ===
-                            'aprovada'
-                              ? '#287A46'
-                              : '#9A3232'
+                          onPress={() =>
+                            setMostrarDetalhesVistoriaFinalizada(
+                              (aberto) =>
+                                !aberto
+                            )
                           }
-                        />
+                          style={[
+                            styles.vistoriaFinalizadaBox,
 
-                        <View
-                          style={{
-                            flex: 1,
-                          }}
+                            solicitacao.status ===
+                              'nao_aprovada'
+                              ? styles.vistoriaFinalizadaNaoAprovada
+                              : styles.vistoriaFinalizadaAprovada,
+                          ]}
                         >
-                          <Text
-                            style={
-                              styles.vistoriaFinalizadaTitle
+                          <Ionicons
+                            name={
+                              solicitacao.status ===
+                              'nao_aprovada'
+                                ? 'close-circle'
+                                : 'checkmark-circle'
                             }
-                          >
-                            {solicitacao.status ===
-                            'aprovada'
-                              ? 'Vistoria aprovada para execução'
-                              : 'Vistoria não aprovada'}
-                          </Text>
+                            size={24}
+                            color={
+                              solicitacao.status ===
+                              'nao_aprovada'
+                                ? '#9A3232'
+                                : '#287A46'
+                            }
+                          />
 
-                          <Text
+                          <View
+                            style={{
+                              flex: 1,
+                            }}
+                          >
+                            <Text
+                              style={
+                                styles.vistoriaFinalizadaTitle
+                              }
+                            >
+                              Vistoria finalizada
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.vistoriaFinalizadaText
+                              }
+                            >
+                              {mostrarDetalhesVistoriaFinalizada
+                                ? 'Clique para minimizar os dados da vistoria.'
+                                : 'Clique para visualizar os dados preenchidos na vistoria.'}
+                            </Text>
+                          </View>
+
+                          <Ionicons
+                            name={
+                              mostrarDetalhesVistoriaFinalizada
+                                ? 'chevron-up'
+                                : 'chevron-down'
+                            }
+                            size={21}
+                            color="#42566D"
+                          />
+                        </TouchableOpacity>
+
+                        {mostrarDetalhesVistoriaFinalizada ? (
+                          <View
                             style={
-                              styles.vistoriaFinalizadaText
+                              styles.vistoriaHistoricoConteudo
                             }
                           >
-                            {solicitacao.status ===
-                            'aprovada'
-                              ? 'A vistoria foi encerrada e o chamado está pronto para seguir para a próxima etapa.'
-                              : 'A vistoria foi encerrada e o chamado não seguirá para execução.'}
-                          </Text>
-                        </View>
+                            <View
+                              style={
+                                styles.vistoriaHistoricoGrid
+                              }
+                            >
+                              <WarrantyInfo
+                                label="Responsável pela vistoria"
+                                value={
+                                  nomeResponsavelVistoriaExibicao
+                                }
+                              />
+
+                              <WarrantyInfo
+                                label="Registrada por"
+                                value={
+                                  vistoriaTecnica.funcionario_nome ||
+                                  '-'
+                                }
+                              />
+
+                              <WarrantyInfo
+                                label="Início"
+                                value={
+                                  formatarDataHora(
+                                    vistoriaTecnica.iniciada_em
+                                  )
+                                }
+                              />
+
+                              <WarrantyInfo
+                                label="Finalização"
+                                value={
+                                  formatarDataHora(
+                                    vistoriaTecnica.finalizada_em
+                                  )
+                                }
+                              />
+
+                              <WarrantyInfo
+                                label="Problema constatado"
+                                value={
+                                  vistoriaTecnica.problema_constatado ===
+                                  true
+                                    ? 'Sim'
+                                    : vistoriaTecnica.problema_constatado ===
+                                        false
+                                      ? 'Não'
+                                      : '-'
+                                }
+                              />
+
+                              <WarrantyInfo
+                                label="Resultado"
+                                value={
+                                  solicitacao.status ===
+                                  'nao_aprovada'
+                                    ? 'Não aprovada'
+                                    : 'Aprovada para execução'
+                                }
+                              />
+                            </View>
+
+                            <View
+                              style={
+                                styles.vistoriaHistoricoBloco
+                              }
+                            >
+                              <Text
+                                style={
+                                  styles.vistoriaHistoricoLabel
+                                }
+                              >
+                                PARECER TÉCNICO
+                              </Text>
+
+                              <Text
+                                style={
+                                  styles.vistoriaHistoricoTexto
+                                }
+                              >
+                                {vistoriaTecnica.parecer_tecnico ||
+                                  '-'}
+                              </Text>
+                            </View>
+
+                            {vistoriaTecnica.observacoes ? (
+                              <View
+                                style={
+                                  styles.vistoriaHistoricoBloco
+                                }
+                              >
+                                <Text
+                                  style={
+                                    styles.vistoriaHistoricoLabel
+                                  }
+                                >
+                                  OBSERVAÇÕES DA VISTORIA
+                                </Text>
+
+                                <Text
+                                  style={
+                                    styles.vistoriaHistoricoTexto
+                                  }
+                                >
+                                  {
+                                    vistoriaTecnica.observacoes
+                                  }
+                                </Text>
+                              </View>
+                            ) : null}
+
+                            {fotosVistoriaSalvas.length >
+                            0 ? (
+                              <View
+                                style={
+                                  styles.vistoriaHistoricoBloco
+                                }
+                              >
+                                <Text
+                                  style={
+                                    styles.vistoriaHistoricoLabel
+                                  }
+                                >
+                                  FOTOS DA VISTORIA
+                                </Text>
+
+                                <View
+                                  style={
+                                    styles.fotosVistoriaGrid
+                                  }
+                                >
+                                  {fotosVistoriaSalvas.map(
+                                    (foto) => (
+                                      <View
+                                        key={
+                                          foto.id
+                                        }
+                                        style={
+                                          styles.fotoVistoriaCard
+                                        }
+                                      >
+                                        {foto.url ? (
+                                          <Image
+                                            source={{
+                                              uri:
+                                                foto.url,
+                                            }}
+                                            style={
+                                              styles.fotoVistoriaImagem
+                                            }
+                                            resizeMode="cover"
+                                          />
+                                        ) : (
+                                          <View
+                                            style={
+                                              styles.fotoVistoriaSemImagem
+                                            }
+                                          >
+                                            <Ionicons
+                                              name="image-outline"
+                                              size={26}
+                                              color="#8995A5"
+                                            />
+                                          </View>
+                                        )}
+                                      </View>
+                                    )
+                                  )}
+                                </View>
+                              </View>
+                            ) : null}
+                          </View>
+                        ) : null}
                       </View>
                     ) : null}
 
@@ -7043,7 +9176,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             >
                               {solicitacao.status ===
                               'aprovada'
-                                ? 'A vistoria foi aprovada. Inicie a execução quando a equipe começar o serviço no imóvel.'
+                                ? 'A vistoria foi aprovada. Envie duas opções de data e horário para o cliente confirmar a execução.'
                                 : solicitacao.status ===
                                     'em_execucao'
                                   ? 'O atendimento está em execução.'
@@ -7094,7 +9227,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   styles.execucaoServicoInfoLabel
                                 }
                               >
-                                RESPONSÁVEL
+                                REGISTRADO POR
                               </Text>
 
                               <Text
@@ -7182,43 +9315,469 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
                         {solicitacao.status ===
                         'aprovada' ? (
-                          <TouchableOpacity
-                            style={[
-                              styles.iniciarExecucaoButton,
-
-                              iniciandoExecucao &&
-                                styles.buttonDisabled,
-                            ]}
-                            disabled={
-                              iniciandoExecucao
-                            }
-                            onPress={
-                              iniciarExecucaoServico
+                          <View
+                            style={
+                              styles.agendamentoExecucaoBox
                             }
                           >
-                            {iniciandoExecucao ? (
-                              <ActivityIndicator
-                                size="small"
-                                color="#FFFFFF"
-                              />
-                            ) : (
-                              <Ionicons
-                                name="play-circle-outline"
-                                size={21}
-                                color="#FFFFFF"
-                              />
-                            )}
-
-                            <Text
+                            <View
                               style={
-                                styles.iniciarExecucaoButtonText
+                                styles.agendamentoExecucaoHeader
                               }
                             >
-                              {iniciandoExecucao
-                                ? 'Iniciando...'
-                                : 'Iniciar execução do serviço'}
-                            </Text>
-                          </TouchableOpacity>
+                              <Ionicons
+                                name="calendar-outline"
+                                size={21}
+                                color="#0B5EA8"
+                              />
+
+                              <View
+                                style={{
+                                  flex: 1,
+                                }}
+                              >
+                                <Text
+                                  style={
+                                    styles.agendamentoExecucaoTitle
+                                  }
+                                >
+                                  Agendamento da execução
+                                </Text>
+
+                                <Text
+                                  style={
+                                    styles.agendamentoExecucaoSubtitle
+                                  }
+                                >
+                                  A empresa escolhe uma data e horário. O cliente confirma ou solicita reagendamento.
+                                </Text>
+                              </View>
+                            </View>
+
+                            {carregandoAgendamentoExecucao ? (
+                              <View
+                                style={
+                                  styles.agendamentoExecucaoLoading
+                                }
+                              >
+                                <ActivityIndicator
+                                  size="small"
+                                  color="#0B5EA8"
+                                />
+
+                                <Text
+                                  style={
+                                    styles.agendamentoExecucaoLoadingText
+                                  }
+                                >
+                                  Carregando agendamento...
+                                </Text>
+                              </View>
+                            ) : null}
+
+                            {erroAgendamentoExecucao ? (
+                              <View
+                                style={
+                                  styles.messageError
+                                }
+                              >
+                                <Ionicons
+                                  name="alert-circle-outline"
+                                  size={19}
+                                  color="#9A3232"
+                                />
+
+                                <Text
+                                  style={
+                                    styles.messageErrorText
+                                  }
+                                >
+                                  {
+                                    erroAgendamentoExecucao
+                                  }
+                                </Text>
+                              </View>
+                            ) : null}
+
+                            {sucessoAgendamentoExecucao ? (
+                              <View
+                                style={
+                                  styles.messageSuccess
+                                }
+                              >
+                                <Ionicons
+                                  name="checkmark-circle-outline"
+                                  size={20}
+                                  color="#287A46"
+                                />
+
+                                <Text
+                                  style={
+                                    styles.messageSuccessText
+                                  }
+                                >
+                                  {
+                                    sucessoAgendamentoExecucao
+                                  }
+                                </Text>
+                              </View>
+                            ) : null}
+
+                            {propostaAgendamentoExecucao?.status ===
+                            'aguardando_cliente' ? (
+                              <>
+                                <View
+                                  style={
+                                    styles.agendamentoExecucaoStatusAguardando
+                                  }
+                                >
+                                  <Ionicons
+                                    name="time-outline"
+                                    size={20}
+                                    color="#8A6418"
+                                  />
+
+                                  <View
+                                    style={{
+                                      flex: 1,
+                                    }}
+                                  >
+                                    <Text
+                                      style={
+                                        styles.agendamentoExecucaoStatusTitle
+                                      }
+                                    >
+                                      Aguardando confirmação do cliente
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.agendamentoExecucaoStatusText
+                                      }
+                                    >
+                                      As duas opções já foram enviadas. A execução ainda não pode ser iniciada.
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                <View
+                                  style={
+                                    styles.agendamentoExecucaoOpcoesGrid
+                                  }
+                                >
+                                  <View
+                                    style={
+                                      styles.agendamentoExecucaoOpcaoCard
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        styles.agendamentoExecucaoOpcaoLabel
+                                      }
+                                    >
+                                      AGENDAMENTO PROPOSTO
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.agendamentoExecucaoOpcaoValue
+                                      }
+                                    >
+                                      {formatarData(
+                                        propostaAgendamentoExecucao.opcao_1_data
+                                      )}
+                                      {' • '}
+                                      {formatarHora(
+                                        propostaAgendamentoExecucao.opcao_1_hora
+                                      )}
+                                    </Text>
+                                  </View>
+                                </View>
+                              </>
+                            ) : propostaAgendamentoExecucao?.status ===
+                              'confirmada' ? (
+                              <>
+                                <View
+                                  style={
+                                    styles.agendamentoExecucaoConfirmado
+                                  }
+                                >
+                                  <Ionicons
+                                    name="checkmark-circle-outline"
+                                    size={24}
+                                    color="#287A46"
+                                  />
+
+                                  <View
+                                    style={{
+                                      flex: 1,
+                                    }}
+                                  >
+                                    <Text
+                                      style={
+                                        styles.agendamentoExecucaoConfirmadoTitle
+                                      }
+                                    >
+                                      Execução confirmada pelo cliente
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.agendamentoExecucaoConfirmadoValue
+                                      }
+                                    >
+                                      {formatarData(
+                                        propostaAgendamentoExecucao.data_confirmada
+                                      )}
+                                      {' às '}
+                                      {formatarHora(
+                                        propostaAgendamentoExecucao.hora_confirmada
+                                      )}
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                <TouchableOpacity
+                                  style={[
+                                    styles.iniciarExecucaoButton,
+
+                                    iniciandoExecucao &&
+                                      styles.buttonDisabled,
+                                  ]}
+                                  disabled={
+                                    iniciandoExecucao
+                                  }
+                                  onPress={
+                                    iniciarExecucaoServico
+                                  }
+                                >
+                                  {iniciandoExecucao ? (
+                                    <ActivityIndicator
+                                      size="small"
+                                      color="#FFFFFF"
+                                    />
+                                  ) : (
+                                    <Ionicons
+                                      name="play-circle-outline"
+                                      size={21}
+                                      color="#FFFFFF"
+                                    />
+                                  )}
+
+                                  <Text
+                                    style={
+                                      styles.iniciarExecucaoButtonText
+                                    }
+                                  >
+                                    {iniciandoExecucao
+                                      ? 'Iniciando...'
+                                      : 'Iniciar execução do serviço'}
+                                  </Text>
+                                </TouchableOpacity>
+                              </>
+                            ) : (
+                              <>
+                                {propostaAgendamentoExecucao?.status ===
+                                'reagendamento_solicitado' ? (
+                                  <View
+                                    style={
+                                      styles.agendamentoExecucaoReagendamento
+                                    }
+                                  >
+                                    <Ionicons
+                                      name="refresh-circle-outline"
+                                      size={22}
+                                      color="#9A5E16"
+                                    />
+
+                                    <View
+                                      style={{
+                                        flex: 1,
+                                      }}
+                                    >
+                                      <Text
+                                        style={
+                                          styles.agendamentoExecucaoReagendamentoTitle
+                                        }
+                                      >
+                                        Cliente solicitou novas datas
+                                      </Text>
+
+                                      <Text
+                                        style={
+                                          styles.agendamentoExecucaoReagendamentoText
+                                        }
+                                      >
+                                        {propostaAgendamentoExecucao.motivo_reagendamento ||
+                                          'O cliente não confirmou nenhuma das opções anteriores.'}
+                                      </Text>
+                                    </View>
+                                  </View>
+                                ) : null}
+
+                                <Text
+                                  style={
+                                    styles.agendamentoExecucaoFormTitle
+                                  }
+                                >
+                                  Escolha a data e o horário da execução
+                                </Text>
+
+                                <View
+                                  style={
+                                    styles.execucaoCalendarioHeader
+                                  }
+                                >
+                                  <Ionicons
+                                    name="calendar-outline"
+                                    size={20}
+                                    color="#0B2447"
+                                  />
+
+                                  <View
+                                    style={{
+                                      flex: 1,
+                                    }}
+                                  >
+                                    <Text
+                                      style={
+                                        styles.execucaoCalendarioTitle
+                                      }
+                                    >
+                                      Agendamento da execução
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.execucaoCalendarioText
+                                      }
+                                    >
+                                      Selecione um dos dias disponíveis e depois escolha o horário.
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                {carregandoHorariosExecucao ? (
+                                  <View
+                                    style={
+                                      styles.carregandoAgendaFuncionario
+                                    }
+                                  >
+                                    <ActivityIndicator
+                                      color="#0B2447"
+                                    />
+
+                                    <Text
+                                      style={
+                                        styles.textoGerenciarAgendaFuncionario
+                                      }
+                                    >
+                                      Carregando agenda...
+                                    </Text>
+                                  </View>
+                                ) : (
+                                  <AgendaCalendarPicker
+                                    horarios={
+                                      horariosExecucaoDisponiveis
+                                    }
+                                    dataSelecionada={
+                                      dataExecucaoSelecionada
+                                    }
+                                    horarioSelecionadoId={
+                                      horarioExecucaoSelecionadoId
+                                    }
+                                    onSelecionarData={
+                                      selecionarDataExecucao
+                                    }
+                                    onSelecionarHorario={
+                                      selecionarHorarioExecucao
+                                    }
+                                  />
+                                )}
+
+                                {dataExecucaoSelecionada &&
+                                horaExecucaoSelecionada ? (
+                                  <View
+                                    style={
+                                      styles.agendamentoExecucaoConfirmado
+                                    }
+                                  >
+                                    <Ionicons
+                                      name="calendar-outline"
+                                      size={22}
+                                      color="#287A46"
+                                    />
+
+                                    <View
+                                      style={{
+                                        flex: 1,
+                                      }}
+                                    >
+                                      <Text
+                                        style={
+                                          styles.agendamentoExecucaoConfirmadoTitle
+                                        }
+                                      >
+                                        Agendamento selecionado
+                                      </Text>
+
+                                      <Text
+                                        style={
+                                          styles.agendamentoExecucaoConfirmadoValue
+                                        }
+                                      >
+                                        {formatarData(
+                                          dataExecucaoSelecionada
+                                        )}
+                                        {' às '}
+                                        {formatarHora(
+                                          horaExecucaoSelecionada
+                                        )}
+                                      </Text>
+                                    </View>
+                                  </View>
+                                ) : null}
+
+                                <TouchableOpacity
+                                  style={[
+                                    styles.enviarPropostaExecucaoButton,
+
+                                    enviandoPropostaExecucao &&
+                                      styles.buttonDisabled,
+                                  ]}
+                                  disabled={
+                                    enviandoPropostaExecucao
+                                  }
+                                  onPress={
+                                    enviarPropostaAgendamentoExecucao
+                                  }
+                                >
+                                  {enviandoPropostaExecucao ? (
+                                    <ActivityIndicator
+                                      size="small"
+                                      color="#FFFFFF"
+                                    />
+                                  ) : (
+                                    <Ionicons
+                                      name="send-outline"
+                                      size={19}
+                                      color="#FFFFFF"
+                                    />
+                                  )}
+
+                                  <Text
+                                    style={
+                                      styles.enviarPropostaExecucaoButtonText
+                                    }
+                                  >
+                                    {enviandoPropostaExecucao
+                                      ? 'Enviando...'
+                                      : 'Enviar agendamento ao cliente'}
+                                  </Text>
+                                </TouchableOpacity>
+                              </>
+                            )}
+                          </View>
                         ) : solicitacao.status ===
                           'em_execucao' ? (
                           <>
@@ -7280,6 +9839,273 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </Text>
                                 </View>
                               </View>
+
+                              <Text
+                                style={
+                                  styles.inputLabel
+                                }
+                              >
+                                RESPONSÁVEL PELA EXECUÇÃO *
+                              </Text>
+
+                              <View
+                                style={
+                                  styles.responsavelModoRow
+                                }
+                              >
+                                <TouchableOpacity
+                                  style={[
+                                    styles.responsavelModoButton,
+
+                                    modoResponsavelExecucao ===
+                                      'funcionario' &&
+                                      styles.responsavelModoButtonActive,
+                                  ]}
+                                  onPress={() => {
+                                    setModoResponsavelExecucao(
+                                      'funcionario'
+                                    );
+
+                                    setResponsavelExecucaoNomeManual(
+                                      ''
+                                    );
+
+                                    setDropdownResponsavelExecucaoAberto(
+                                      false
+                                    );
+
+                                    setErroFormularioExecucao(
+                                      ''
+                                    );
+                                  }}
+                                >
+                                  <Ionicons
+                                    name="person-outline"
+                                    size={17}
+                                    color={
+                                      modoResponsavelExecucao ===
+                                      'funcionario'
+                                        ? '#FFFFFF'
+                                        : '#0B5EA8'
+                                    }
+                                  />
+
+                                  <Text
+                                    style={[
+                                      styles.responsavelModoText,
+
+                                      modoResponsavelExecucao ===
+                                        'funcionario' &&
+                                        styles.responsavelModoTextActive,
+                                    ]}
+                                  >
+                                    Funcionário cadastrado
+                                  </Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                  style={[
+                                    styles.responsavelModoButton,
+
+                                    modoResponsavelExecucao ===
+                                      'outro' &&
+                                      styles.responsavelModoButtonActive,
+                                  ]}
+                                  onPress={() => {
+                                    setModoResponsavelExecucao(
+                                      'outro'
+                                    );
+
+                                    setResponsavelExecucaoId(
+                                      ''
+                                    );
+
+                                    setDropdownResponsavelExecucaoAberto(
+                                      false
+                                    );
+
+                                    setErroFormularioExecucao(
+                                      ''
+                                    );
+                                  }}
+                                >
+                                  <Ionicons
+                                    name="create-outline"
+                                    size={17}
+                                    color={
+                                      modoResponsavelExecucao ===
+                                      'outro'
+                                        ? '#FFFFFF'
+                                        : '#0B5EA8'
+                                    }
+                                  />
+
+                                  <Text
+                                    style={[
+                                      styles.responsavelModoText,
+
+                                      modoResponsavelExecucao ===
+                                        'outro' &&
+                                        styles.responsavelModoTextActive,
+                                    ]}
+                                  >
+                                    Outro responsável
+                                  </Text>
+                                </TouchableOpacity>
+                              </View>
+
+                              {modoResponsavelExecucao ===
+                              'funcionario' ? (
+                                <>
+                                  <TouchableOpacity
+                                    activeOpacity={
+                                      0.85
+                                    }
+                                    onPress={() =>
+                                      setDropdownResponsavelExecucaoAberto(
+                                        (aberto) =>
+                                          !aberto
+                                      )
+                                    }
+                                    style={
+                                      styles.categorySelectButton
+                                    }
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.categorySelectText,
+
+                                        !responsavelExecucaoId &&
+                                          styles.categoryPlaceholder,
+                                      ]}
+                                      numberOfLines={
+                                        1
+                                      }
+                                    >
+                                      {responsaveisFuncionarios.find(
+                                        (item) =>
+                                          item.responsavel_id ===
+                                          responsavelExecucaoId
+                                      )?.nome ||
+                                        'Selecione o funcionário'}
+                                    </Text>
+
+                                    <Ionicons
+                                      name={
+                                        dropdownResponsavelExecucaoAberto
+                                          ? 'chevron-up'
+                                          : 'chevron-down'
+                                      }
+                                      size={20}
+                                      color="#42566D"
+                                    />
+                                  </TouchableOpacity>
+
+                                  {dropdownResponsavelExecucaoAberto ? (
+                                    <View
+                                      style={
+                                        styles.categoryDropdownPanel
+                                      }
+                                    >
+                                      {responsaveisFuncionarios.length >
+                                      0 ? (
+                                        responsaveisFuncionarios.map(
+                                          (item) => {
+                                            const ativo =
+                                              responsavelExecucaoId ===
+                                              item.responsavel_id;
+
+                                            return (
+                                              <TouchableOpacity
+                                                key={
+                                                  item.responsavel_id
+                                                }
+                                                activeOpacity={
+                                                  0.8
+                                                }
+                                                onPress={() => {
+                                                  setResponsavelExecucaoId(
+                                                    item.responsavel_id
+                                                  );
+
+                                                  setResponsavelExecucaoNomeManual(
+                                                    ''
+                                                  );
+
+                                                  setDropdownResponsavelExecucaoAberto(
+                                                    false
+                                                  );
+
+                                                  setErroFormularioExecucao(
+                                                    ''
+                                                  );
+                                                }}
+                                                style={[
+                                                  styles.categoryOption,
+
+                                                  ativo &&
+                                                    styles.categoryOptionActive,
+                                                ]}
+                                              >
+                                                <Text
+                                                  style={[
+                                                    styles.categoryOptionText,
+
+                                                    ativo &&
+                                                      styles.categoryOptionTextActive,
+                                                  ]}
+                                                >
+                                                  {
+                                                    item.nome
+                                                  }
+                                                </Text>
+
+                                                {ativo ? (
+                                                  <Ionicons
+                                                    name="checkmark"
+                                                    size={18}
+                                                    color="#FFFFFF"
+                                                  />
+                                                ) : null}
+                                              </TouchableOpacity>
+                                            );
+                                          }
+                                        )
+                                      ) : (
+                                        <Text
+                                          style={
+                                            styles.categoryEmptyText
+                                          }
+                                        >
+                                          Nenhum funcionário cadastrado disponível.
+                                        </Text>
+                                      )}
+                                    </View>
+                                  ) : null}
+                                </>
+                              ) : (
+                                <TextInput
+                                  style={
+                                    styles.input
+                                  }
+                                  value={
+                                    responsavelExecucaoNomeManual
+                                  }
+                                  onChangeText={(
+                                    texto
+                                  ) => {
+                                    setResponsavelExecucaoNomeManual(
+                                      texto
+                                    );
+
+                                    setErroFormularioExecucao(
+                                      ''
+                                    );
+                                  }}
+                                  placeholder="Digite o nome do responsável pela execução"
+                                  placeholderTextColor="#8995A5"
+                                />
+                              )}
 
                               <Text
                                 style={
@@ -9732,136 +12558,50 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             ) : null}
 
                             {!carregandoAgendaVistoria &&
-                              datasDisponiveisVistoria.map(
-                                ([
-                                  data,
-                                  horarios,
-                                ]) => (
-                                  <View
-                                    key={data}
-                                    style={
-                                      styles.dataAgendaFuncionarioBox
-                                    }
-                                  >
-                                    <TouchableOpacity
-                                      style={[
-                                        styles.dataAgendaFuncionarioButton,
+                            horariosVistoriaDisponiveis.length >
+                              0 ? (
+                              <AgendaCalendarPicker
+                                horarios={
+                                  horariosVistoriaDisponiveis
+                                }
+                                dataSelecionada={
+                                  novaDataVistoria
+                                }
+                                horarioSelecionadoId={
+                                  novoHorarioVistoriaId
+                                }
+                                onSelecionarData={(
+                                  data
+                                ) => {
+                                  setNovaDataVistoria(
+                                    data
+                                  );
 
-                                        novaDataVistoria ===
-                                          data &&
-                                          styles.dataAgendaFuncionarioButtonSelected,
-                                      ]}
-                                      onPress={() => {
-                                        setNovaDataVistoria(
-                                          data
-                                        );
+                                  setNovoHorarioVistoriaId(
+                                    ''
+                                  );
 
-                                        setNovoHorarioVistoriaId(
-                                          ''
-                                        );
+                                  setErroVistoria(
+                                    ''
+                                  );
+                                }}
+                                onSelecionarHorario={(
+                                  horario
+                                ) => {
+                                  setNovaDataVistoria(
+                                    horario.data_vistoria
+                                  );
 
-                                        setErroVistoria('');
-                                      }}
-                                    >
-                                      <Ionicons
-                                        name="calendar-outline"
-                                        size={18}
-                                        color={
-                                          novaDataVistoria ===
-                                          data
-                                            ? '#FFFFFF'
-                                            : '#0B2447'
-                                        }
-                                      />
+                                  setNovoHorarioVistoriaId(
+                                    horario.horario_vistoria_id
+                                  );
 
-                                      <Text
-                                        style={[
-                                          styles.dataAgendaFuncionarioText,
-
-                                          novaDataVistoria ===
-                                            data &&
-                                            styles.dataAgendaFuncionarioTextSelected,
-                                        ]}
-                                      >
-                                        {formatarData(
-                                          data
-                                        )}
-                                      </Text>
-                                    </TouchableOpacity>
-
-                                    {novaDataVistoria ===
-                                    data ? (
-                                      <View
-                                        style={
-                                          styles.horariosAgendaFuncionario
-                                        }
-                                      >
-                                        {horarios.map(
-                                          (
-                                            horario
-                                          ) => {
-                                            const selecionado =
-                                              novoHorarioVistoriaId ===
-                                              horario.horario_vistoria_id;
-
-                                            return (
-                                              <TouchableOpacity
-                                                key={
-                                                  horario.horario_vistoria_id
-                                                }
-                                                style={[
-                                                  styles.horarioAgendaFuncionarioButton,
-
-                                                  selecionado &&
-                                                    styles.horarioAgendaFuncionarioButtonSelected,
-                                                ]}
-                                                onPress={() => {
-                                                  setNovoHorarioVistoriaId(
-                                                    horario.horario_vistoria_id
-                                                  );
-
-                                                  setErroVistoria('');
-                                                }}
-                                              >
-                                                <Ionicons
-                                                  name={
-                                                    selecionado
-                                                      ? 'checkmark-circle'
-                                                      : 'time-outline'
-                                                  }
-                                                  size={18}
-                                                  color={
-                                                    selecionado
-                                                      ? '#FFFFFF'
-                                                      : '#0B2447'
-                                                  }
-                                                />
-
-                                                <Text
-                                                  style={[
-                                                    styles.horarioAgendaFuncionarioText,
-
-                                                    selecionado &&
-                                                      styles.horarioAgendaFuncionarioTextSelected,
-                                                  ]}
-                                                >
-                                                  {formatarHora(
-                                                    horario.hora_inicio
-                                                  )}{' '}
-                                                  às{' '}
-                                                  {formatarHora(
-                                                    horario.hora_fim
-                                                  )}
-                                                </Text>
-                                              </TouchableOpacity>
-                                            );
-                                          }
-                                        )}
-                                      </View>
-                                    ) : null}
-                                  </View>
-                                )
-                              )}
+                                  setErroVistoria(
+                                    ''
+                                  );
+                                }}
+                              />
+                            ) : null}
 
                             <View
                               style={
@@ -10899,6 +13639,135 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
+  responsavelModoRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 10,
+  },
+
+  responsavelModoButton: {
+    flex: 1,
+    minWidth: 180,
+    minHeight: 46,
+    borderWidth: 1,
+    borderColor: '#B9CCE0',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+
+  responsavelModoButtonActive: {
+    backgroundColor: '#0B5EA8',
+    borderColor: '#0B5EA8',
+  },
+
+  responsavelModoText: {
+    color: '#0B5EA8',
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
+  responsavelModoTextActive: {
+    color: '#FFFFFF',
+  },
+
+  categorySelectButton: {
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    minHeight: 48,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+
+  categorySelectText: {
+    flex: 1,
+    color: '#0B2447',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  categoryPlaceholder: {
+    color: '#8995A5',
+    fontWeight: '600',
+  },
+
+  categoryDropdownPanel: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 8,
+    gap: 6,
+  },
+
+  categorySearchRow: {
+    borderWidth: 1,
+    borderColor: '#E1E6ED',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
+  },
+
+  categorySearchInput: {
+    flex: 1,
+    minHeight: 42,
+    color: '#0B2447',
+    fontSize: 12,
+    outlineStyle: 'none',
+  } as any,
+
+  categoryOption: {
+    minHeight: 42,
+    borderRadius: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+
+  categoryOptionActive: {
+    backgroundColor: '#0B2447',
+  },
+
+  categoryOptionText: {
+    flex: 1,
+    color: '#42566D',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  categoryOptionTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+
+  categoryEmptyText: {
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    color: '#8995A5',
+    fontSize: 11,
+    textAlign: 'center',
+  },
+
   optionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -11790,6 +14659,491 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 
+  calendarCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 10,
+  },
+
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 13,
+  },
+
+  calendarArrowButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  calendarArrowButtonDisabled: {
+    opacity: 0.45,
+  },
+
+  calendarMonthTitle: {
+    color: '#0B2447',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+
+  calendarWeekRow: {
+    flexDirection: 'row',
+    marginBottom: 5,
+  },
+
+  calendarWeekText: {
+    width: '14.2857%',
+    textAlign: 'center',
+    color: '#7B8795',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+
+  calendarDayWrapper: {
+    width: '14.2857%',
+    alignItems: 'center',
+    paddingVertical: 3,
+  },
+
+  calendarDay: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  calendarDayOutside: {
+    opacity: 0.18,
+  },
+
+  calendarDayUnavailable: {
+    backgroundColor: '#F3F5F7',
+  },
+
+  calendarDayAvailable: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#0B5EA8',
+  },
+
+  calendarDaySelected: {
+    backgroundColor: '#0B2447',
+    borderColor: '#0B2447',
+  },
+
+  calendarDayText: {
+    color: '#42566D',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  calendarDayTextOutside: {
+    color: '#AAB3BE',
+  },
+
+  calendarDayTextUnavailable: {
+    color: '#B0B8C2',
+  },
+
+  calendarDayTextAvailable: {
+    color: '#0B5EA8',
+    fontWeight: '800',
+  },
+
+  calendarDayTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+
+  calendarLegend: {
+    marginTop: 13,
+    paddingTop: 11,
+    borderTopWidth: 1,
+    borderTopColor: '#EEF1F4',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+  },
+
+  calendarLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+
+  calendarLegendAvailable: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#0B5EA8',
+  },
+
+  calendarLegendUnavailable: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#F3F5F7',
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+  },
+
+  calendarLegendText: {
+    color: '#697789',
+    fontSize: 10,
+  },
+
+  timeSelectionCard: {
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    borderRadius: 16,
+    padding: 15,
+  },
+
+  timeSelectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    marginBottom: 12,
+  },
+
+  timeSelectionTitle: {
+    color: '#0B2447',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  timeSelectionDate: {
+    color: '#697789',
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 2,
+  },
+
+  timeButtonsContainer: {
+    gap: 8,
+  },
+
+  timeButton: {
+    minHeight: 50,
+    borderWidth: 1,
+    borderColor: '#C8D3DF',
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+
+  timeButtonSelected: {
+    backgroundColor: '#0B2447',
+    borderColor: '#0B2447',
+  },
+
+  timeButtonText: {
+    color: '#0B2447',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  timeButtonTextSelected: {
+    color: '#FFFFFF',
+  },
+
+  agendaHintBox: {
+    marginTop: 10,
+    backgroundColor: '#EDF5FC',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  agendaHintText: {
+    flex: 1,
+    color: '#0B5EA8',
+    fontSize: 11,
+    lineHeight: 16,
+  },
+
+  execucaoOpcoesResumo: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 12,
+  },
+
+  execucaoOpcaoResumoCard: {
+    flex: 1,
+    minWidth: 220,
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    padding: 13,
+  },
+
+  execucaoOpcaoResumoCardActive: {
+    backgroundColor: '#0B2447',
+    borderColor: '#0B2447',
+  },
+
+  execucaoOpcaoResumoLabel: {
+    color: '#697789',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+
+  execucaoOpcaoResumoLabelActive: {
+    color: '#C8D8EA',
+  },
+
+  execucaoOpcaoResumoValue: {
+    color: '#0B2447',
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 5,
+  },
+
+  execucaoOpcaoResumoValueActive: {
+    color: '#FFFFFF',
+  },
+
+  execucaoCalendarioHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+    marginTop: 4,
+  },
+
+  execucaoCalendarioTitle: {
+    color: '#0B2447',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  execucaoCalendarioText: {
+    color: '#697789',
+    fontSize: 10,
+    marginTop: 2,
+  },
+
+  irParaOpcao2Button: {
+    minHeight: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#BFD2E6',
+    backgroundColor: '#F2F7FC',
+    paddingHorizontal: 13,
+    marginTop: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+
+  irParaOpcao2ButtonText: {
+    color: '#0B5EA8',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  agendamentoExecucaoBox: {
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#D7E3EF',
+    backgroundColor: '#F8FBFF',
+    borderRadius: 14,
+    padding: 16,
+  },
+
+  agendamentoExecucaoHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 14,
+  },
+
+  agendamentoExecucaoTitle: {
+    color: '#0B2447',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  agendamentoExecucaoSubtitle: {
+    color: '#697789',
+    fontSize: 10,
+    lineHeight: 16,
+    marginTop: 3,
+  },
+
+  agendamentoExecucaoLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+  },
+
+  agendamentoExecucaoLoadingText: {
+    color: '#697789',
+    fontSize: 11,
+  },
+
+  agendamentoExecucaoStatusAguardando: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#FFF9E8',
+    borderWidth: 1,
+    borderColor: '#E9D89C',
+    borderRadius: 11,
+    padding: 13,
+  },
+
+  agendamentoExecucaoStatusTitle: {
+    color: '#755313',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  agendamentoExecucaoStatusText: {
+    color: '#806A3D',
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 3,
+  },
+
+  agendamentoExecucaoOpcoesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 12,
+  },
+
+  agendamentoExecucaoOpcaoCard: {
+    flex: 1,
+    minWidth: 220,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8E2EC',
+    borderRadius: 11,
+    padding: 13,
+  },
+
+  agendamentoExecucaoOpcaoLabel: {
+    color: '#697789',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+
+  agendamentoExecucaoOpcaoValue: {
+    color: '#0B2447',
+    fontSize: 13,
+    fontWeight: '800',
+    marginTop: 5,
+  },
+
+  agendamentoExecucaoConfirmado: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#EEF9F1',
+    borderWidth: 1,
+    borderColor: '#B9DDC5',
+    borderRadius: 11,
+    padding: 14,
+  },
+
+  agendamentoExecucaoConfirmadoTitle: {
+    color: '#287A46',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  agendamentoExecucaoConfirmadoValue: {
+    color: '#1E5F36',
+    fontSize: 13,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+
+  agendamentoExecucaoReagendamento: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#FFF5E8',
+    borderWidth: 1,
+    borderColor: '#E7C99B',
+    borderRadius: 11,
+    padding: 13,
+    marginBottom: 14,
+  },
+
+  agendamentoExecucaoReagendamentoTitle: {
+    color: '#8A5316',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  agendamentoExecucaoReagendamentoText: {
+    color: '#7A6549',
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 3,
+  },
+
+  agendamentoExecucaoFormTitle: {
+    color: '#0B2447',
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 10,
+  },
+
+  agendamentoExecucaoFormCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E0E6ED',
+    borderRadius: 11,
+    padding: 12,
+    marginBottom: 10,
+  },
+
+  enviarPropostaExecucaoButton: {
+    minHeight: 50,
+    backgroundColor: '#0B5EA8',
+    borderRadius: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+
+  enviarPropostaExecucaoButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
   iniciarExecucaoButton: {
     minHeight: 55,
     borderRadius: 13,
@@ -12620,6 +15974,46 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
+  },
+
+  vistoriaHistoricoWrapper: {
+    marginTop: 18,
+    marginBottom: 18,
+  },
+
+  vistoriaHistoricoConteudo: {
+    borderWidth: 1,
+    borderColor: '#D8E0E8',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: -8,
+    gap: 14,
+  },
+
+  vistoriaHistoricoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+
+  vistoriaHistoricoBloco: {
+    borderTopWidth: 1,
+    borderTopColor: '#E7EBF0',
+    paddingTop: 12,
+  },
+
+  vistoriaHistoricoLabel: {
+    color: '#607086',
+    fontSize: 10,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+
+  vistoriaHistoricoTexto: {
+    color: '#24364B',
+    fontSize: 12,
+    lineHeight: 18,
   },
 
   vistoriaFinalizadaBox: {

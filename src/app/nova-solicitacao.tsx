@@ -2551,6 +2551,26 @@ export default function NovaSolicitacaoScreen() {
                 Conte de forma simples o que está acontecendo.
               </Text>
 
+              <View
+                style={
+                  styles.warningBox
+                }
+              >
+                <Ionicons
+                  name="information-circle-outline"
+                  size={20}
+                  color="#7B5A12"
+                />
+
+                <Text
+                  style={
+                    styles.warningText
+                  }
+                >
+                  Registre uma solicitação separada para cada problema ou serviço. Não inclua problemas diferentes no mesmo chamado.
+                </Text>
+              </View>
+
               <TextInput
                 style={
                   styles.descriptionInput
