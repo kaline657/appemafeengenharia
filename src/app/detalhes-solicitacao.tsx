@@ -861,6 +861,28 @@ type AgendamentoExecucaoCliente = {
   created_at: string;
 };
 
+type FotoAusenciaCliente = {
+  foto_id: string;
+  caminho_storage: string;
+  nome_arquivo: string | null;
+  descricao: string | null;
+  created_at: string;
+  url: string;
+};
+
+type ResultadoVistoriaCliente = {
+  solicitacao_id: string;
+  resultado:
+    | 'aprovada'
+    | 'nao_aprovada'
+    | 'cliente_ausente'
+    | string;
+  justificativa_resultado: string | null;
+  parecer_tecnico: string | null;
+  finalizada_em: string | null;
+};
+
+
 type Form03Cliente = {
   form03_id: string;
   protocolo: string;
@@ -1036,6 +1058,45 @@ export default function DetalhesSolicitacaoScreen() {
   ] = useState('');
 
   const [
+    resultadoVistoriaCliente,
+    setResultadoVistoriaCliente,
+  ] = useState<ResultadoVistoriaCliente | null>(
+    null
+  );
+
+  const [
+    carregandoResultadoVistoria,
+    setCarregandoResultadoVistoria,
+  ] = useState(false);
+
+  const [
+    erroResultadoVistoria,
+    setErroResultadoVistoria,
+  ] = useState('');
+
+  const [
+    fotosAusenciaCliente,
+    setFotosAusenciaCliente,
+  ] = useState<FotoAusenciaCliente[]>([]);
+
+  const [
+    carregandoFotosAusencia,
+    setCarregandoFotosAusencia,
+  ] = useState(false);
+
+  const [
+    erroFotosAusencia,
+    setErroFotosAusencia,
+  ] = useState('');
+
+  const [
+    fotoAusenciaSelecionada,
+    setFotoAusenciaSelecionada,
+  ] = useState<FotoAusenciaCliente | null>(
+    null
+  );
+
+  const [
     form03Cliente,
     setForm03Cliente,
   ] = useState<Form03Cliente | null>(
@@ -1085,9 +1146,22 @@ export default function DetalhesSolicitacaoScreen() {
     await carregarSolicitacao();
     await carregarFotos();
     await carregarAgendamentoVistoria();
+    await carregarResultadoVistoriaCliente();
     await carregarAgendamentoExecucaoCliente();
     await carregarForm03Cliente();
   }
+
+  useEffect(() => {
+    if (
+      solicitacao?.status ===
+      'encerrada_ausencia'
+    ) {
+      carregarFotosAusenciaCliente();
+    } else {
+      setFotosAusenciaCliente([]);
+      setErroFotosAusencia('');
+    }
+  }, [solicitacao?.status]);
 
   async function carregarSolicitacao() {
     try {
@@ -1616,8 +1690,22 @@ export default function DetalhesSolicitacaoScreen() {
       }
 
       setHorariosExecucao(
-        (data ?? []) as
-          HorarioVistoriaDisponivel[]
+        (data ?? []).map(
+          (item: any) => ({
+            data_vistoria:
+              item.data_execucao,
+            dia_semana:
+              item.dia_semana,
+            nome_dia:
+              item.nome_dia,
+            horario_vistoria_id:
+              item.horario_execucao_id,
+            hora_inicio:
+              item.hora_inicio,
+            hora_fim:
+              item.hora_fim,
+          })
+        ) as HorarioVistoriaDisponivel[]
       );
     } catch (error) {
       console.error(
@@ -1786,6 +1874,132 @@ export default function DetalhesSolicitacaoScreen() {
       );
     }
   }
+
+  async function carregarResultadoVistoriaCliente() {
+    try {
+      setCarregandoResultadoVistoria(true);
+      setErroResultadoVistoria('');
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'buscar_resultado_vistoria_cliente',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao buscar resultado da vistoria:',
+          error
+        );
+
+        setErroResultadoVistoria(
+          'Não foi possível carregar o resultado da vistoria.'
+        );
+
+        return;
+      }
+
+      setResultadoVistoriaCliente(
+        (data?.[0] as
+          | ResultadoVistoriaCliente
+          | undefined) ??
+          null
+      );
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao carregar resultado da vistoria:',
+        error
+      );
+
+      setErroResultadoVistoria(
+        'Ocorreu um erro ao carregar o resultado da vistoria.'
+      );
+    } finally {
+      setCarregandoResultadoVistoria(false);
+    }
+  }
+
+
+  async function carregarFotosAusenciaCliente() {
+    try {
+      setCarregandoFotosAusencia(true);
+      setErroFotosAusencia('');
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'buscar_fotos_ausencia_cliente',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao buscar fotos da ausência:',
+          error
+        );
+
+        setErroFotosAusencia(
+          'Não foi possível carregar a comprovação da visita.'
+        );
+
+        return;
+      }
+
+      const fotosComUrl:
+        FotoAusenciaCliente[] = [];
+
+      for (const foto of data ?? []) {
+        const {
+          data: signedData,
+          error: signedError,
+        } = await supabase.storage
+          .from('vistorias-fotos')
+          .createSignedUrl(
+            foto.caminho_storage,
+            60 * 60
+          );
+
+        if (signedError) {
+          console.error(
+            'Erro ao abrir foto da ausência:',
+            signedError
+          );
+
+          continue;
+        }
+
+        fotosComUrl.push({
+          ...foto,
+          url: signedData.signedUrl,
+        } as FotoAusenciaCliente);
+      }
+
+      setFotosAusenciaCliente(
+        fotosComUrl
+      );
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao carregar comprovação da visita:',
+        error
+      );
+
+      setErroFotosAusencia(
+        'Ocorreu um erro ao carregar a comprovação da visita.'
+      );
+    } finally {
+      setCarregandoFotosAusencia(false);
+    }
+  }
+
 
   async function carregarForm03Cliente() {
     try {
@@ -1970,6 +2184,9 @@ export default function DetalhesSolicitacaoScreen() {
       case 'cancelada':
         return 'Cancelada';
 
+      case 'encerrada_ausencia':
+        return 'Encerrada por ausência';
+
       default:
         return status;
     }
@@ -1989,6 +2206,7 @@ export default function DetalhesSolicitacaoScreen() {
       'em_vistoria',
       'aprovada',
       'nao_aprovada',
+      'encerrada_ausencia',
       'em_execucao',
       'concluida',
     ].includes(status);
@@ -2013,11 +2231,17 @@ export default function DetalhesSolicitacaoScreen() {
       case 'aprovada':
         return 'A vistoria foi aprovada. Confira abaixo o agendamento proposto para a execução do serviço.';
 
+      case 'nao_aprovada':
+        return 'A vistoria foi finalizada como não aprovada. Consulte abaixo o resultado e a justificativa registrada pela equipe técnica.';
+
       case 'em_execucao':
         return 'O atendimento está em execução. Você poderá acompanhar a conclusão por esta tela.';
 
       case 'concluida':
         return 'O atendimento foi concluído. Este protocolo permanece disponível para consulta.';
+
+      case 'encerrada_ausencia':
+        return 'Este chamado foi encerrado porque não havia responsável presente no imóvel no horário da vistoria. Para um novo atendimento, abra uma nova solicitação.';
 
       default:
         return 'Acompanhe esta tela para consultar as próximas atualizações do atendimento.';
@@ -2112,6 +2336,59 @@ export default function DetalhesSolicitacaoScreen() {
               }
             </Text>
           ) : null}
+        </View>
+      </Modal>
+
+      <Modal
+        visible={
+          !!fotoAusenciaSelecionada
+        }
+        transparent
+        animationType="fade"
+        onRequestClose={() =>
+          setFotoAusenciaSelecionada(
+            null
+          )
+        }
+      >
+        <View
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalClose}
+            onPress={() =>
+              setFotoAusenciaSelecionada(
+                null
+              )
+            }
+          >
+            <Ionicons
+              name="close"
+              size={28}
+              color="#FFFFFF"
+            />
+          </TouchableOpacity>
+
+          {fotoAusenciaSelecionada ? (
+            <Image
+              source={{
+                uri:
+                  fotoAusenciaSelecionada.url,
+              }}
+              style={
+                styles.modalImage
+              }
+              resizeMode="contain"
+            />
+          ) : null}
+
+          <Text
+            style={
+              styles.modalCaption
+            }
+          >
+            Comprovação da visita
+          </Text>
         </View>
       </Modal>
 
@@ -2594,6 +2871,393 @@ export default function DetalhesSolicitacaoScreen() {
                     ) : null}
                   </View>
                 </>
+              ) : null}
+
+              {solicitacao.status ===
+              'nao_aprovada' ? (
+                <View
+                  style={
+                    styles.naoAprovadaClienteCard
+                  }
+                >
+                  <View
+                    style={
+                      styles.naoAprovadaClienteHeader
+                    }
+                  >
+                    <View
+                      style={
+                        styles.naoAprovadaClienteIcon
+                      }
+                    >
+                      <Ionicons
+                        name="close-circle-outline"
+                        size={24}
+                        color="#9A3232"
+                      />
+                    </View>
+
+                    <View
+                      style={{
+                        flex: 1,
+                      }}
+                    >
+                      <Text
+                        style={
+                          styles.naoAprovadaClienteStatus
+                        }
+                      >
+                        RESULTADO DA VISTORIA
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.naoAprovadaClienteTitle
+                        }
+                      >
+                        Vistoria não aprovada
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text
+                    style={
+                      styles.naoAprovadaClienteMensagem
+                    }
+                  >
+                    Após a avaliação técnica, esta solicitação não foi aprovada para execução.
+                  </Text>
+
+                  {carregandoResultadoVistoria ? (
+                    <View
+                      style={
+                        styles.naoAprovadaClienteLoading
+                      }
+                    >
+                      <ActivityIndicator
+                        color="#9A3232"
+                      />
+
+                      <Text
+                        style={
+                          styles.naoAprovadaClienteLoadingText
+                        }
+                      >
+                        Carregando resultado da vistoria...
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {erroResultadoVistoria ? (
+                    <View
+                      style={
+                        styles.naoAprovadaClienteErroBox
+                      }
+                    >
+                      <Ionicons
+                        name="alert-circle-outline"
+                        size={18}
+                        color="#9A3232"
+                      />
+
+                      <Text
+                        style={
+                          styles.naoAprovadaClienteErroText
+                        }
+                      >
+                        {erroResultadoVistoria}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {!carregandoResultadoVistoria &&
+                  resultadoVistoriaCliente ? (
+                    <>
+                      <View
+                        style={
+                          styles.naoAprovadaClienteDetalhe
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.naoAprovadaClienteLabel
+                          }
+                        >
+                          JUSTIFICATIVA
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.naoAprovadaClienteValor
+                          }
+                        >
+                          {
+                            resultadoVistoriaCliente
+                              .justificativa_resultado ||
+                            'Não informada.'
+                          }
+                        </Text>
+                      </View>
+
+                      {resultadoVistoriaCliente
+                        .parecer_tecnico ? (
+                        <View
+                          style={
+                            styles.naoAprovadaClienteDetalhe
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.naoAprovadaClienteLabel
+                            }
+                          >
+                            PARECER TÉCNICO
+                          </Text>
+
+                          <Text
+                            style={
+                              styles.naoAprovadaClienteValor
+                            }
+                          >
+                            {
+                              resultadoVistoriaCliente
+                                .parecer_tecnico
+                            }
+                          </Text>
+                        </View>
+                      ) : null}
+
+                      {resultadoVistoriaCliente
+                        .finalizada_em ? (
+                        <Text
+                          style={
+                            styles.naoAprovadaClienteData
+                          }
+                        >
+                          Vistoria finalizada em {
+                            formatarDataHora(
+                              resultadoVistoriaCliente
+                                .finalizada_em
+                            )
+                          }
+                        </Text>
+                      ) : null}
+                    </>
+                  ) : null}
+
+                  <View
+                    style={
+                      styles.naoAprovadaClienteAviso
+                    }
+                  >
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={20}
+                      color="#0B5EA8"
+                    />
+
+                    <Text
+                      style={
+                        styles.naoAprovadaClienteAvisoText
+                      }
+                    >
+                      Este protocolo não seguirá para a etapa de execução.
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
+              {solicitacao.status ===
+              'encerrada_ausencia' ? (
+                <View
+                  style={
+                    styles.ausenciaClienteCard
+                  }
+                >
+                  <View
+                    style={
+                      styles.ausenciaClienteHeader
+                    }
+                  >
+                    <View
+                      style={
+                        styles.ausenciaClienteIcon
+                      }
+                    >
+                      <Ionicons
+                        name="person-remove-outline"
+                        size={23}
+                        color="#A76500"
+                      />
+                    </View>
+
+                    <View
+                      style={{
+                        flex: 1,
+                      }}
+                    >
+                      <Text
+                        style={
+                          styles.ausenciaClienteStatus
+                        }
+                      >
+                        CHAMADO ENCERRADO
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.ausenciaClienteTitle
+                        }
+                      >
+                        Encerrado por ausência
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text
+                    style={
+                      styles.ausenciaClienteMensagem
+                    }
+                  >
+                    Nossa equipe compareceu ao local no horário agendado, mas não havia responsável presente no imóvel. Para um novo atendimento, abra uma nova solicitação.
+                  </Text>
+
+                  <View
+                    style={
+                      styles.ausenciaClienteAviso
+                    }
+                  >
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={20}
+                      color="#0B5EA8"
+                    />
+
+                    <Text
+                      style={
+                        styles.ausenciaClienteAvisoText
+                      }
+                    >
+                      Este protocolo permanece disponível para consulta como registro da visita realizada.
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={
+                      styles.ausenciaClienteFotosTitulo
+                    }
+                  >
+                    Comprovação da visita
+                  </Text>
+
+                  {carregandoFotosAusencia ? (
+                    <View
+                      style={
+                        styles.ausenciaClienteLoading
+                      }
+                    >
+                      <ActivityIndicator
+                        color="#A76500"
+                      />
+
+                      <Text
+                        style={
+                          styles.ausenciaClienteLoadingText
+                        }
+                      >
+                        Carregando foto da visita...
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {erroFotosAusencia ? (
+                    <Text
+                      style={
+                        styles.ausenciaClienteErro
+                      }
+                    >
+                      {erroFotosAusencia}
+                    </Text>
+                  ) : null}
+
+                  {!carregandoFotosAusencia &&
+                  fotosAusenciaCliente.length >
+                    0 ? (
+                    <View
+                      style={
+                        styles.ausenciaClienteFotosGrid
+                      }
+                    >
+                      {fotosAusenciaCliente.map(
+                        (foto) => (
+                          <TouchableOpacity
+                            key={
+                              foto.foto_id
+                            }
+                            style={
+                              styles.ausenciaClienteFotoCard
+                            }
+                            activeOpacity={
+                              0.85
+                            }
+                            onPress={() =>
+                              setFotoAusenciaSelecionada(
+                                foto
+                              )
+                            }
+                          >
+                            <Image
+                              source={{
+                                uri: foto.url,
+                              }}
+                              style={
+                                styles.ausenciaClienteFoto
+                              }
+                              resizeMode="cover"
+                            />
+
+                            <View
+                              style={
+                                styles.ausenciaClienteFotoOverlay
+                              }
+                            >
+                              <Ionicons
+                                name="expand-outline"
+                                size={18}
+                                color="#FFFFFF"
+                              />
+                            </View>
+                          </TouchableOpacity>
+                        )
+                      )}
+                    </View>
+                  ) : null}
+
+                  <TouchableOpacity
+                    style={
+                      styles.ausenciaClienteNovaSolicitacaoButton
+                    }
+                    onPress={() =>
+                      router.push(
+                        '/nova-solicitacao'
+                      )
+                    }
+                  >
+                    <Ionicons
+                      name="add-circle-outline"
+                      size={20}
+                      color="#FFFFFF"
+                    />
+
+                    <Text
+                      style={
+                        styles.ausenciaClienteNovaSolicitacaoButtonText
+                      }
+                    >
+                      Abrir nova solicitação
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               ) : null}
 
               {/* VISTORIA */}
@@ -6287,6 +6951,263 @@ const styles =
       color: '#8995A5',
       fontSize: 10,
       marginTop: 3,
+    },
+
+    naoAprovadaClienteCard: {
+      backgroundColor: '#FFF4F4',
+      borderWidth: 1,
+      borderColor: '#E6B8B8',
+      borderRadius: 15,
+      padding: 16,
+      marginTop: 18,
+      marginBottom: 6,
+    },
+
+    naoAprovadaClienteHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 12,
+    },
+
+    naoAprovadaClienteIcon: {
+      width: 43,
+      height: 43,
+      borderRadius: 22,
+      backgroundColor: '#FCE6E6',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    naoAprovadaClienteStatus: {
+      color: '#9A3232',
+      fontSize: 10,
+      fontWeight: '900',
+      letterSpacing: 0.5,
+    },
+
+    naoAprovadaClienteTitle: {
+      color: '#702727',
+      fontSize: 16,
+      fontWeight: '800',
+      marginTop: 2,
+    },
+
+    naoAprovadaClienteMensagem: {
+      color: '#5F4545',
+      fontSize: 12,
+      lineHeight: 19,
+    },
+
+    naoAprovadaClienteLoading: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 12,
+    },
+
+    naoAprovadaClienteLoadingText: {
+      color: '#7B6060',
+      fontSize: 10,
+    },
+
+    naoAprovadaClienteErroBox: {
+      marginTop: 12,
+      borderRadius: 10,
+      backgroundColor: '#FFFFFF',
+      padding: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 7,
+    },
+
+    naoAprovadaClienteErroText: {
+      flex: 1,
+      color: '#9A3232',
+      fontSize: 10,
+      lineHeight: 15,
+    },
+
+    naoAprovadaClienteDetalhe: {
+      backgroundColor: '#FFFFFF',
+      borderRadius: 11,
+      padding: 12,
+      marginTop: 12,
+    },
+
+    naoAprovadaClienteLabel: {
+      color: '#9A3232',
+      fontSize: 9,
+      fontWeight: '900',
+      letterSpacing: 0.4,
+      marginBottom: 5,
+    },
+
+    naoAprovadaClienteValor: {
+      color: '#3E4A59',
+      fontSize: 11,
+      lineHeight: 18,
+    },
+
+    naoAprovadaClienteData: {
+      color: '#7C8794',
+      fontSize: 9,
+      marginTop: 10,
+    },
+
+    naoAprovadaClienteAviso: {
+      backgroundColor: '#FFFFFF',
+      borderRadius: 11,
+      padding: 11,
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+    },
+
+    naoAprovadaClienteAvisoText: {
+      flex: 1,
+      color: '#697789',
+      fontSize: 10,
+      lineHeight: 16,
+    },
+
+    ausenciaClienteCard: {
+      backgroundColor: '#FFF7E8',
+      borderWidth: 1,
+      borderColor: '#E0B567',
+      borderRadius: 15,
+      padding: 16,
+      marginTop: 18,
+      marginBottom: 6,
+    },
+
+    ausenciaClienteHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 12,
+    },
+
+    ausenciaClienteIcon: {
+      width: 43,
+      height: 43,
+      borderRadius: 22,
+      backgroundColor: '#FFF0D1',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    ausenciaClienteStatus: {
+      color: '#A76500',
+      fontSize: 10,
+      fontWeight: '900',
+      letterSpacing: 0.5,
+    },
+
+    ausenciaClienteTitle: {
+      color: '#6D4700',
+      fontSize: 16,
+      fontWeight: '800',
+      marginTop: 2,
+    },
+
+    ausenciaClienteMensagem: {
+      color: '#634F2F',
+      fontSize: 12,
+      lineHeight: 19,
+    },
+
+    ausenciaClienteAviso: {
+      backgroundColor: '#FFFFFF',
+      borderRadius: 11,
+      padding: 11,
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+    },
+
+    ausenciaClienteAvisoText: {
+      flex: 1,
+      color: '#697789',
+      fontSize: 10,
+      lineHeight: 16,
+    },
+
+    ausenciaClienteFotosTitulo: {
+      color: '#6D4700',
+      fontSize: 11,
+      fontWeight: '800',
+      marginTop: 15,
+      marginBottom: 9,
+    },
+
+    ausenciaClienteLoading: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 10,
+    },
+
+    ausenciaClienteLoadingText: {
+      color: '#7B6540',
+      fontSize: 10,
+    },
+
+    ausenciaClienteErro: {
+      color: '#9A3232',
+      fontSize: 10,
+      marginBottom: 8,
+    },
+
+    ausenciaClienteFotosGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 9,
+    },
+
+    ausenciaClienteFotoCard: {
+      width: 105,
+      height: 105,
+      borderRadius: 12,
+      overflow: 'hidden',
+      backgroundColor: '#E7EBF0',
+      position: 'relative',
+    },
+
+    ausenciaClienteFoto: {
+      width: '100%',
+      height: '100%',
+    },
+
+    ausenciaClienteFotoOverlay: {
+      position: 'absolute',
+      right: 7,
+      bottom: 7,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: 'rgba(0,0,0,0.55)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    ausenciaClienteNovaSolicitacaoButton: {
+      minHeight: 50,
+      borderRadius: 12,
+      backgroundColor: '#0B5EA8',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      marginTop: 16,
+    },
+
+    ausenciaClienteNovaSolicitacaoButtonText: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: '800',
     },
 
     infoBox: {

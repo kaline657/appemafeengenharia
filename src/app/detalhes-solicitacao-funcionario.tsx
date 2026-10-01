@@ -1237,6 +1237,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   ] = useState('');
 
   const [
+    ausenciaClienteAberta,
+    setAusenciaClienteAberta,
+  ] = useState(false);
+
+  const [
+    preparandoAusenciaCliente,
+    setPreparandoAusenciaCliente,
+  ] = useState(false);
+
+  const [
     finalizandoVistoria,
     setFinalizandoVistoria,
   ] = useState(false);
@@ -2721,7 +2731,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         data,
         error,
       } = await supabase.rpc(
-        'listar_horarios_execucao_disponiveis',
+        'listar_horarios_vistoria_disponiveis',
         {
           p_data_inicio:
             null,
@@ -3257,6 +3267,65 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+  async function tirarFotoVistoria() {
+    setErroFormularioVistoria('');
+    setErroFinalizacaoVistoria('');
+
+    const quantidadeAtual =
+      fotosVistoriaPendentes.length +
+      fotosVistoriaSalvas.length;
+
+    if (quantidadeAtual >= 10) {
+      setErroFinalizacaoVistoria(
+        'A vistoria pode ter no máximo 10 fotos.'
+      );
+
+      return;
+    }
+
+    try {
+      const permissao =
+        await ImagePicker.requestCameraPermissionsAsync();
+
+      if (!permissao.granted) {
+        setErroFinalizacaoVistoria(
+          'Permita o acesso à câmera para registrar a comprovação da visita.'
+        );
+
+        return;
+      }
+
+      const resultado =
+        await ImagePicker.launchCameraAsync({
+          mediaTypes:
+            ImagePicker.MediaTypeOptions.Images,
+          quality: 0.8,
+        });
+
+      if (resultado.canceled) {
+        return;
+      }
+
+      if (resultado.assets?.[0]) {
+        setFotosVistoriaPendentes(
+          (atuais) => [
+            ...atuais,
+            resultado.assets[0],
+          ]
+        );
+      }
+    } catch (error) {
+      console.error(
+        'Erro ao tirar foto da vistoria:',
+        error
+      );
+
+      setErroFinalizacaoVistoria(
+        'Não foi possível abrir a câmera.'
+      );
+    }
+  }
+
   function removerFotoVistoriaPendente(
     uri: string
   ) {
@@ -3732,7 +3801,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         data,
         error,
       } = await supabase.rpc(
-        'listar_horarios_vistoria_disponiveis',
+        'listar_horarios_execucao_disponiveis',
         {
           p_data_inicio:
             null,
@@ -3752,8 +3821,22 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       }
 
       setHorariosExecucaoDisponiveis(
-        (data ?? []) as
-          HorarioVistoriaDisponivel[]
+        (data ?? []).map(
+          (item: any) => ({
+            data_vistoria:
+              item.data_execucao,
+            dia_semana:
+              item.dia_semana,
+            nome_dia:
+              item.nome_dia,
+            horario_vistoria_id:
+              item.horario_execucao_id,
+            hora_inicio:
+              item.hora_inicio,
+            hora_fim:
+              item.hora_fim,
+          })
+        ) as HorarioVistoriaDisponivel[]
       );
     } catch (error) {
       console.error(
@@ -6100,6 +6183,184 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   }
 
   // ==========================================================
+  // PREPARAR AUSÊNCIA ANTES DE INICIAR A VISTORIA
+  // ==========================================================
+
+  async function abrirAusenciaCliente() {
+    setErroInicioVistoria('');
+    setErroFinalizacaoVistoria('');
+    setSucessoFinalizacaoVistoria('');
+
+    try {
+      setPreparandoAusenciaCliente(true);
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'preparar_ausencia_cliente_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao preparar registro de ausência:',
+          error
+        );
+
+        setErroInicioVistoria(
+          error.message ||
+            'Não foi possível preparar o registro de ausência.'
+        );
+
+        return;
+      }
+
+      if (!data) {
+        setErroInicioVistoria(
+          'O sistema não retornou o registro da visita.'
+        );
+
+        return;
+      }
+
+      setJustificativaResultado(
+        'Cliente não estava presente no imóvel no horário agendado.'
+      );
+
+      const registro =
+        await carregarVistoriaTecnica();
+
+      if (!registro) {
+        setErroInicioVistoria(
+          'O registro da visita foi criado, mas não foi possível carregá-lo.'
+        );
+
+        return;
+      }
+
+      setAusenciaClienteAberta(true);
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao preparar ausência:',
+        error
+      );
+
+      setErroInicioVistoria(
+        'Ocorreu um erro ao preparar o registro de ausência.'
+      );
+    } finally {
+      setPreparandoAusenciaCliente(false);
+    }
+  }
+
+
+  // ==========================================================
+  // ENCERRAR POR AUSÊNCIA DO CLIENTE
+  // ==========================================================
+
+  async function encerrarPorAusenciaCliente() {
+    setErroFinalizacaoVistoria('');
+    setSucessoFinalizacaoVistoria('');
+
+    const quantidadeFotos =
+      fotosVistoriaPendentes.length +
+      fotosVistoriaSalvas.length;
+
+    if (quantidadeFotos < 1) {
+      setErroFinalizacaoVistoria(
+        'Tire ou anexe pelo menos uma foto para comprovar que a equipe esteve no local.'
+      );
+
+      return;
+    }
+
+    if (!justificativaResultado.trim()) {
+      setErroFinalizacaoVistoria(
+        'Informe uma observação sobre a ausência do cliente.'
+      );
+
+      return;
+    }
+
+    try {
+      setFinalizandoVistoria(true);
+
+      const fotosEnviadas =
+        await enviarFotosVistoria();
+
+      if (!fotosEnviadas) {
+        setErroFinalizacaoVistoria(
+          'Não foi possível enviar a foto de comprovação. O chamado não foi encerrado.'
+        );
+
+        return;
+      }
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'encerrar_solicitacao_ausencia_cliente_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+
+          p_observacao:
+            justificativaResultado.trim(),
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao encerrar chamado por ausência:',
+          error
+        );
+
+        setErroFinalizacaoVistoria(
+          error.message ||
+            'Não foi possível encerrar o chamado por ausência do cliente.'
+        );
+
+        return;
+      }
+
+      if (!data?.length) {
+        setErroFinalizacaoVistoria(
+          'O sistema não confirmou o encerramento do chamado.'
+        );
+
+        return;
+      }
+
+      setSucessoFinalizacaoVistoria(
+        'Chamado encerrado por ausência do cliente.'
+      );
+
+      await carregarSolicitacao();
+      await carregarVistoriaTecnica();
+      await carregarFotosVistoria();
+      await carregarExecucaoServico();
+      await carregarAgendamentoExecucao();
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao encerrar por ausência:',
+        error
+      );
+
+      setErroFinalizacaoVistoria(
+        'Ocorreu um erro ao encerrar o chamado por ausência.'
+      );
+    } finally {
+      setFinalizandoVistoria(false);
+    }
+  }
+
+
+  // ==========================================================
   // FINALIZAR VISTORIA
   // ==========================================================
 
@@ -6390,6 +6651,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
       case 'cancelada':
         return 'Cancelada';
+
+      case 'encerrada_ausencia':
+        return 'Encerrada por ausência';
 
       default:
         return status;
@@ -7753,43 +8017,350 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           </View>
                         ) : null}
 
-                        <TouchableOpacity
-                          style={[
-                            styles.iniciarVistoriaButton,
-
-                            iniciandoVistoria &&
-                              styles.buttonDisabled,
-                          ]}
-                          disabled={
-                            iniciandoVistoria
-                          }
-                          onPress={
-                            iniciarVistoria
+                        <View
+                          style={
+                            styles.iniciarVistoriaAcoes
                           }
                         >
-                          {iniciandoVistoria ? (
-                            <ActivityIndicator
-                              size="small"
-                              color="#FFFFFF"
-                            />
-                          ) : (
-                            <Ionicons
-                              name="play-circle-outline"
-                              size={22}
-                              color="#FFFFFF"
-                            />
-                          )}
+                          <TouchableOpacity
+                            style={[
+                              styles.iniciarVistoriaButton,
 
-                          <Text
-                            style={
-                              styles.iniciarVistoriaButtonText
+                              (iniciandoVistoria ||
+                                preparandoAusenciaCliente ||
+                                ausenciaClienteAberta) &&
+                                styles.buttonDisabled,
+                            ]}
+                            disabled={
+                              iniciandoVistoria ||
+                              preparandoAusenciaCliente ||
+                              ausenciaClienteAberta
+                            }
+                            onPress={
+                              iniciarVistoria
                             }
                           >
-                            {iniciandoVistoria
-                              ? 'Iniciando...'
-                              : 'Iniciar vistoria'}
-                          </Text>
-                        </TouchableOpacity>
+                            {iniciandoVistoria ? (
+                              <ActivityIndicator
+                                size="small"
+                                color="#FFFFFF"
+                              />
+                            ) : (
+                              <Ionicons
+                                name="play-circle-outline"
+                                size={22}
+                                color="#FFFFFF"
+                              />
+                            )}
+
+                            <Text
+                              style={
+                                styles.iniciarVistoriaButtonText
+                              }
+                            >
+                              {iniciandoVistoria
+                                ? 'Iniciando...'
+                                : 'Iniciar vistoria'}
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[
+                              styles.clienteAusenteAntesButton,
+
+                              preparandoAusenciaCliente &&
+                                styles.buttonDisabled,
+                            ]}
+                            disabled={
+                              iniciandoVistoria ||
+                              preparandoAusenciaCliente ||
+                              ausenciaClienteAberta
+                            }
+                            onPress={
+                              abrirAusenciaCliente
+                            }
+                          >
+                            {preparandoAusenciaCliente ? (
+                              <ActivityIndicator
+                                size="small"
+                                color="#A76500"
+                              />
+                            ) : (
+                              <Ionicons
+                                name="person-remove-outline"
+                                size={21}
+                                color="#A76500"
+                              />
+                            )}
+
+                            <Text
+                              style={
+                                styles.clienteAusenteAntesButtonText
+                              }
+                            >
+                              {preparandoAusenciaCliente
+                                ? 'Preparando...'
+                                : 'Cliente ausente'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        {ausenciaClienteAberta ? (
+                          <View
+                            style={
+                              styles.ausenciaClienteBox
+                            }
+                          >
+                            <View
+                              style={
+                                styles.ausenciaClienteHeader
+                              }
+                            >
+                              <Ionicons
+                                name="warning-outline"
+                                size={22}
+                                color="#A76500"
+                              />
+
+                              <View
+                                style={{
+                                  flex: 1,
+                                }}
+                              >
+                                <Text
+                                  style={
+                                    styles.ausenciaClienteTitle
+                                  }
+                                >
+                                  Comprovação da visita
+                                </Text>
+
+                                <Text
+                                  style={
+                                    styles.ausenciaClienteText
+                                  }
+                                >
+                                  O cliente não está presente. Tire ou anexe pelo menos uma foto para comprovar que a equipe esteve no local.
+                                </Text>
+                              </View>
+                            </View>
+
+                            <View
+                              style={
+                                styles.ausenciaClienteAcoes
+                              }
+                            >
+                              <TouchableOpacity
+                                style={
+                                  styles.ausenciaClienteFotoButton
+                                }
+                                onPress={
+                                  tirarFotoVistoria
+                                }
+                                disabled={
+                                  finalizandoVistoria
+                                }
+                              >
+                                <Ionicons
+                                  name="camera-outline"
+                                  size={20}
+                                  color="#0B5EA8"
+                                />
+
+                                <Text
+                                  style={
+                                    styles.ausenciaClienteFotoButtonText
+                                  }
+                                >
+                                  Tirar foto
+                                </Text>
+                              </TouchableOpacity>
+
+                              <TouchableOpacity
+                                style={
+                                  styles.ausenciaClienteFotoButton
+                                }
+                                onPress={
+                                  selecionarFotosVistoria
+                                }
+                                disabled={
+                                  finalizandoVistoria
+                                }
+                              >
+                                <Ionicons
+                                  name="images-outline"
+                                  size={20}
+                                  color="#0B5EA8"
+                                />
+
+                                <Text
+                                  style={
+                                    styles.ausenciaClienteFotoButtonText
+                                  }
+                                >
+                                  Anexar foto
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+
+                            <Text
+                              style={
+                                styles.ausenciaClienteContagem
+                              }
+                            >
+                              Fotos registradas: {
+                                fotosVistoriaSalvas.length +
+                                fotosVistoriaPendentes.length
+                              }
+                            </Text>
+
+                            {fotosVistoriaPendentes.length >
+                            0 ? (
+                              <View
+                                style={
+                                  styles.fotosVistoriaGrid
+                                }
+                              >
+                                {fotosVistoriaPendentes.map(
+                                  (foto) => (
+                                    <View
+                                      key={
+                                        foto.uri
+                                      }
+                                      style={
+                                        styles.fotoVistoriaCard
+                                      }
+                                    >
+                                      <Image
+                                        source={{
+                                          uri:
+                                            foto.uri,
+                                        }}
+                                        style={
+                                          styles.fotoVistoriaImagem
+                                        }
+                                        resizeMode="cover"
+                                      />
+
+                                      <TouchableOpacity
+                                        style={
+                                          styles.removerFotoVistoriaButton
+                                        }
+                                        onPress={() =>
+                                          removerFotoVistoriaPendente(
+                                            foto.uri
+                                          )
+                                        }
+                                      >
+                                        <Ionicons
+                                          name="close"
+                                          size={17}
+                                          color="#FFFFFF"
+                                        />
+                                      </TouchableOpacity>
+                                    </View>
+                                  )
+                                )}
+                              </View>
+                            ) : null}
+
+                            <Text
+                              style={
+                                styles.inputLabel
+                              }
+                            >
+                              OBSERVAÇÃO *
+                            </Text>
+
+                            <TextInput
+                              style={[
+                                styles.input,
+                                styles.textArea,
+                              ]}
+                              value={
+                                justificativaResultado
+                              }
+                              placeholder="Informe que o cliente não estava presente no local."
+                              placeholderTextColor="#9AA6B4"
+                              multiline
+                              numberOfLines={4}
+                              textAlignVertical="top"
+                              onChangeText={(
+                                texto
+                              ) => {
+                                setJustificativaResultado(
+                                  texto
+                                );
+
+                                setErroFinalizacaoVistoria(
+                                  ''
+                                );
+                              }}
+                            />
+
+                            {erroFinalizacaoVistoria ? (
+                              <View
+                                style={
+                                  styles.messageError
+                                }
+                              >
+                                <Ionicons
+                                  name="alert-circle-outline"
+                                  size={19}
+                                  color="#9A3232"
+                                />
+
+                                <Text
+                                  style={
+                                    styles.messageErrorText
+                                  }
+                                >
+                                  {
+                                    erroFinalizacaoVistoria
+                                  }
+                                </Text>
+                              </View>
+                            ) : null}
+
+                            <TouchableOpacity
+                              style={[
+                                styles.encerrarAusenciaButton,
+
+                                finalizandoVistoria &&
+                                  styles.buttonDisabled,
+                              ]}
+                              disabled={
+                                finalizandoVistoria
+                              }
+                              onPress={
+                                encerrarPorAusenciaCliente
+                              }
+                            >
+                              {finalizandoVistoria ? (
+                                <ActivityIndicator
+                                  size="small"
+                                  color="#FFFFFF"
+                                />
+                              ) : (
+                                <Ionicons
+                                  name="close-circle-outline"
+                                  size={21}
+                                  color="#FFFFFF"
+                                />
+                              )}
+
+                              <Text
+                                style={
+                                  styles.encerrarAusenciaButtonText
+                                }
+                              >
+                                {finalizandoVistoria
+                                  ? 'Encerrando...'
+                                  : 'Encerrar chamado por ausência'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : null}
                       </View>
                     ) : null}
 
@@ -8764,6 +9335,8 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 Não aprovada
                               </Text>
                             </TouchableOpacity>
+
+
                           </View>
 
                           {resultadoVistoria ===
@@ -9007,9 +9580,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 label="Resultado"
                                 value={
                                   solicitacao.status ===
-                                  'nao_aprovada'
-                                    ? 'Não aprovada'
-                                    : 'Aprovada para execução'
+                                  'encerrada_ausencia'
+                                    ? 'Encerrada por ausência do cliente'
+                                    : solicitacao.status ===
+                                        'nao_aprovada'
+                                      ? 'Não aprovada'
+                                      : 'Aprovada para execução'
                                 }
                               />
                             </View>
@@ -12271,7 +12847,8 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         GERENCIAR AGENDAMENTO
                     =========================================== */}
 
-                    {[
+                    {!ausenciaClienteAberta &&
+                    [
                       'em_analise',
                       'vistoria_agendada',
                     ].includes(
@@ -15948,6 +16525,93 @@ const styles = StyleSheet.create({
     borderColor: '#9A3232',
   },
 
+  resultadoVistoriaButtonAusente: {
+    backgroundColor: '#A76500',
+    borderColor: '#A76500',
+  },
+
+  ausenciaClienteBox: {
+    backgroundColor: '#FFF7E8',
+    borderWidth: 1,
+    borderColor: '#E0B567',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+  },
+
+  ausenciaClienteHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+    marginBottom: 12,
+  },
+
+  ausenciaClienteTitle: {
+    color: '#6D4700',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  ausenciaClienteText: {
+    color: '#7B6540',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 3,
+  },
+
+  ausenciaClienteAcoes: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 9,
+    marginBottom: 10,
+  },
+
+  ausenciaClienteFotoButton: {
+    flexGrow: 1,
+    flexBasis: 150,
+    minHeight: 45,
+    borderWidth: 1,
+    borderColor: '#B8C9DA',
+    borderRadius: 11,
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingHorizontal: 12,
+  },
+
+  ausenciaClienteFotoButtonText: {
+    color: '#0B5EA8',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  ausenciaClienteContagem: {
+    color: '#697789',
+    fontSize: 10,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+
+  encerrarAusenciaButton: {
+    minHeight: 52,
+    borderRadius: 12,
+    backgroundColor: '#A76500',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+
+  encerrarAusenciaButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+
   resultadoVistoriaButtonText: {
     color: '#24364B',
     fontSize: 11,
@@ -16103,6 +16767,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+  iniciarVistoriaAcoes: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 16,
+  },
+
   iniciarVistoriaButton: {
     minHeight: 54,
     backgroundColor:
@@ -16113,7 +16784,31 @@ const styles = StyleSheet.create({
     justifyContent:
       'center',
     gap: 8,
-    marginTop: 16,
+    flexGrow: 1,
+    flexBasis: 220,
+  },
+
+  clienteAusenteAntesButton: {
+    minHeight: 54,
+    backgroundColor:
+      '#FFF7E8',
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor:
+      '#E0B567',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent:
+      'center',
+    gap: 8,
+    flexGrow: 1,
+    flexBasis: 220,
+  },
+
+  clienteAusenteAntesButtonText: {
+    color: '#A76500',
+    fontSize: 13,
+    fontWeight: '800',
   },
 
   iniciarVistoriaButtonText: {
