@@ -49,6 +49,24 @@ type Solicitacao = {
   updated_at: string;
 };
 
+type GarantiaSolicitacaoCliente = {
+  solicitacao_id: string;
+  item_garantia_id: string | null;
+  categoria: string | null;
+  elemento_construtivo: string | null;
+  manifestacao_patologica: string | null;
+  tipo_prazo: string | null;
+  prazo_quantidade: number | null;
+  prazo_unidade: string | null;
+  regra_data_base: string | null;
+  data_base_garantia: string | null;
+  data_limite_garantia: string | null;
+  status_garantia: string | null;
+  dias_restantes: number | null;
+  aviso_garantia: string | null;
+  observacao_item: string | null;
+};
+
 type FotoSolicitacao = {
   id: string;
   solicitacao_id: string;
@@ -1058,6 +1076,29 @@ export default function DetalhesSolicitacaoScreen() {
   ] = useState('');
 
   const [
+    garantiaSolicitacao,
+    setGarantiaSolicitacao,
+  ] = useState<GarantiaSolicitacaoCliente | null>(
+    null
+  );
+
+  const [
+    carregandoGarantia,
+    setCarregandoGarantia,
+  ] = useState(false);
+
+  const [
+    erroGarantia,
+    setErroGarantia,
+  ] = useState('');
+
+  const foraDaGarantiaCliente =
+    garantiaSolicitacao?.status_garantia ===
+      'fora_da_garantia' ||
+    garantiaSolicitacao?.status_garantia ===
+      'fora_garantia';
+
+  const [
     resultadoVistoriaCliente,
     setResultadoVistoriaCliente,
   ] = useState<ResultadoVistoriaCliente | null>(
@@ -1144,6 +1185,7 @@ export default function DetalhesSolicitacaoScreen() {
 
   async function carregarDados() {
     await carregarSolicitacao();
+    await carregarGarantiaSolicitacao();
     await carregarFotos();
     await carregarAgendamentoVistoria();
     await carregarResultadoVistoriaCliente();
@@ -1162,6 +1204,13 @@ export default function DetalhesSolicitacaoScreen() {
       setErroFotosAusencia('');
     }
   }, [solicitacao?.status]);
+
+  useEffect(() => {
+    if (foraDaGarantiaCliente) {
+      setMostrarReagendamento(false);
+      setMostrarCancelamento(false);
+    }
+  }, [foraDaGarantiaCliente]);
 
   async function carregarSolicitacao() {
     try {
@@ -1212,6 +1261,55 @@ export default function DetalhesSolicitacaoScreen() {
       );
     } finally {
       setCarregando(false);
+    }
+  }
+
+  async function carregarGarantiaSolicitacao() {
+    try {
+      setCarregandoGarantia(true);
+      setErroGarantia('');
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'buscar_garantia_solicitacao_cliente',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao buscar garantia da solicitação:',
+          error
+        );
+
+        setErroGarantia(
+          'Não foi possível carregar as informações de garantia.'
+        );
+
+        return;
+      }
+
+      setGarantiaSolicitacao(
+        (data?.[0] as
+          | GarantiaSolicitacaoCliente
+          | undefined) ??
+          null
+      );
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao carregar garantia:',
+        error
+      );
+
+      setErroGarantia(
+        'Ocorreu um erro ao carregar as informações de garantia.'
+      );
+    } finally {
+      setCarregandoGarantia(false);
     }
   }
 
@@ -1399,6 +1497,12 @@ export default function DetalhesSolicitacaoScreen() {
   }
 
   async function abrirReagendamento() {
+    if (foraDaGarantiaCliente) {
+      setMostrarReagendamento(false);
+      setMostrarCancelamento(false);
+      return;
+    }
+
     setMensagemVistoria('');
     setMostrarCancelamento(false);
     setMostrarReagendamento(true);
@@ -1408,6 +1512,11 @@ export default function DetalhesSolicitacaoScreen() {
   }
 
   async function confirmarReagendamento() {
+    if (foraDaGarantiaCliente) {
+      setMostrarReagendamento(false);
+      return;
+    }
+
     if (
       !dataVistoriaSelecionada ||
       !horarioVistoriaSelecionadoId
@@ -2153,6 +2262,60 @@ export default function DetalhesSolicitacaoScreen() {
     }
   }
 
+  function textoStatusGarantia(
+    status:
+      | string
+      | null
+      | undefined
+  ) {
+    switch (status) {
+      case 'dentro_da_garantia':
+        return 'Dentro da garantia';
+
+      case 'fora_da_garantia':
+        return 'Fora da garantia';
+
+      case 'ato_da_entrega':
+        return 'Garantia no ato da entrega';
+
+      case 'dados_insuficientes':
+        return 'Dados insuficientes';
+
+      case 'nao_se_aplica':
+        return 'Não se aplica';
+
+      default:
+        return 'Aguardando análise';
+    }
+  }
+
+  function textoPrazoGarantia(
+    garantia:
+      | GarantiaSolicitacaoCliente
+      | null
+  ) {
+    if (!garantia) {
+      return '-';
+    }
+
+    if (
+      garantia.tipo_prazo ===
+      'ato_entrega'
+    ) {
+      return 'Ato da entrega';
+    }
+
+    if (
+      garantia.prazo_quantidade ===
+        null ||
+      !garantia.prazo_unidade
+    ) {
+      return '-';
+    }
+
+    return `${garantia.prazo_quantidade} ${garantia.prazo_unidade}`;
+  }
+
   function textoStatus(
     status: string
   ) {
@@ -2607,6 +2770,335 @@ export default function DetalhesSolicitacaoScreen() {
                   }
                 </Text>
               </View>
+
+              {/* GARANTIA
+                  Exibida para o cliente somente quando a análise
+                  confirmar que o item está fora da garantia.
+              */}
+
+              {!carregandoGarantia &&
+              !erroGarantia &&
+              garantiaSolicitacao &&
+              garantiaSolicitacao
+                .item_garantia_id &&
+              garantiaSolicitacao
+                .status_garantia ===
+                'fora_da_garantia' ? (
+                <>
+                  <Text
+                    style={
+                      styles.sectionTitle
+                    }
+                  >
+                    Garantia
+                  </Text>
+
+                  <View
+                    style={
+                      styles.garantiaCard
+                    }
+                  >
+                    <View
+                      style={
+                        styles.garantiaHeader
+                      }
+                    >
+                      <View
+                        style={
+                          styles.garantiaIcon
+                        }
+                      >
+                        <Ionicons
+                          name="shield-checkmark-outline"
+                          size={23}
+                          color={
+                            garantiaSolicitacao
+                              .status_garantia ===
+                            'fora_da_garantia'
+                              ? '#9A3232'
+                              : '#287A46'
+                          }
+                        />
+                      </View>
+
+                      <View
+                        style={{
+                          flex: 1,
+                        }}
+                      >
+                        <Text
+                          style={
+                            styles.garantiaHeaderLabel
+                          }
+                        >
+                          SITUAÇÃO DA GARANTIA
+                        </Text>
+
+                        <Text
+                          style={[
+                            styles.garantiaStatusText,
+                            garantiaSolicitacao
+                              .status_garantia ===
+                            'fora_da_garantia'
+                              ? styles.garantiaStatusFora
+                              : styles.garantiaStatusDentro,
+                          ]}
+                        >
+                          {textoStatusGarantia(
+                            garantiaSolicitacao
+                              .status_garantia
+                          )}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View
+                      style={
+                        styles.garantiaInfoBox
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.garantiaInfoLabel
+                        }
+                      >
+                        ITEM DA GARANTIA
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.garantiaInfoValueStrong
+                        }
+                      >
+                        {
+                          garantiaSolicitacao
+                            .manifestacao_patologica ||
+                          '-'
+                        }
+                      </Text>
+                    </View>
+
+                    <View
+                      style={
+                        styles.garantiaInfoBox
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.garantiaInfoLabel
+                        }
+                      >
+                        REFERE-SE A
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.garantiaInfoValue
+                        }
+                      >
+                        {
+                          garantiaSolicitacao
+                            .elemento_construtivo ||
+                          '-'
+                        }
+                      </Text>
+                    </View>
+
+                    {garantiaSolicitacao
+                      .categoria ? (
+                      <View
+                        style={
+                          styles.garantiaLinha
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.garantiaLinhaLabel
+                          }
+                        >
+                          Categoria
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.garantiaLinhaValue
+                          }
+                        >
+                          {
+                            garantiaSolicitacao
+                              .categoria
+                          }
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    <View
+                      style={
+                        styles.garantiaLinha
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.garantiaLinhaLabel
+                        }
+                      >
+                        Prazo
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.garantiaLinhaValue
+                        }
+                      >
+                        {textoPrazoGarantia(
+                          garantiaSolicitacao
+                        )}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={
+                        styles.garantiaLinha
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.garantiaLinhaLabel
+                        }
+                      >
+                        Data-base
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.garantiaLinhaValue
+                        }
+                      >
+                        {formatarData(
+                          garantiaSolicitacao
+                            .data_base_garantia
+                        )}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={
+                        styles.garantiaLinha
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.garantiaLinhaLabel
+                        }
+                      >
+                        Data limite
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.garantiaLinhaValue
+                        }
+                      >
+                        {formatarData(
+                          garantiaSolicitacao
+                            .data_limite_garantia
+                        )}
+                      </Text>
+                    </View>
+
+                    {garantiaSolicitacao
+                      .dias_restantes !==
+                      null ? (
+                      <View
+                        style={
+                          styles.garantiaLinha
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.garantiaLinhaLabel
+                          }
+                        >
+                          Dias restantes
+                        </Text>
+
+                        <Text
+                          style={[
+                            styles.garantiaLinhaValue,
+                            garantiaSolicitacao
+                              .dias_restantes <
+                            0
+                              ? styles.garantiaDiasExpirados
+                              : null,
+                          ]}
+                        >
+                          {garantiaSolicitacao
+                            .dias_restantes >=
+                          0
+                            ? `${garantiaSolicitacao.dias_restantes} dias`
+                            : `Prazo encerrado há ${Math.abs(
+                                garantiaSolicitacao
+                                  .dias_restantes
+                              )} dias`}
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    {garantiaSolicitacao
+                      .observacao_item ? (
+                      <View
+                        style={
+                          styles.garantiaObservacao
+                        }
+                      >
+                        <Ionicons
+                          name="information-circle-outline"
+                          size={19}
+                          color="#0B5EA8"
+                        />
+
+                        <Text
+                          style={
+                            styles.garantiaObservacaoText
+                          }
+                        >
+                          {
+                            garantiaSolicitacao
+                              .observacao_item
+                          }
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    {garantiaSolicitacao
+                      .aviso_garantia ? (
+                      <View
+                        style={
+                          styles.garantiaAviso
+                        }
+                      >
+                        <Ionicons
+                          name="alert-circle-outline"
+                          size={19}
+                          color="#A76500"
+                        />
+
+                        <Text
+                          style={
+                            styles.garantiaAvisoText
+                          }
+                        >
+                          {
+                            garantiaSolicitacao
+                              .aviso_garantia
+                          }
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                </>
+              ) : null}
 
               {/* FOTOS */}
 
@@ -3471,7 +3963,8 @@ export default function DetalhesSolicitacaoScreen() {
                     </View>
                   </View>
 
-                  {[
+                  {!foraDaGarantiaCliente &&
+                  [
                     'aberta',
                     'em_analise',
                     'vistoria_agendada',
@@ -3548,6 +4041,8 @@ export default function DetalhesSolicitacaoScreen() {
               ) : null}
 
               {!carregandoAgendamento &&
+              !carregandoGarantia &&
+              !foraDaGarantiaCliente &&
               !agendamento &&
               [
                 'aberta',
@@ -3608,7 +4103,8 @@ export default function DetalhesSolicitacaoScreen() {
                 </View>
               ) : null}
 
-              {mostrarCancelamento ? (
+              {!foraDaGarantiaCliente &&
+              mostrarCancelamento ? (
                 <View
                   style={
                     styles.vistoriaFormBox
@@ -3692,7 +4188,8 @@ export default function DetalhesSolicitacaoScreen() {
                 </View>
               ) : null}
 
-              {mostrarReagendamento ? (
+              {!foraDaGarantiaCliente &&
+              mostrarReagendamento ? (
                 <View
                   style={
                     styles.vistoriaFormBox
@@ -5062,9 +5559,11 @@ export default function DetalhesSolicitacaoScreen() {
                     styles.infoText
                   }
                 >
-                  {textoProximaEtapa(
-                    solicitacao.status
-                  )}
+                  {foraDaGarantiaCliente
+                    ? 'Este item está fora da garantia. Não há agendamento de vistoria de garantia disponível para este chamado.'
+                    : textoProximaEtapa(
+                        solicitacao.status
+                      )}
                 </Text>
               </View>
             </>
@@ -6950,6 +7449,181 @@ const styles =
     timelineDate: {
       color: '#8995A5',
       fontSize: 10,
+      marginTop: 3,
+    },
+
+    garantiaLoadingCard: {
+      backgroundColor: '#FFFFFF',
+      borderRadius: 14,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: '#D8DEE7',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 9,
+    },
+
+    garantiaLoadingText: {
+      color: '#697789',
+      fontSize: 11,
+    },
+
+    garantiaCard: {
+      backgroundColor: '#FFFFFF',
+      borderRadius: 15,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: '#D8DEE7',
+    },
+
+    garantiaHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 14,
+    },
+
+    garantiaIcon: {
+      width: 43,
+      height: 43,
+      borderRadius: 22,
+      backgroundColor: '#EEF4F8',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    garantiaHeaderLabel: {
+      color: '#8995A5',
+      fontSize: 9,
+      fontWeight: '900',
+      letterSpacing: 0.5,
+    },
+
+    garantiaStatusText: {
+      fontSize: 15,
+      fontWeight: '900',
+      marginTop: 2,
+    },
+
+    garantiaStatusDentro: {
+      color: '#287A46',
+    },
+
+    garantiaStatusFora: {
+      color: '#9A3232',
+    },
+
+    garantiaInfoBox: {
+      backgroundColor: '#F7F9FC',
+      borderRadius: 11,
+      padding: 12,
+      marginBottom: 9,
+    },
+
+    garantiaInfoLabel: {
+      color: '#8995A5',
+      fontSize: 9,
+      fontWeight: '900',
+      letterSpacing: 0.4,
+      marginBottom: 5,
+    },
+
+    garantiaInfoValueStrong: {
+      color: '#24364B',
+      fontSize: 12,
+      fontWeight: '800',
+      lineHeight: 18,
+    },
+
+    garantiaInfoValue: {
+      color: '#3E4A59',
+      fontSize: 11,
+      lineHeight: 18,
+    },
+
+    garantiaLinha: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 14,
+      paddingVertical: 9,
+      borderBottomWidth: 1,
+      borderBottomColor: '#EEF1F5',
+    },
+
+    garantiaLinhaLabel: {
+      color: '#697789',
+      fontSize: 10,
+      fontWeight: '700',
+    },
+
+    garantiaLinhaValue: {
+      flex: 1,
+      color: '#24364B',
+      fontSize: 10,
+      fontWeight: '700',
+      textAlign: 'right',
+    },
+
+    garantiaDiasExpirados: {
+      color: '#9A3232',
+    },
+
+    garantiaObservacao: {
+      marginTop: 12,
+      padding: 11,
+      borderRadius: 11,
+      backgroundColor: '#F2F7FC',
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+    },
+
+    garantiaObservacaoText: {
+      flex: 1,
+      color: '#526477',
+      fontSize: 10,
+      lineHeight: 16,
+    },
+
+    garantiaAviso: {
+      marginTop: 10,
+      padding: 11,
+      borderRadius: 11,
+      backgroundColor: '#FFF7E8',
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+    },
+
+    garantiaAvisoText: {
+      flex: 1,
+      color: '#7B6540',
+      fontSize: 10,
+      lineHeight: 16,
+    },
+
+    garantiaPendenteCard: {
+      backgroundColor: '#F7F9FC',
+      borderRadius: 14,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: '#D8DEE7',
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+    },
+
+    garantiaPendenteTitle: {
+      color: '#24364B',
+      fontSize: 12,
+      fontWeight: '800',
+    },
+
+    garantiaPendenteText: {
+      color: '#697789',
+      fontSize: 10,
+      lineHeight: 16,
       marginTop: 3,
     },
 

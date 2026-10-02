@@ -18,6 +18,7 @@ import {
 import {
   ActivityIndicator,
   Image,
+  Linking,
   Modal,
   PanResponder,
   Platform,
@@ -2993,6 +2994,129 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       );
     } finally {
       setSalvandoVistoria(false);
+    }
+  }
+
+  function normalizarTelefoneWhatsApp(
+    telefone:
+      | string
+      | null
+      | undefined
+  ) {
+    const somenteNumeros =
+      String(
+        telefone ?? ''
+      ).replace(
+        /\D/g,
+        ''
+      );
+
+    if (
+      !somenteNumeros
+    ) {
+      return '';
+    }
+
+    if (
+      somenteNumeros.startsWith(
+        '55'
+      ) &&
+      (
+        somenteNumeros.length ===
+          12 ||
+        somenteNumeros.length ===
+          13
+      )
+    ) {
+      return somenteNumeros;
+    }
+
+    if (
+      somenteNumeros.length ===
+        10 ||
+      somenteNumeros.length ===
+        11
+    ) {
+      return `55${somenteNumeros}`;
+    }
+
+    return '';
+  }
+
+  async function avisarClienteWhatsAppVistoria() {
+    setErroVistoria('');
+
+    if (
+      !solicitacao ||
+      !agendamento
+    ) {
+      setErroVistoria(
+        'Não há vistoria agendada para enviar ao cliente.'
+      );
+
+      return;
+    }
+
+    const telefone =
+      normalizarTelefoneWhatsApp(
+        solicitacao.telefone_contato
+      );
+
+    if (!telefone) {
+      setErroVistoria(
+        'O telefone do cliente está vazio ou inválido para abrir o WhatsApp.'
+      );
+
+      return;
+    }
+
+    const mensagem = [
+      `Olá, ${solicitacao.cliente_nome}!`,
+      '',
+      'Aqui é da EMAFE Engenharia.',
+      `Sua vistoria do protocolo ${solicitacao.protocolo} está agendada para ${formatarData(
+        agendamento.data_vistoria
+      )}, das ${formatarHora(
+        agendamento.hora_inicio
+      )} às ${formatarHora(
+        agendamento.hora_fim
+      )}.`,
+      `Imóvel: ${solicitacao.empreendimento} - Unidade ${solicitacao.unidade}.`,
+      '',
+      'Esta mensagem foi preparada pelo sistema da EMAFE. Para concluir o aviso, basta enviar esta mensagem no WhatsApp.',
+    ].join('\n');
+
+    const url =
+      `https://wa.me/${telefone}?text=${encodeURIComponent(
+        mensagem
+      )}`;
+
+    try {
+      if (
+        Platform.OS === 'web' &&
+        typeof window !== 'undefined'
+      ) {
+        window.open(
+          url,
+          '_blank',
+          'noopener,noreferrer'
+        );
+
+        return;
+      }
+
+      await Linking.openURL(
+        url
+      );
+    } catch (error) {
+      console.error(
+        'Erro ao abrir WhatsApp:',
+        error
+      );
+
+      setErroVistoria(
+        'Não foi possível abrir o WhatsApp neste dispositivo.'
+      );
     }
   }
 
@@ -7944,6 +8068,50 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             }
                           />
                         </View>
+
+                        <TouchableOpacity
+                          style={
+                            styles.whatsAppVistoriaButton
+                          }
+                          onPress={
+                            avisarClienteWhatsAppVistoria
+                          }
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons
+                            name="logo-whatsapp"
+                            size={20}
+                            color="#FFFFFF"
+                          />
+
+                          <View
+                            style={{
+                              flex: 1,
+                            }}
+                          >
+                            <Text
+                              style={
+                                styles.whatsAppVistoriaButtonText
+                              }
+                            >
+                              Avisar cliente no WhatsApp
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.whatsAppVistoriaButtonSubtext
+                              }
+                            >
+                              Abre a conversa com a mensagem da vistoria pronta para enviar.
+                            </Text>
+                          </View>
+
+                          <Ionicons
+                            name="open-outline"
+                            size={18}
+                            color="#FFFFFF"
+                          />
+                        </TouchableOpacity>
                       </View>
                     ) : null}
 
@@ -14899,6 +15067,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+  },
+
+  whatsAppVistoriaButton: {
+    minHeight: 54,
+    marginTop: 14,
+    borderRadius: 12,
+    backgroundColor:
+      '#1F8F4E',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 11,
+  },
+
+  whatsAppVistoriaButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  whatsAppVistoriaButtonSubtext: {
+    color: '#EAF7EF',
+    fontSize: 9,
+    lineHeight: 14,
+    marginTop: 2,
   },
 
   observacaoAtual: {
