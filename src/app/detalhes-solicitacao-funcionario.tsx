@@ -1391,6 +1391,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   ] = useState(false);
 
   const [
+    dataRealInicioExecucao,
+    setDataRealInicioExecucao,
+  ] = useState('');
+
+  const [
+    horaRealInicioExecucao,
+    setHoraRealInicioExecucao,
+  ] = useState('');
+
+  const [
     erroExecucao,
     setErroExecucao,
   ] = useState('');
@@ -3092,19 +3102,6 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       )}`;
 
     try {
-      if (
-        Platform.OS === 'web' &&
-        typeof window !== 'undefined'
-      ) {
-        window.open(
-          url,
-          '_blank',
-          'noopener,noreferrer'
-        );
-
-        return;
-      }
-
       await Linking.openURL(
         url
       );
@@ -4277,7 +4274,66 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       !propostaAgendamentoExecucao.hora_confirmada
     ) {
       setErroExecucao(
-        'A execução só pode ser iniciada depois que o cliente confirmar uma das opções de agendamento.'
+        'A execução só pode ser iniciada depois que o cliente confirmar o agendamento.'
+      );
+
+      return;
+    }
+
+    const dataInformada =
+      dataRealInicioExecucao.trim();
+
+    const horaInformada =
+      horaRealInicioExecucao.trim();
+
+    const dataMatch =
+      dataInformada.match(
+        /^(\d{2})\/(\d{2})\/(\d{4})$/
+      );
+
+    if (!dataMatch) {
+      setErroExecucao(
+        'Informe a data real do início no formato DD/MM/AAAA.'
+      );
+
+      return;
+    }
+
+    if (
+      !/^([01]\d|2[0-3]):[0-5]\d$/.test(
+        horaInformada
+      )
+    ) {
+      setErroExecucao(
+        'Informe a hora real do início no formato HH:MM.'
+      );
+
+      return;
+    }
+
+    const [, dia, mes, ano] =
+      dataMatch;
+
+    const dataIso =
+      `${ano}-${mes}-${dia}`;
+
+    const dataValidacao =
+      new Date(
+        Number(ano),
+        Number(mes) - 1,
+        Number(dia)
+      );
+
+    if (
+      dataValidacao.getFullYear() !==
+        Number(ano) ||
+      dataValidacao.getMonth() !==
+        Number(mes) - 1 ||
+      dataValidacao.getDate() !==
+        Number(dia)
+    ) {
+      setErroExecucao(
+        'Informe uma data real válida para o início da execução.'
       );
 
       return;
@@ -4290,10 +4346,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         data,
         error,
       } = await supabase.rpc(
-        'iniciar_execucao_servico_funcionario',
+        'iniciar_execucao_servico_funcionario_manual',
         {
           p_solicitacao_id:
             solicitacaoId,
+
+          p_data_inicio:
+            dataIso,
+
+          p_hora_inicio:
+            horaInformada,
         }
       );
 
@@ -10281,15 +10343,89 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </View>
                                 </View>
 
+                                <View
+                                  style={{
+                                    marginTop: 14,
+                                  }}
+                                >
+                                  <Text
+                                    style={
+                                      styles.inputLabel
+                                    }
+                                  >
+                                    DATA REAL DO INÍCIO *
+                                  </Text>
+
+                                  <TextInput
+                                    style={
+                                      styles.input
+                                    }
+                                    value={
+                                      dataRealInicioExecucao
+                                    }
+                                    onChangeText={
+                                      setDataRealInicioExecucao
+                                    }
+                                    placeholder="DD/MM/AAAA"
+                                    keyboardType="numeric"
+                                    maxLength={10}
+                                    editable={
+                                      !iniciandoExecucao
+                                    }
+                                  />
+
+                                  <Text
+                                    style={
+                                      styles.inputLabel
+                                    }
+                                  >
+                                    HORA REAL DO INÍCIO *
+                                  </Text>
+
+                                  <TextInput
+                                    style={
+                                      styles.input
+                                    }
+                                    value={
+                                      horaRealInicioExecucao
+                                    }
+                                    onChangeText={
+                                      setHoraRealInicioExecucao
+                                    }
+                                    placeholder="HH:MM"
+                                    keyboardType="numeric"
+                                    maxLength={5}
+                                    editable={
+                                      !iniciandoExecucao
+                                    }
+                                  />
+
+                                  <Text
+                                    style={{
+                                      color: '#697789',
+                                      fontSize: 10,
+                                      lineHeight: 15,
+                                      marginTop: 7,
+                                      marginBottom: 10,
+                                    }}
+                                  >
+                                    Informe a data e a hora em que o serviço realmente começou.
+                                  </Text>
+                                </View>
+
                                 <TouchableOpacity
                                   style={[
                                     styles.iniciarExecucaoButton,
 
-                                    iniciandoExecucao &&
+                                    (iniciandoExecucao ||
+                                      !dataRealInicioExecucao.trim() ||
+                                      !horaRealInicioExecucao.trim()) &&
                                       styles.buttonDisabled,
                                   ]}
                                   disabled={
-                                    iniciandoExecucao
+                                    iniciandoExecucao ||
+                                    !dataRealInicioExecucao.trim() ||
+                                    !horaRealInicioExecucao.trim()
                                   }
                                   onPress={
                                     iniciarExecucaoServico

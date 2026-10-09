@@ -602,6 +602,11 @@ export default function DashboardFuncionarioScreen() {
             <TouchableOpacity
               style={styles.menuCard}
               activeOpacity={0.85}
+              onPress={() =>
+                router.push(
+                  '/clientes-imoveis-funcionario'
+                )
+              }
             >
               <View
                 style={
