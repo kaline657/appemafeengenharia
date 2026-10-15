@@ -4,19 +4,21 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 import { supabase } from '../lib/supabase';
 
-type Aba = 'clientes' | 'empreendimentos' | 'garantias';
+type Aba = 'clientes' | 'funcionarios' | 'empreendimentos' | 'garantias';
 
 type LinhaCliente = {
   pre_cadastro_id: string;
@@ -48,6 +50,16 @@ type Cliente = {
   ativo: boolean;
   acesso_ativado: boolean;
   unidades: UnidadeVinculada[];
+};
+
+type FuncionarioPreCadastro = {
+  pre_cadastro_id: string;
+  nome_completo: string;
+  cpf_cnpj: string;
+  email: string;
+  telefone: string | null;
+  ativo: boolean;
+  acesso_ativado: boolean;
 };
 
 type UnidadeDisponivel = {
@@ -236,21 +248,59 @@ function BotaoSalvar({
   );
 }
 
+function converterDataParaISO(valor: string) {
+  const texto = valor.trim();
+
+  if (!texto) return null;
+
+  let ano: number;
+  let mes: number;
+  let dia: number;
+
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(texto)) {
+    const partes = texto.split('/').map(Number);
+    dia = partes[0];
+    mes = partes[1];
+    ano = partes[2];
+  } else if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+    const partes = texto.split('-').map(Number);
+    ano = partes[0];
+    mes = partes[1];
+    dia = partes[2];
+  } else {
+    return null;
+  }
+
+  const data = new Date(Date.UTC(ano, mes - 1, dia));
+
+  if (
+    data.getUTCFullYear() !== ano ||
+    data.getUTCMonth() !== mes - 1 ||
+    data.getUTCDate() !== dia
+  ) {
+    return null;
+  }
+
+  return `${String(ano).padStart(4, '0')}-${String(mes).padStart(
+    2,
+    '0'
+  )}-${String(dia).padStart(2, '0')}`;
+}
+
 function dataValida(valor: string) {
   if (!valor.trim()) return true;
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor.trim())) {
-    return false;
-  }
+  return converterDataParaISO(valor) !== null;
+}
 
-  const [ano, mes, dia] = valor.trim().split('-').map(Number);
-  const data = new Date(Date.UTC(ano, mes - 1, dia));
+function formatarDataBrasileira(valor: string | null) {
+  if (!valor) return '-';
 
-  return (
-    data.getUTCFullYear() === ano &&
-    data.getUTCMonth() === mes - 1 &&
-    data.getUTCDate() === dia
-  );
+  const match = valor.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+  if (!match) return valor;
+
+  return `${match[3]}/${match[2]}/${match[1]}`;
 }
 
 function formatarDocumento(valor: string) {
@@ -278,6 +328,7 @@ export default function ClientesImoveisFuncionarioScreen() {
   const [carregando, setCarregando] = useState(true);
   const [atualizando, setAtualizando] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [excluindoId, setExcluindoId] = useState<string | null>(null);
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
 
@@ -285,6 +336,18 @@ export default function ClientesImoveisFuncionarioScreen() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [unidades, setUnidades] = useState<UnidadeDisponivel[]>([]);
   const [busca, setBusca] = useState('');
+
+  // FUNCIONÁRIOS
+  const [funcionarios, setFuncionarios] = useState<FuncionarioPreCadastro[]>([]);
+  const [buscaFuncionario, setBuscaFuncionario] = useState('');
+  const [mostrarFormularioFuncionario, setMostrarFormularioFuncionario] =
+    useState(false);
+  const [editandoFuncionarioId, setEditandoFuncionarioId] =
+    useState<string | null>(null);
+  const [funcionarioNome, setFuncionarioNome] = useState('');
+  const [funcionarioCpf, setFuncionarioCpf] = useState('');
+  const [funcionarioEmail, setFuncionarioEmail] = useState('');
+  const [funcionarioTelefone, setFuncionarioTelefone] = useState('');
   const [mostrarFormularioCliente, setMostrarFormularioCliente] =
     useState(false);
   const [editandoId, setEditandoId] = useState<string | null>(null);
@@ -351,6 +414,7 @@ export default function ClientesImoveisFuncionarioScreen() {
 
       await Promise.all([
         carregarClientes(),
+        carregarFuncionarios(),
         carregarCatalogo(),
       ]);
     } catch (e: any) {
@@ -417,6 +481,20 @@ export default function ClientesImoveisFuncionarioScreen() {
     );
   }
 
+  async function carregarFuncionarios() {
+    const { data, error } = await supabase.rpc(
+      'listar_funcionarios_pre_cadastro_funcionario'
+    );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    setFuncionarios(
+      (data ?? []) as FuncionarioPreCadastro[]
+    );
+  }
+
   async function carregarCatalogo(modeloId?: string) {
     const { data, error } = await supabase.rpc(
       'gerenciar_cadastro_empreendimentos_garantias_funcionario',
@@ -448,6 +526,8 @@ export default function ClientesImoveisFuncionarioScreen() {
 
       if (aba === 'clientes') {
         await carregarClientes();
+      } else if (aba === 'funcionarios') {
+        await carregarFuncionarios();
       } else {
         await carregarCatalogo(
           aba === 'garantias' && modeloSelecionadoId
@@ -502,6 +582,188 @@ export default function ClientesImoveisFuncionarioScreen() {
       return null;
     } finally {
       setSalvando(false);
+    }
+  }
+
+  // FUNCIONÁRIOS
+
+  const funcionariosFiltrados = useMemo(() => {
+    const termo = buscaFuncionario.trim().toLowerCase();
+
+    if (!termo) return funcionarios;
+
+    const numeros = termo.replace(/\D/g, '');
+
+    return funcionarios.filter((funcionario) => {
+      return (
+        funcionario.nome_completo.toLowerCase().includes(termo) ||
+        funcionario.email.toLowerCase().includes(termo) ||
+        (!!numeros &&
+          funcionario.cpf_cnpj.replace(/\D/g, '').includes(numeros)) ||
+        (!!numeros &&
+          (funcionario.telefone ?? '')
+            .replace(/\D/g, '')
+            .includes(numeros))
+      );
+    });
+  }, [funcionarios, buscaFuncionario]);
+
+  function limparFuncionario() {
+    setEditandoFuncionarioId(null);
+    setFuncionarioNome('');
+    setFuncionarioCpf('');
+    setFuncionarioEmail('');
+    setFuncionarioTelefone('');
+  }
+
+  function abrirNovoFuncionario() {
+    limparFuncionario();
+    setErro('');
+    setSucesso('');
+    setMostrarFormularioFuncionario(true);
+  }
+
+  function abrirEdicaoFuncionario(
+    funcionario: FuncionarioPreCadastro
+  ) {
+    if (funcionario.acesso_ativado) {
+      setErro(
+        'O acesso deste funcionário já foi ativado. Este pré-cadastro não pode mais ser editado.'
+      );
+      return;
+    }
+
+    setEditandoFuncionarioId(funcionario.pre_cadastro_id);
+    setFuncionarioNome(funcionario.nome_completo);
+    setFuncionarioCpf(funcionario.cpf_cnpj);
+    setFuncionarioEmail(funcionario.email);
+    setFuncionarioTelefone(funcionario.telefone ?? '');
+    setErro('');
+    setSucesso('');
+    setMostrarFormularioFuncionario(true);
+  }
+
+  async function salvarFuncionario() {
+    setErro('');
+    setSucesso('');
+
+    const documento = funcionarioCpf.replace(/\D/g, '');
+    const emailNormalizado =
+      funcionarioEmail.trim().toLowerCase();
+
+    if (!funcionarioNome.trim()) {
+      setErro('Informe o nome completo do funcionário.');
+      return;
+    }
+
+    if (documento.length !== 11) {
+      setErro('Informe um CPF com 11 dígitos.');
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNormalizado)) {
+      setErro('Informe um e-mail válido.');
+      return;
+    }
+
+    try {
+      setSalvando(true);
+
+      const { data, error } = await supabase.rpc(
+        'salvar_funcionario_pre_cadastro_funcionario',
+        {
+          p_pre_cadastro_id: editandoFuncionarioId,
+          p_nome_completo: funcionarioNome.trim(),
+          p_cpf_cnpj: documento,
+          p_email: emailNormalizado,
+          p_telefone: funcionarioTelefone.trim() || null,
+        }
+      );
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const resultado = data as {
+        mensagem?: string;
+      } | null;
+
+      setSucesso(
+        resultado?.mensagem ??
+          'Funcionário salvo com sucesso.'
+      );
+
+      setMostrarFormularioFuncionario(false);
+      limparFuncionario();
+      await carregarFuncionarios();
+    } catch (e: any) {
+      setErro(
+        e?.message ??
+          'Não foi possível salvar o funcionário.'
+      );
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function excluirFuncionario(
+    funcionario: FuncionarioPreCadastro
+  ) {
+    if (funcionario.acesso_ativado) {
+      setErro(
+        'Não é possível excluir este funcionário porque o acesso já foi ativado.'
+      );
+      return;
+    }
+
+    const confirmou = await confirmarExclusao(
+      'Excluir funcionário',
+      `Tem certeza que deseja excluir "${funcionario.nome_completo}" do pré-cadastro? Esta ação não poderá ser desfeita.`
+    );
+
+    if (!confirmou) return;
+
+    try {
+      setExcluindoId(funcionario.pre_cadastro_id);
+      setErro('');
+      setSucesso('');
+
+      const { data, error } = await supabase.rpc(
+        'excluir_funcionario_pre_cadastro_funcionario',
+        {
+          p_pre_cadastro_id: funcionario.pre_cadastro_id,
+        }
+      );
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const resultado = data as {
+        mensagem?: string;
+      } | null;
+
+      setSucesso(
+        resultado?.mensagem ??
+          'Funcionário excluído com sucesso.'
+      );
+
+      if (
+        editandoFuncionarioId ===
+        funcionario.pre_cadastro_id
+      ) {
+        setMostrarFormularioFuncionario(false);
+        limparFuncionario();
+      }
+
+      await carregarFuncionarios();
+    } catch (e: any) {
+      setErro(
+        e?.message ??
+          'Não foi possível excluir o funcionário.'
+      );
+    } finally {
+      setExcluindoId(null);
     }
   }
 
@@ -644,6 +906,187 @@ export default function ClientesImoveisFuncionarioScreen() {
     }
   }
 
+  async function confirmarExclusao(
+    titulo: string,
+    mensagem: string
+  ): Promise<boolean> {
+    if (Platform.OS === 'web') {
+      return globalThis.confirm?.(`${titulo}\n\n${mensagem}`) ?? false;
+    }
+
+    return new Promise((resolve) => {
+      Alert.alert(
+        titulo,
+        mensagem,
+        [
+          {
+            text: 'Cancelar',
+            style: 'cancel',
+            onPress: () => resolve(false),
+          },
+          {
+            text: 'Excluir',
+            style: 'destructive',
+            onPress: () => resolve(true),
+          },
+        ],
+        {
+          cancelable: true,
+          onDismiss: () => resolve(false),
+        }
+      );
+    });
+  }
+
+  async function excluirEmpreendimento(emp: Empreendimento) {
+    const confirmou = await confirmarExclusao(
+      'Excluir empreendimento',
+      `Tem certeza que deseja excluir "${emp.nome}"? Esta ação não poderá ser desfeita.`
+    );
+
+    if (!confirmou) return;
+
+    try {
+      setExcluindoId(emp.id);
+      setErro('');
+      setSucesso('');
+
+      const { data, error } = await supabase.rpc(
+        'excluir_empreendimento_funcionario',
+        {
+          p_empreendimento_id: emp.id,
+        }
+      );
+
+      if (error) throw new Error(error.message);
+
+      const resultado = data as {
+        sucesso?: boolean;
+        mensagem?: string;
+      } | null;
+
+      setSucesso(
+        resultado?.mensagem ??
+          'Empreendimento excluído com sucesso.'
+      );
+
+      if (empreendimentoSelecionadoId === emp.id) {
+        setEmpreendimentoSelecionadoId('');
+        setFormUnidade(false);
+      }
+
+      await Promise.all([
+        carregarCatalogo(),
+        carregarClientes(),
+      ]);
+    } catch (e: any) {
+      setErro(
+        e?.message ??
+          'Não foi possível excluir o empreendimento.'
+      );
+    } finally {
+      setExcluindoId(null);
+    }
+  }
+
+  async function excluirModeloGarantia(modelo: ModeloGarantia) {
+    const confirmou = await confirmarExclusao(
+      'Excluir modelo de garantia',
+      `Tem certeza que deseja excluir "${modelo.nome}"? Esta ação não poderá ser desfeita.`
+    );
+
+    if (!confirmou) return;
+
+    try {
+      setExcluindoId(modelo.id);
+      setErro('');
+      setSucesso('');
+
+      const { data, error } = await supabase.rpc(
+        'excluir_modelo_garantia_funcionario',
+        {
+          p_modelo_id: modelo.id,
+        }
+      );
+
+      if (error) throw new Error(error.message);
+
+      const resultado = data as {
+        sucesso?: boolean;
+        mensagem?: string;
+      } | null;
+
+      setSucesso(
+        resultado?.mensagem ??
+          'Modelo de garantia excluído com sucesso.'
+      );
+
+      if (modeloSelecionadoId === modelo.id) {
+        setModeloSelecionadoId('');
+        setFormItem(false);
+      }
+
+      await carregarCatalogo();
+    } catch (e: any) {
+      setErro(
+        e?.message ??
+          'Não foi possível excluir o modelo de garantia.'
+      );
+    } finally {
+      setExcluindoId(null);
+    }
+  }
+
+  async function excluirCliente(cliente: Cliente) {
+    const confirmou = await confirmarExclusao(
+      'Excluir cliente',
+      `Tem certeza que deseja excluir "${cliente.nome_completo}"? O vínculo de pré-cadastro com a unidade também será removido. Esta ação não poderá ser desfeita.`
+    );
+
+    if (!confirmou) return;
+
+    try {
+      setExcluindoId(cliente.pre_cadastro_id);
+      setErro('');
+      setSucesso('');
+
+      const { data, error } = await supabase.rpc(
+        'excluir_cliente_pre_cadastro_funcionario',
+        {
+          p_pre_cadastro_id: cliente.pre_cadastro_id,
+        }
+      );
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const resultado = data as {
+        sucesso?: boolean;
+        mensagem?: string;
+      } | null;
+
+      setSucesso(
+        resultado?.mensagem ??
+          'Cliente excluído com sucesso.'
+      );
+
+      if (editandoId === cliente.pre_cadastro_id) {
+        setMostrarFormularioCliente(false);
+        limparCliente();
+      }
+
+      await carregarClientes();
+    } catch (e: any) {
+      setErro(
+        e?.message ??
+          'Não foi possível excluir o cliente.'
+      );
+    } finally {
+      setExcluindoId(null);
+    }
+  }
+
   // EMPREENDIMENTOS
 
   async function salvarEmpreendimento() {
@@ -694,7 +1137,7 @@ export default function ClientesImoveisFuncionarioScreen() {
     ];
 
     if (datas.some((data) => !dataValida(data))) {
-      setErro('Informe datas válidas no formato AAAA-MM-DD.');
+      setErro('Informe datas válidas no formato DD/MM/AAAA.');
       return;
     }
 
@@ -702,10 +1145,18 @@ export default function ClientesImoveisFuncionarioScreen() {
       empreendimento_id: empreendimentoSelecionadoId,
       identificacao: novaUnidadeIdentificacao.trim(),
       modelo_id: novaUnidadeModeloId || null,
-      data_habite_se: dataHabiteSe.trim() || null,
-      data_entrega_chaves: dataChaves.trim() || null,
-      data_entrega_obra: dataObra.trim() || null,
-      data_assinatura_contrato: dataContrato.trim() || null,
+      data_habite_se: dataHabiteSe.trim()
+        ? converterDataParaISO(dataHabiteSe)
+        : null,
+      data_entrega_chaves: dataChaves.trim()
+        ? converterDataParaISO(dataChaves)
+        : null,
+      data_entrega_obra: dataObra.trim()
+        ? converterDataParaISO(dataObra)
+        : null,
+      data_assinatura_contrato: dataContrato.trim()
+        ? converterDataParaISO(dataContrato)
+        : null,
     });
 
     if (id === null) return;
@@ -1210,19 +1661,46 @@ export default function ClientesImoveisFuncionarioScreen() {
                 ))
               )}
 
-              <TouchableOpacity
-                style={styles.botaoContornoLargo}
-                onPress={() => abrirEdicaoCliente(cliente)}
-              >
-                <Ionicons
-                  name="create-outline"
-                  size={18}
-                  color="#0B5EA8"
-                />
-                <Text style={styles.botaoContornoTexto}>
-                  Editar dados / vincular outra unidade
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.acoesCliente}>
+                <TouchableOpacity
+                  style={[
+                    styles.botaoContornoLargo,
+                    styles.botaoEditarCliente,
+                  ]}
+                  onPress={() => abrirEdicaoCliente(cliente)}
+                >
+                  <Ionicons
+                    name="create-outline"
+                    size={18}
+                    color="#0B5EA8"
+                  />
+                  <Text style={styles.botaoContornoTexto}>
+                    Editar dados / vincular outra unidade
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.botaoExcluirCliente}
+                  disabled={excluindoId === cliente.pre_cadastro_id}
+                  onPress={() => excluirCliente(cliente)}
+                >
+                  {excluindoId === cliente.pre_cadastro_id ? (
+                    <ActivityIndicator size="small" color="#A52828" />
+                  ) : (
+                    <Ionicons
+                      name="trash-outline"
+                      size={18}
+                      color="#A52828"
+                    />
+                  )}
+
+                  <Text style={styles.botaoExcluirTexto}>
+                    {excluindoId === cliente.pre_cadastro_id
+                      ? 'Excluindo...'
+                      : 'Excluir cliente'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ))
         )}
@@ -1245,6 +1723,259 @@ export default function ClientesImoveisFuncionarioScreen() {
   }
 
   // TELA EMPREENDIMENTOS
+
+  function renderFuncionarios() {
+    return (
+      <>
+        <View style={styles.cabecalhoSecao}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.tituloSecao}>
+              Funcionários
+            </Text>
+            <Text style={styles.subtitulo}>
+              Pré-cadastre os funcionários que poderão acessar a Área do Funcionário da EMAFE.
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.botaoAzul}
+            onPress={abrirNovoFuncionario}
+          >
+            <Ionicons
+              name="person-add-outline"
+              size={18}
+              color="#FFFFFF"
+            />
+            <Text style={styles.botaoAzulTexto}>
+              Cadastrar funcionário
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {mostrarFormularioFuncionario ? (
+          <View style={styles.cartao}>
+            <View style={styles.cabecalhoFormulario}>
+              <Text style={styles.tituloFormulario}>
+                {editandoFuncionarioId
+                  ? 'Editar funcionário'
+                  : 'Novo funcionário'}
+              </Text>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setMostrarFormularioFuncionario(false);
+                  limparFuncionario();
+                }}
+              >
+                <Ionicons
+                  name="close"
+                  size={24}
+                  color="#697789"
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.textoAuxiliar}>
+              O funcionário usará este CPF e este e-mail no Primeiro acesso. Após a ativação, o perfil será criado como funcionário.
+            </Text>
+
+            <Campo
+              titulo="NOME COMPLETO *"
+              valor={funcionarioNome}
+              alterar={setFuncionarioNome}
+              placeholder="Nome do funcionário"
+            />
+
+            <Campo
+              titulo="CPF *"
+              valor={funcionarioCpf}
+              alterar={setFuncionarioCpf}
+              placeholder="Somente números"
+              teclado="numeric"
+            />
+
+            <Campo
+              titulo="TELEFONE"
+              valor={funcionarioTelefone}
+              alterar={setFuncionarioTelefone}
+              placeholder="Telefone do funcionário"
+              teclado="phone-pad"
+            />
+
+            <Campo
+              titulo="E-MAIL *"
+              valor={funcionarioEmail}
+              alterar={setFuncionarioEmail}
+              placeholder="E-mail cadastrado"
+              teclado="email-address"
+            />
+
+            <BotaoSalvar
+              titulo={
+                editandoFuncionarioId
+                  ? 'Salvar alterações'
+                  : 'Cadastrar funcionário'
+              }
+              salvando={salvando}
+              onPress={salvarFuncionario}
+            />
+          </View>
+        ) : null}
+
+        <View style={styles.cabecalhoLista}>
+          <View>
+            <Text style={styles.tituloMenor}>
+              Funcionários cadastrados
+            </Text>
+            <Text style={styles.textoAuxiliar}>
+              {funcionarios.length} funcionário(s)
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            onPress={atualizar}
+            style={styles.botaoAtualizar}
+          >
+            <Ionicons
+              name="refresh-outline"
+              size={18}
+              color="#0B5EA8"
+            />
+            <Text style={styles.botaoContornoTexto}>
+              Atualizar
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <TextInput
+          style={styles.busca}
+          value={buscaFuncionario}
+          onChangeText={setBuscaFuncionario}
+          placeholder="Buscar nome, CPF, e-mail ou telefone"
+          placeholderTextColor="#8995A5"
+        />
+
+        {funcionariosFiltrados.length === 0 ? (
+          <View style={styles.cartao}>
+            <Text style={styles.textoAuxiliar}>
+              Nenhum funcionário encontrado.
+            </Text>
+          </View>
+        ) : (
+          funcionariosFiltrados.map((funcionario) => (
+            <View
+              key={funcionario.pre_cadastro_id}
+              style={styles.cartao}
+            >
+              <View style={styles.linhaTopoCliente}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.nomeCliente}>
+                    {funcionario.nome_completo}
+                  </Text>
+                  <Text style={styles.textoAuxiliar}>
+                    {formatarDocumento(
+                      funcionario.cpf_cnpj
+                    )}
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.status,
+                    funcionario.acesso_ativado
+                      ? styles.statusAtivo
+                      : styles.statusPendente,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.statusTexto,
+                      funcionario.acesso_ativado
+                        ? styles.statusAtivoTexto
+                        : styles.statusPendenteTexto,
+                    ]}
+                  >
+                    {funcionario.acesso_ativado
+                      ? 'Acesso ativado'
+                      : 'Aguardando ativação'}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={styles.label}>E-MAIL</Text>
+              <Text style={styles.textoForte}>
+                {funcionario.email}
+              </Text>
+
+              <Text style={styles.label}>TELEFONE</Text>
+              <Text style={styles.textoForte}>
+                {funcionario.telefone || '-'}
+              </Text>
+
+              {!funcionario.acesso_ativado ? (
+                <View style={styles.acoesCliente}>
+                  <TouchableOpacity
+                    style={[
+                      styles.botaoContornoLargo,
+                      styles.botaoEditarCliente,
+                    ]}
+                    onPress={() =>
+                      abrirEdicaoFuncionario(funcionario)
+                    }
+                  >
+                    <Ionicons
+                      name="create-outline"
+                      size={18}
+                      color="#0B5EA8"
+                    />
+                    <Text style={styles.botaoContornoTexto}>
+                      Editar funcionário
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.botaoExcluirCliente}
+                    disabled={
+                      excluindoId ===
+                      funcionario.pre_cadastro_id
+                    }
+                    onPress={() =>
+                      excluirFuncionario(funcionario)
+                    }
+                  >
+                    {excluindoId ===
+                    funcionario.pre_cadastro_id ? (
+                      <ActivityIndicator
+                        size="small"
+                        color="#A52828"
+                      />
+                    ) : (
+                      <Ionicons
+                        name="trash-outline"
+                        size={18}
+                        color="#A52828"
+                      />
+                    )}
+
+                    <Text style={styles.botaoExcluirTexto}>
+                      {excluindoId ===
+                      funcionario.pre_cadastro_id
+                        ? 'Excluindo...'
+                        : 'Excluir funcionário'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <Text style={styles.textoAuxiliar}>
+                  Este funcionário já concluiu o primeiro acesso e possui perfil ativo no sistema.
+                </Text>
+              )}
+            </View>
+          ))
+        )}
+      </>
+    );
+  }
 
   function renderEmpreendimentos() {
     return (
@@ -1377,19 +2108,44 @@ export default function ClientesImoveisFuncionarioScreen() {
                 </Text>
               </View>
 
-              <TouchableOpacity
-                style={styles.botaoAzul}
-                onPress={() => setFormUnidade(!formUnidade)}
-              >
-                <Ionicons
-                  name="home-outline"
-                  size={17}
-                  color="#FFFFFF"
-                />
-                <Text style={styles.botaoAzulTexto}>
-                  Nova unidade
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.acoesCabecalho}>
+                <TouchableOpacity
+                  style={styles.botaoExcluir}
+                  disabled={excluindoId === empreendimentoSelecionado.id}
+                  onPress={() =>
+                    excluirEmpreendimento(empreendimentoSelecionado)
+                  }
+                >
+                  {excluindoId === empreendimentoSelecionado.id ? (
+                    <ActivityIndicator size="small" color="#A52828" />
+                  ) : (
+                    <Ionicons
+                      name="trash-outline"
+                      size={17}
+                      color="#A52828"
+                    />
+                  )}
+                  <Text style={styles.botaoExcluirTexto}>
+                    {excluindoId === empreendimentoSelecionado.id
+                      ? 'Excluindo...'
+                      : 'Excluir'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.botaoAzul}
+                  onPress={() => setFormUnidade(!formUnidade)}
+                >
+                  <Ionicons
+                    name="home-outline"
+                    size={17}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.botaoAzulTexto}>
+                    Nova unidade
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {formUnidade ? (
@@ -1444,35 +2200,39 @@ export default function ClientesImoveisFuncionarioScreen() {
                 </Text>
                 <Text style={styles.textoAuxiliar}>
                   Preencha somente as datas confirmadas.
-                  Formato: AAAA-MM-DD.
+                  Formato: DD/MM/AAAA.
                 </Text>
 
                 <Campo
                   titulo="DATA DO HABITE-SE"
                   valor={dataHabiteSe}
                   alterar={setDataHabiteSe}
-                  placeholder="2026-10-08"
+                  placeholder="10/08/2026"
+                  teclado="numeric"
                 />
 
                 <Campo
                   titulo="DATA DA ENTREGA DAS CHAVES"
                   valor={dataChaves}
                   alterar={setDataChaves}
-                  placeholder="AAAA-MM-DD"
+                  placeholder="DD/MM/AAAA"
+                  teclado="numeric"
                 />
 
                 <Campo
                   titulo="DATA DA ENTREGA DA OBRA"
                   valor={dataObra}
                   alterar={setDataObra}
-                  placeholder="AAAA-MM-DD"
+                  placeholder="DD/MM/AAAA"
+                  teclado="numeric"
                 />
 
                 <Campo
                   titulo="DATA DA ASSINATURA DO CONTRATO"
                   valor={dataContrato}
                   alterar={setDataContrato}
-                  placeholder="AAAA-MM-DD"
+                  placeholder="DD/MM/AAAA"
+                  teclado="numeric"
                 />
 
                 <BotaoSalvar
@@ -1513,7 +2273,9 @@ export default function ClientesImoveisFuncionarioScreen() {
                     </Text>
                     {unidade.data_habite_se ? (
                       <Text style={styles.textoAuxiliar}>
-                        Habite-se: {unidade.data_habite_se}
+                        Habite-se: {formatarDataBrasileira(
+                          unidade.data_habite_se
+                        )}
                       </Text>
                     ) : null}
                   </View>
@@ -1646,9 +2408,36 @@ export default function ClientesImoveisFuncionarioScreen() {
 
         {modeloSelecionado ? (
           <View style={styles.cartaoDestaque}>
-            <Text style={styles.tituloFormulario}>
-              {modeloSelecionado.nome}
-            </Text>
+            <View style={styles.cabecalhoLista}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.tituloFormulario}>
+                  {modeloSelecionado.nome}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.botaoExcluir}
+                disabled={excluindoId === modeloSelecionado.id}
+                onPress={() =>
+                  excluirModeloGarantia(modeloSelecionado)
+                }
+              >
+                {excluindoId === modeloSelecionado.id ? (
+                  <ActivityIndicator size="small" color="#A52828" />
+                ) : (
+                  <Ionicons
+                    name="trash-outline"
+                    size={17}
+                    color="#A52828"
+                  />
+                )}
+                <Text style={styles.botaoExcluirTexto}>
+                  {excluindoId === modeloSelecionado.id
+                    ? 'Excluindo...'
+                    : 'Excluir'}
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             {modeloSelecionado.descricao ? (
               <Text style={styles.textoAuxiliar}>
@@ -2034,6 +2823,36 @@ export default function ClientesImoveisFuncionarioScreen() {
             <TouchableOpacity
               style={[
                 styles.aba,
+                aba === 'funcionarios' &&
+                  styles.abaAtiva,
+              ]}
+              onPress={() =>
+                trocarAba('funcionarios')
+              }
+            >
+              <Ionicons
+                name="people-outline"
+                size={18}
+                color={
+                  aba === 'funcionarios'
+                    ? '#FFFFFF'
+                    : '#0B2447'
+                }
+              />
+              <Text
+                style={[
+                  styles.abaTexto,
+                  aba === 'funcionarios' &&
+                    styles.abaTextoAtivo,
+                ]}
+              >
+                Funcionários
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.aba,
                 aba === 'empreendimentos' &&
                   styles.abaAtiva,
               ]}
@@ -2116,6 +2935,7 @@ export default function ClientesImoveisFuncionarioScreen() {
           ) : null}
 
           {aba === 'clientes' && renderClientes()}
+          {aba === 'funcionarios' && renderFuncionarios()}
           {aba === 'empreendimentos' &&
             renderEmpreendimentos()}
           {aba === 'garantias' && renderGarantias()}
@@ -2295,6 +3115,52 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 17,
   },
+  busca: {
+    minHeight: 50,
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    color: '#16283D',
+    fontSize: 12,
+    marginBottom: 17,
+  },
+  linhaTopoCliente: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 12,
+  },
+  nomeCliente: {
+    color: '#0B2447',
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 3,
+  },
+  status: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignSelf: 'flex-start',
+  },
+  statusAtivo: {
+    backgroundColor: '#E8F6ED',
+  },
+  statusPendente: {
+    backgroundColor: '#FFF4D8',
+  },
+  statusTexto: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  statusAtivoTexto: {
+    color: '#287A46',
+  },
+  statusPendenteTexto: {
+    color: '#9A6A00',
+  },
   botaoAzul: {
     minHeight: 44,
     borderRadius: 11,
@@ -2357,6 +3223,53 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
+  },
+  acoesCabecalho: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  botaoExcluir: {
+    minHeight: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2B8B8',
+    backgroundColor: '#FFF7F7',
+    paddingHorizontal: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  botaoExcluirTexto: {
+    color: '#A52828',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  acoesCliente: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+  botaoEditarCliente: {
+    flexGrow: 1,
+    marginTop: 0,
+  },
+  botaoExcluirCliente: {
+    minHeight: 42,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2B8B8',
+    backgroundColor: '#FFF7F7',
+    paddingHorizontal: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
   opcao: {
     minHeight: 57,

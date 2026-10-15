@@ -1,7 +1,8 @@
 {
   "expo": {
     "name": "appemafeengenharia",
-    "slug": "appemafeengenharia",
+    "slug": "emafe-engenharia",
+    "owner": "emafe-engenharia",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -39,6 +40,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "16236bda-fa22-40de-8821-4bc114445d2f"
+      }
     }
   }
 }

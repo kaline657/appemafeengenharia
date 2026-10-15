@@ -1,5 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Asset } from 'expo-asset';
+import * as Print from 'expo-print';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import { StatusBar } from 'expo-status-bar';
 import {
   useEffect,
@@ -13,6 +16,7 @@ import {
   Image,
   Modal,
   PanResponder,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -901,13 +905,40 @@ type ResultadoVistoriaCliente = {
 };
 
 
+type Form03PdfCliente = {
+  form03_id: string | null;
+  form03_status: string | null;
+  modo_assinatura: 'manual_app' | null;
+  solicitacao_id: string; protocolo: string; data_reclamacao: string | null;
+  solicitante: string | null; telefone: string | null; email: string | null; disponibilidade: string | null;
+  empreendimento: string | null; unidade: string | null; comodo: string | null;
+  problema_relatado: string | null; categoria: string | null; elemento_construtivo: string | null;
+  manifestacao_patologica: string | null; status_garantia: string | null;
+  prazo_quantidade: number | null; prazo_unidade: string | null; data_limite_garantia: string | null;
+  responsavel_vistoria: string | null; inicio_vistoria: string | null; fim_vistoria: string | null;
+  problema_constatado: boolean | null; parecer_tecnico: string | null; servico_necessario: string | null;
+  observacoes_vistoria: string | null; resultado_vistoria: string | null; numero_termo: number | null;
+  responsavel_servico: string | null; inicio_execucao: string | null; data_conclusao: string | null;
+  conclusao: string | null; solucao_tecnica: string | null; observacoes_execucao: string | null;
+  assinatura_cliente_svg: string | null; assinatura_cliente_nome: string | null; assinado_cliente_em: string | null;
+  assinatura_funcionario_svg: string | null; assinatura_funcionario_nome: string | null; assinado_funcionario_em: string | null;
+  fotos_vistoria: Array<{ caminho_storage?: string | null; nome_arquivo?: string | null; descricao?: string | null; }>;
+  fotos_execucao: Array<{ caminho_storage?: string | null; nome_arquivo?: string | null; descricao?: string | null; }>;
+};
+
+type AvaliacaoCliente = {
+  nota: number;
+  comentario: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type Form03Cliente = {
   form03_id: string;
   protocolo: string;
 
   modo_assinatura:
     | 'manual_app'
-    | 'externa_pdf'
     | null;
 
   status: string;
@@ -1169,6 +1200,44 @@ export default function DetalhesSolicitacaoScreen() {
     setSucessoAssinaturaCliente,
   ] = useState('');
 
+  const [gerandoPdfForm03Cliente, setGerandoPdfForm03Cliente] = useState(false);
+  const [mensagemPdfForm03Cliente, setMensagemPdfForm03Cliente] = useState('');
+
+  const [
+    avaliacaoCliente,
+    setAvaliacaoCliente,
+  ] = useState<AvaliacaoCliente | null>(null);
+
+  const [
+    notaAvaliacao,
+    setNotaAvaliacao,
+  ] = useState(0);
+
+  const [
+    comentarioAvaliacao,
+    setComentarioAvaliacao,
+  ] = useState('');
+
+  const [
+    carregandoAvaliacao,
+    setCarregandoAvaliacao,
+  ] = useState(false);
+
+  const [
+    salvandoAvaliacao,
+    setSalvandoAvaliacao,
+  ] = useState(false);
+
+  const [
+    erroAvaliacao,
+    setErroAvaliacao,
+  ] = useState('');
+
+  const [
+    sucessoAvaliacao,
+    setSucessoAvaliacao,
+  ] = useState('');
+
   useEffect(() => {
     if (!solicitacaoId) {
       setErro(
@@ -1191,6 +1260,7 @@ export default function DetalhesSolicitacaoScreen() {
     await carregarResultadoVistoriaCliente();
     await carregarAgendamentoExecucaoCliente();
     await carregarForm03Cliente();
+    await carregarAvaliacaoCliente();
   }
 
   useEffect(() => {
@@ -1211,6 +1281,154 @@ export default function DetalhesSolicitacaoScreen() {
       setMostrarCancelamento(false);
     }
   }, [foraDaGarantiaCliente]);
+
+  async function carregarAvaliacaoCliente() {
+    try {
+      setCarregandoAvaliacao(true);
+      setErroAvaliacao('');
+
+      const { data, error } =
+        await supabase.rpc(
+          'buscar_minha_avaliacao_cliente',
+          {
+            p_solicitacao_id:
+              solicitacaoId,
+          }
+        );
+
+      if (error) {
+        console.error(
+          'Erro ao carregar avaliação:',
+          error
+        );
+
+        setErroAvaliacao(
+          'Não foi possível carregar sua avaliação.'
+        );
+
+        return;
+      }
+
+      const resultado =
+        data?.[0] as
+          | AvaliacaoCliente
+          | undefined;
+
+      if (resultado) {
+        setAvaliacaoCliente(
+          resultado
+        );
+
+        setNotaAvaliacao(
+          resultado.nota
+        );
+
+        setComentarioAvaliacao(
+          resultado.comentario ??
+            ''
+        );
+      } else {
+        setAvaliacaoCliente(
+          null
+        );
+
+        setNotaAvaliacao(
+          0
+        );
+
+        setComentarioAvaliacao(
+          ''
+        );
+      }
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao carregar avaliação:',
+        error
+      );
+
+      setErroAvaliacao(
+        'Não foi possível carregar sua avaliação.'
+      );
+    } finally {
+      setCarregandoAvaliacao(
+        false
+      );
+    }
+  }
+
+  async function salvarAvaliacaoCliente() {
+    if (
+      notaAvaliacao < 1 ||
+      notaAvaliacao > 5
+    ) {
+      setErroAvaliacao(
+        'Escolha uma nota de 1 a 5 estrelas.'
+      );
+
+      return;
+    }
+
+    try {
+      setSalvandoAvaliacao(
+        true
+      );
+
+      setErroAvaliacao('');
+      setSucessoAvaliacao('');
+
+      const { error } =
+        await supabase.rpc(
+          'salvar_avaliacao_solicitacao_cliente',
+          {
+            p_solicitacao_id:
+              solicitacaoId,
+
+            p_nota:
+              notaAvaliacao,
+
+            p_comentario:
+              comentarioAvaliacao.trim() ||
+              null,
+          }
+        );
+
+      if (error) {
+        console.error(
+          'Erro ao salvar avaliação:',
+          error
+        );
+
+        setErroAvaliacao(
+          error.message ||
+            'Não foi possível salvar sua avaliação.'
+        );
+
+        return;
+      }
+
+      setSucessoAvaliacao(
+        avaliacaoCliente
+          ? 'Sua avaliação foi atualizada com sucesso.'
+          : 'Obrigado! Sua avaliação foi enviada com sucesso.'
+      );
+
+      await carregarAvaliacaoCliente();
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao salvar avaliação:',
+        error
+      );
+
+      setErroAvaliacao(
+        'Não foi possível salvar sua avaliação.'
+      );
+    } finally {
+      setSalvandoAvaliacao(
+        false
+      );
+    }
+  }
+
 
   async function carregarSolicitacao() {
     try {
@@ -1684,7 +1902,7 @@ export default function DetalhesSolicitacaoScreen() {
   }
 
   function formatarDataHora(
-    dataIso: string
+    dataIso: string | null | undefined
   ) {
     if (!dataIso) {
       return '-';
@@ -2259,6 +2477,932 @@ export default function DetalhesSolicitacaoScreen() {
       setSalvandoAssinaturaCliente(
         false
       );
+    }
+  }
+
+
+  // ==========================================================
+  // PDF FINAL DO FORM 03 - CLIENTE
+  // ==========================================================
+
+  function escaparHtmlForm03Cliente(
+    valor: unknown
+  ) {
+    return String(
+      valor ?? ''
+    )
+      .replace(
+        /&/g,
+        '&amp;'
+      )
+      .replace(
+        /</g,
+        '&lt;'
+      )
+      .replace(
+        />/g,
+        '&gt;'
+      )
+      .replace(
+        /"/g,
+        '&quot;'
+      )
+      .replace(
+        /'/g,
+        '&#039;'
+      );
+  }
+
+  async function carregarDadosPdfForm03Cliente() {
+    const { data, error } = await supabase.rpc(
+      'buscar_form03_pdf_cliente',
+      {
+        p_solicitacao_id: solicitacaoId,
+      }
+    );
+
+    if (error) {
+      throw new Error(
+        error.message ||
+          'Não foi possível carregar os dados do FORM 03.'
+      );
+    }
+
+    if (!data) {
+      throw new Error(
+        'Dados do FORM 03 não encontrados.'
+      );
+    }
+
+    return data as Form03PdfCliente;
+  }
+
+  async function gerarUrlsFotosPdfForm03Cliente(dados: Form03PdfCliente) {
+    const fotos = [
+      ...(dados.fotos_vistoria ??
+        []).map(
+        (foto: any) => ({
+          bucket:
+            'vistorias-fotos',
+          caminho:
+            foto.caminho_storage,
+        })
+      ),
+
+      ...(dados.fotos_execucao ??
+        []).map(
+        (foto: any) => ({
+          bucket:
+            'execucoes-fotos',
+          caminho:
+            foto.caminho_storage,
+        })
+      ),
+    ].slice(0, 3);
+
+    const urls: string[] = [];
+
+    for (const foto of fotos) {
+      if (!foto.caminho) {
+        continue;
+      }
+
+      const {
+        data,
+        error,
+      } = await supabase.storage
+        .from(foto.bucket)
+        .createSignedUrl(
+          foto.caminho,
+          60 * 60
+        );
+
+      if (error) {
+        console.error(
+          'Erro ao gerar URL de foto para o FORM 03:',
+          error
+        );
+
+        continue;
+      }
+
+      if (data?.signedUrl) {
+        urls.push(
+          data.signedUrl
+        );
+      }
+    }
+
+    return urls;
+  }
+
+  async function montarHtmlPdfForm03Cliente(dados: Form03PdfCliente) {
+    const logoAsset =
+      Asset.fromModule(
+        require(
+          '../../assets/emafe/logo-horizontal-transparente.png'
+        )
+      );
+
+    if (!logoAsset.localUri) {
+      await logoAsset.downloadAsync();
+    }
+
+    const logoForm03Uri =
+      logoAsset.localUri ??
+      logoAsset.uri;
+
+    const urlsFotos =
+      await gerarUrlsFotosPdfForm03Cliente(dados);
+
+    const fotosHtml =
+      urlsFotos.length > 0
+        ? urlsFotos
+            .map(
+              (
+                url,
+                indice
+              ) => `
+                <div class="foto-box">
+                  <div class="foto-titulo">
+                    REGISTRO FOTOGRÁFICO ${indice + 1}
+                  </div>
+
+                  <img
+                    src="${escaparHtmlForm03Cliente(url)}"
+                    class="foto"
+                  />
+                </div>
+              `
+            )
+            .join('')
+        : `
+            <div class="sem-fotos">
+              Nenhum registro fotográfico disponível.
+            </div>
+          `;
+
+    const procedencia =
+      dados.problema_constatado ===
+      true
+        ? 'P - Procedente'
+        : dados.problema_constatado ===
+            false
+          ? 'I - Improcedente'
+          : '-';
+
+    const conclusao =
+      dados.conclusao ===
+      'total'
+        ? 'TOTAL'
+        : dados.conclusao ===
+            'improcedente'
+          ? 'IMPROCEDENTE'
+          : '-';
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+
+  <style>
+    @page {
+      size: A4;
+      margin: 12mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: #1d2c3f;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10px;
+      line-height: 1.35;
+    }
+
+    .header {
+      width: calc(100% - 2px);
+      margin-right: 2px;
+      border: 1.5px solid #0B2447;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      text-align: center;
+      overflow: hidden;
+      page-break-inside: avoid;
+    }
+
+    .logo-form03 {
+      display: block;
+      width: 180px;
+      max-height: 60px;
+      object-fit: contain;
+      margin: 0 auto 5px auto;
+    }
+
+    .titulo {
+      margin-top: 5px;
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .revisao {
+      margin-top: 3px;
+      color: #5d6b7b;
+      font-size: 9px;
+    }
+
+    .section-title {
+      margin-top: 10px;
+      padding: 6px 8px;
+      color: #ffffff;
+      background: #0B2447;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border-left: 1px solid #9eabb8;
+      border-top: 1px solid #9eabb8;
+    }
+
+    .cell {
+      min-height: 45px;
+      padding: 7px;
+      border-right: 1px solid #9eabb8;
+      border-bottom: 1px solid #9eabb8;
+    }
+
+    .cell-full {
+      grid-column: 1 / -1;
+    }
+
+    .label {
+      margin-bottom: 4px;
+      color: #647486;
+      font-size: 8px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .value {
+      font-size: 10px;
+      font-weight: 600;
+      white-space: pre-wrap;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th,
+    td {
+      border: 1px solid #9eabb8;
+      padding: 6px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    th {
+      color: #0B2447;
+      background: #eef3f8;
+      font-size: 8px;
+    }
+
+    .fotos {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 7px;
+      margin-top: 7px;
+    }
+
+    .foto-box {
+      border: 1px solid #9eabb8;
+      padding: 5px;
+      page-break-inside: avoid;
+    }
+
+    .foto-titulo {
+      margin-bottom: 4px;
+      color: #647486;
+      font-size: 7px;
+      font-weight: 800;
+    }
+
+    .foto {
+      display: block;
+      width: 100%;
+      height: 150px;
+      object-fit: cover;
+    }
+
+    .sem-fotos {
+      padding: 12px;
+      border: 1px solid #9eabb8;
+      margin-top: 7px;
+      color: #647486;
+    }
+
+    .termo {
+      margin-top: 10px;
+      padding: 9px;
+      border: 1px solid #9eabb8;
+      font-size: 9px;
+      text-align: justify;
+    }
+
+    .assinaturas {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin-top: 38px;
+      page-break-inside: avoid;
+    }
+
+    .assinatura {
+      text-align: center;
+    }
+
+    .assinatura-svg {
+      width: 100%;
+      height: 70px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+
+    .assinatura-svg svg {
+      width: 100%;
+      height: 70px;
+    }
+
+    .linha {
+      border-top: 1px solid #1d2c3f;
+      padding-top: 5px;
+    }
+
+    .data {
+      margin-top: 10px;
+      color: #647486;
+      font-size: 8px;
+    }
+
+    .rodape {
+      margin-top: 12px;
+      color: #7a8795;
+      font-size: 7px;
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <img
+      src="${escaparHtmlForm03Cliente(
+        logoForm03Uri
+      )}"
+      class="logo-form03"
+      alt="EMAFE Engenharia"
+    />
+
+    <div class="titulo">
+      FORM 03 — TERMO DE VISTORIA E EXECUÇÃO
+    </div>
+
+    <div class="revisao">
+      Revisão 06 • Protocolo ${escaparHtmlForm03Cliente(
+        dados.protocolo
+      )}
+    </div>
+  </div>
+
+  <div class="section-title">
+    SOLICITAÇÃO
+  </div>
+
+  <div class="grid">
+    <div class="cell">
+      <div class="label">
+        Solicitante
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          dados.solicitante
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Data da reclamação
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          formatarDataHora(
+            dados.data_reclamacao
+          )
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Contato
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          dados.telefone ??
+            '-'
+        )}
+        <br />
+        ${escaparHtmlForm03Cliente(
+          dados.email ??
+            '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Horário / disponibilidade
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          dados.disponibilidade ??
+            '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Empreendimento
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          dados.empreendimento
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Unidade / Local
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          dados.unidade
+        )}
+        ${
+          dados.comodo
+            ? ` • ${escaparHtmlForm03Cliente(
+                dados.comodo
+              )}`
+            : ''
+        }
+      </div>
+    </div>
+
+    <div class="cell cell-full">
+      <div class="label">
+        Problema relatado
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          dados.problema_relatado
+        )}
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">
+    VISTORIA
+  </div>
+
+  <div class="grid">
+    <div class="cell">
+      <div class="label">
+        Responsável pela vistoria
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          dados.responsavel_vistoria ??
+            '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Data da vistoria
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          formatarDataHora(
+            dados.inicio_vistoria
+          )
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Constatação do problema
+      </div>
+
+      <div class="value">
+        ${
+          dados.problema_constatado ===
+          true
+            ? 'SIM'
+            : dados.problema_constatado ===
+                false
+              ? 'NÃO'
+              : '-'
+        }
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Resultado
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          dados.resultado_vistoria ===
+          'aprovada'
+            ? 'Aprovada'
+            : dados.resultado_vistoria ===
+                'nao_aprovada'
+              ? 'Não aprovada'
+              : '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell cell-full">
+      <div class="label">
+        Parecer técnico
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          dados.parecer_tecnico ??
+            '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell cell-full">
+      <div class="label">
+        Serviço necessário
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          dados.servico_necessario ??
+            '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell cell-full">
+      <div class="label">
+        Observações da vistoria
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          dados.observacoes_vistoria ??
+            '-'
+        )}
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">
+    GARANTIA
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Problema</th>
+        <th>Descrição da garantia</th>
+        <th>Prazo</th>
+        <th>Vigência</th>
+        <th>P / I</th>
+        <th>Observações</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      <tr>
+        <td>
+          ${escaparHtmlForm03Cliente(
+            dados.categoria ??
+              dados.manifestacao_patologica ??
+              '-'
+          )}
+        </td>
+
+        <td>
+          ${escaparHtmlForm03Cliente(
+            [
+              dados.elemento_construtivo,
+              dados.manifestacao_patologica,
+            ]
+              .filter(Boolean)
+              .join(' - ') ||
+              '-'
+          )}
+        </td>
+
+        <td>
+          ${escaparHtmlForm03Cliente(
+            dados.prazo_quantidade ??
+              '-'
+          )}
+          ${escaparHtmlForm03Cliente(
+            dados.prazo_unidade ??
+              ''
+          )}
+        </td>
+
+        <td>
+          ${escaparHtmlForm03Cliente(
+            formatarData(
+              dados.data_limite_garantia
+            )
+          )}
+        </td>
+
+        <td>
+          ${escaparHtmlForm03Cliente(
+            procedencia
+          )}
+        </td>
+
+        <td>
+          ${escaparHtmlForm03Cliente(
+            dados.observacoes_vistoria ??
+              '-'
+          )}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">
+    SERVIÇO
+  </div>
+
+  <div class="grid">
+    <div class="cell">
+      <div class="label">
+        Nº Termo de Serviço
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          dados.numero_termo ??
+            '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Responsável pelo serviço
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          dados.responsavel_servico ??
+            '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Data de conclusão
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          formatarDataHora(
+            dados.data_conclusao
+          )
+        )}
+      </div>
+    </div>
+
+    <div class="cell">
+      <div class="label">
+        Conclusão
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          conclusao
+        )}
+      </div>
+    </div>
+
+    <div class="cell cell-full">
+      <div class="label">
+        Solução técnica
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          dados.solucao_tecnica ??
+            '-'
+        )}
+      </div>
+    </div>
+
+    <div class="cell cell-full">
+      <div class="label">
+        Observações
+      </div>
+
+      <div class="value">
+        ${escaparHtmlForm03Cliente(
+          dados.observacoes_execucao ??
+            '-'
+        )}
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">
+    REGISTROS FOTOGRÁFICOS
+  </div>
+
+  <div class="fotos">
+    ${fotosHtml}
+  </div>
+
+  <div class="section-title">
+    TERMO DE RECEBIMENTO DOS SERVIÇOS
+  </div>
+
+  <div class="termo">
+    Pelo presente termo, aceito os serviços prestados para a correção
+    das falhas apontadas, nada mais tendo a reclamar sobre os mesmos.
+  </div>
+
+  <div class="assinaturas">
+    <div class="assinatura">
+      ${
+        dados.assinatura_cliente_svg
+          ? `
+            <div class="assinatura-svg">
+              ${
+                dados.assinatura_cliente_svg
+              }
+            </div>
+          `
+          : ''
+      }
+
+      <div class="linha">
+        ${escaparHtmlForm03Cliente(
+          dados.assinatura_cliente_nome ??
+            dados.solicitante
+        )}
+      </div>
+
+      <div>
+        Nome / Assinatura do Cliente ou seu representante
+      </div>
+
+      <div class="data">
+        ${
+          dados.assinado_cliente_em
+            ? `Data: ${escaparHtmlForm03Cliente(
+                formatarDataHora(
+                  dados.assinado_cliente_em
+                )
+              )}`
+            : 'Data: _____ / _____ / __________'
+        }
+      </div>
+    </div>
+
+    <div class="assinatura">
+      ${
+        dados.assinatura_funcionario_svg
+          ? `
+            <div class="assinatura-svg">
+              ${
+                dados.assinatura_funcionario_svg
+              }
+            </div>
+          `
+          : ''
+      }
+
+      <div class="linha">
+        ${escaparHtmlForm03Cliente(
+          dados.assinatura_funcionario_nome ??
+            dados.responsavel_servico ??
+            ''
+        )}
+      </div>
+
+      <div>
+        Assinatura do responsável pela execução dos serviços
+      </div>
+
+      <div class="data">
+        ${
+          dados.assinado_funcionario_em
+            ? `Data: ${escaparHtmlForm03Cliente(
+                formatarDataHora(
+                  dados.assinado_funcionario_em
+                )
+              )}`
+            : 'Data: _____ / _____ / __________'
+        }
+      </div>
+    </div>
+  </div>
+
+  <div class="rodape">
+    EMAFE Engenharia • FORM 03 • Revisão 06
+  </div>
+</body>
+</html>
+    `;
+  }
+
+  async function gerarPdfFinalForm03Cliente() {
+    setErroForm03Cliente('');
+    setMensagemPdfForm03Cliente('');
+    if (!form03Cliente?.assinatura_cliente_ok || !form03Cliente?.assinatura_funcionario_ok) {
+      setErroForm03Cliente('O PDF final só pode ser gerado depois que cliente e responsável da EMAFE assinarem o FORM 03.');
+      return;
+    }
+    try {
+      setGerandoPdfForm03Cliente(true);
+      const dados = await carregarDadosPdfForm03Cliente();
+
+      if (
+        dados.form03_status !== 'assinado' ||
+        dados.modo_assinatura !== 'manual_app' ||
+        !dados.assinatura_cliente_svg ||
+        !dados.assinatura_funcionario_svg
+      ) {
+        setErroForm03Cliente(
+          'O FORM 03 ainda não está finalizado com as duas assinaturas no aplicativo.'
+        );
+        return;
+      }
+      const html = await montarHtmlPdfForm03Cliente(dados);
+      if (Platform.OS === 'web') {
+        const janela = window.open('', '_blank');
+        if (!janela) {
+          setErroForm03Cliente('O navegador bloqueou a janela do PDF. Permita pop-ups e tente novamente.');
+          return;
+        }
+        janela.document.open(); janela.document.write(html); janela.document.close();
+        setMensagemPdfForm03Cliente('FORM 03 final preparado. Na janela aberta, escolha Imprimir e depois “Salvar como PDF”.');
+        setTimeout(() => { try { janela.focus(); janela.print(); } catch (error) { console.error(error); } }, 500);
+        return;
+      }
+      const resultado = await Print.printToFileAsync({ html });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(resultado.uri, { mimeType: 'application/pdf', dialogTitle: `FORM 03 - ${dados.protocolo}`, UTI: 'com.adobe.pdf' });
+      }
+      setMensagemPdfForm03Cliente('PDF final do FORM 03 gerado com sucesso.');
+    } catch (error: any) {
+      console.error('Erro ao gerar PDF final do FORM 03:', error);
+      setErroForm03Cliente(error?.message ?? 'Não foi possível gerar o PDF final do FORM 03.');
+    } finally {
+      setGerandoPdfForm03Cliente(false);
     }
   }
 
@@ -5180,6 +6324,38 @@ export default function DetalhesSolicitacaoScreen() {
                       </Text>
                     </View>
 
+                    {form03Cliente.assinatura_cliente_ok &&
+                    form03Cliente.assinatura_funcionario_ok ? (
+                      <View style={styles.form03PdfFinalBox}>
+                        <Ionicons name="checkmark-done-circle-outline" size={23} color="#287A46" />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.form03PdfFinalTitle}>FORM 03 finalizado</Text>
+                          <Text style={styles.form03PdfFinalText}>As duas assinaturas foram registradas. Você já pode gerar sua cópia final em PDF.</Text>
+                        </View>
+                      </View>
+                    ) : null}
+
+                    {form03Cliente.assinatura_cliente_ok &&
+                    form03Cliente.assinatura_funcionario_ok ? (
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        style={[styles.form03PdfFinalButton, gerandoPdfForm03Cliente && styles.form03SignatureDisabled]}
+                        disabled={gerandoPdfForm03Cliente}
+                        onPress={gerarPdfFinalForm03Cliente}
+                      >
+                        {gerandoPdfForm03Cliente ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="document-text-outline" size={20} color="#FFFFFF" />}
+                        <Text style={styles.form03PdfFinalButtonText}>
+                          {gerandoPdfForm03Cliente ? 'Gerando PDF...' : 'Gerar PDF final do FORM 03'}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+
+                    {mensagemPdfForm03Cliente ? (
+                      <View style={styles.form03ClienteSucesso}>
+                        <Text style={styles.form03ClienteSucessoText}>{mensagemPdfForm03Cliente}</Text>
+                      </View>
+                    ) : null}
+
                     {erroForm03Cliente ? (
                       <View
                         style={
@@ -5567,6 +6743,286 @@ export default function DetalhesSolicitacaoScreen() {
                 </Text>
               </View>
             </>
+          ) : null}
+
+          {solicitacao?.status ===
+          'concluida' ? (
+            <View
+              style={
+                styles.satisfactionCard
+              }
+            >
+              <View
+                style={
+                  styles.satisfactionHeader
+                }
+              >
+                <View
+                  style={
+                    styles.satisfactionIconBox
+                  }
+                >
+                  <Ionicons
+                    name="star-outline"
+                    size={23}
+                    color="#0B2447"
+                  />
+                </View>
+
+                <View
+                  style={
+                    styles.satisfactionHeaderText
+                  }
+                >
+                  <Text
+                    style={
+                      styles.satisfactionTitle
+                    }
+                  >
+                    Avalie seu atendimento
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.satisfactionSubtitle
+                    }
+                  >
+                    Sua opinião ajuda a EMAFE a melhorar continuamente o atendimento.
+                  </Text>
+                </View>
+              </View>
+
+              {carregandoAvaliacao ? (
+                <View
+                  style={
+                    styles.satisfactionLoading
+                  }
+                >
+                  <ActivityIndicator
+                    size="small"
+                    color="#0B2447"
+                  />
+
+                  <Text
+                    style={
+                      styles.satisfactionLoadingText
+                    }
+                  >
+                    Carregando avaliação...
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <Text
+                    style={
+                      styles.satisfactionQuestion
+                    }
+                  >
+                    Como foi o atendimento?
+                  </Text>
+
+                  <View
+                    style={
+                      styles.starsRow
+                    }
+                  >
+                    {[
+                      1,
+                      2,
+                      3,
+                      4,
+                      5,
+                    ].map(
+                      (nota) => (
+                        <TouchableOpacity
+                          key={nota}
+                          style={
+                            styles.starButton
+                          }
+                          onPress={() => {
+                            setNotaAvaliacao(
+                              nota
+                            );
+
+                            setErroAvaliacao(
+                              ''
+                            );
+
+                            setSucessoAvaliacao(
+                              ''
+                            );
+                          }}
+                          disabled={
+                            salvandoAvaliacao
+                          }
+                        >
+                          <Ionicons
+                            name={
+                              nota <=
+                              notaAvaliacao
+                                ? 'star'
+                                : 'star-outline'
+                            }
+                            size={34}
+                            color={
+                              nota <=
+                              notaAvaliacao
+                                ? '#E4A900'
+                                : '#AAB4C0'
+                            }
+                          />
+                        </TouchableOpacity>
+                      )
+                    )}
+                  </View>
+
+                  <Text
+                    style={
+                      styles.satisfactionLegend
+                    }
+                  >
+                    {notaAvaliacao === 1
+                      ? 'Péssimo'
+                      : notaAvaliacao ===
+                          2
+                        ? 'Ruim'
+                        : notaAvaliacao ===
+                            3
+                          ? 'Regular'
+                          : notaAvaliacao ===
+                              4
+                            ? 'Bom'
+                            : notaAvaliacao ===
+                                5
+                              ? 'Excelente'
+                              : 'Selecione de 1 a 5 estrelas'}
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.satisfactionLabel
+                    }
+                  >
+                    Comentário (opcional)
+                  </Text>
+
+                  <TextInput
+                    style={
+                      styles.satisfactionInput
+                    }
+                    value={
+                      comentarioAvaliacao
+                    }
+                    onChangeText={(
+                      texto
+                    ) => {
+                      setComentarioAvaliacao(
+                        texto
+                      );
+
+                      setErroAvaliacao(
+                        ''
+                      );
+
+                      setSucessoAvaliacao(
+                        ''
+                      );
+                    }}
+                    placeholder="Conte como foi sua experiência com o atendimento..."
+                    placeholderTextColor="#8995A5"
+                    multiline
+                    maxLength={1000}
+                    editable={
+                      !salvandoAvaliacao
+                    }
+                  />
+
+                  {erroAvaliacao ? (
+                    <View
+                      style={
+                        styles.satisfactionErrorBox
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.satisfactionErrorText
+                        }
+                      >
+                        {
+                          erroAvaliacao
+                        }
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {sucessoAvaliacao ? (
+                    <View
+                      style={
+                        styles.satisfactionSuccessBox
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.satisfactionSuccessText
+                        }
+                      >
+                        {
+                          sucessoAvaliacao
+                        }
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  <TouchableOpacity
+                    style={[
+                      styles.satisfactionSubmitButton,
+
+                      (
+                        salvandoAvaliacao ||
+                        notaAvaliacao ===
+                          0
+                      ) &&
+                        styles.satisfactionSubmitButtonDisabled,
+                    ]}
+                    onPress={
+                      salvarAvaliacaoCliente
+                    }
+                    disabled={
+                      salvandoAvaliacao ||
+                      notaAvaliacao ===
+                        0
+                    }
+                  >
+                    {salvandoAvaliacao ? (
+                      <ActivityIndicator
+                        size="small"
+                        color="#FFFFFF"
+                      />
+                    ) : (
+                      <Text
+                        style={
+                          styles.satisfactionSubmitText
+                        }
+                      >
+                        {avaliacaoCliente
+                          ? 'Atualizar avaliação'
+                          : 'Enviar avaliação'}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+
+                  {avaliacaoCliente ? (
+                    <Text
+                      style={
+                        styles.satisfactionSavedText
+                      }
+                    >
+                      Você já avaliou este atendimento e pode atualizar sua avaliação se desejar.
+                    </Text>
+                  ) : null}
+                </>
+              )}
+            </View>
           ) : null}
 
           <Text
@@ -6055,6 +7511,12 @@ const styles =
       fontSize: 11,
       fontWeight: '700',
     },
+
+    form03PdfFinalBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#EEF8F2', borderWidth: 1, borderColor: '#A7D7B7', borderRadius: 12, padding: 13, marginTop: 14 },
+    form03PdfFinalTitle: { color: '#23633A', fontSize: 12, fontWeight: '800' },
+    form03PdfFinalText: { color: '#47775A', fontSize: 10, lineHeight: 16, marginTop: 3 },
+    form03PdfFinalButton: { minHeight: 46, borderRadius: 12, backgroundColor: '#0B2447', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 14, marginTop: 12 },
+    form03PdfFinalButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
 
     form03ClienteErro: {
       backgroundColor: '#FCEEEE',
@@ -7937,6 +9399,179 @@ const styles =
       flex: 1,
       color: '#9A3232',
       fontSize: 12,
+    },
+
+    satisfactionCard: {
+      backgroundColor:
+        '#FFFFFF',
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+      borderRadius: 18,
+      padding: 20,
+      marginTop: 22,
+    },
+
+    satisfactionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginBottom: 18,
+    },
+
+    satisfactionIconBox: {
+      width: 46,
+      height: 46,
+      borderRadius: 14,
+      backgroundColor:
+        '#FFF6DD',
+      alignItems: 'center',
+      justifyContent:
+        'center',
+    },
+
+    satisfactionHeaderText: {
+      flex: 1,
+    },
+
+    satisfactionTitle: {
+      color: '#0B2447',
+      fontSize: 18,
+      fontWeight: '800',
+    },
+
+    satisfactionSubtitle: {
+      color: '#697789',
+      fontSize: 12,
+      lineHeight: 18,
+      marginTop: 4,
+    },
+
+    satisfactionLoading: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 9,
+      paddingVertical: 12,
+    },
+
+    satisfactionLoadingText: {
+      color: '#697789',
+      fontSize: 12,
+    },
+
+    satisfactionQuestion: {
+      color: '#24364B',
+      fontSize: 14,
+      fontWeight: '700',
+      textAlign: 'center',
+    },
+
+    starsRow: {
+      flexDirection: 'row',
+      justifyContent:
+        'center',
+      alignItems: 'center',
+      gap: 7,
+      marginTop: 13,
+    },
+
+    starButton: {
+      padding: 3,
+    },
+
+    satisfactionLegend: {
+      color: '#697789',
+      fontSize: 12,
+      fontWeight: '600',
+      textAlign: 'center',
+      marginTop: 7,
+      marginBottom: 20,
+    },
+
+    satisfactionLabel: {
+      color: '#24364B',
+      fontSize: 13,
+      fontWeight: '700',
+      marginBottom: 8,
+    },
+
+    satisfactionInput: {
+      minHeight: 100,
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+      borderRadius: 13,
+      backgroundColor:
+        '#F8FAFC',
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      color: '#16283D',
+      fontSize: 13,
+      textAlignVertical:
+        'top',
+      marginBottom: 14,
+    },
+
+    satisfactionErrorBox: {
+      backgroundColor:
+        '#FDECEC',
+      borderWidth: 1,
+      borderColor:
+        '#F3B7B7',
+      borderRadius: 11,
+      padding: 11,
+      marginBottom: 12,
+    },
+
+    satisfactionErrorText: {
+      color: '#A52828',
+      fontSize: 11,
+      lineHeight: 17,
+    },
+
+    satisfactionSuccessBox: {
+      backgroundColor:
+        '#EAF7EF',
+      borderWidth: 1,
+      borderColor:
+        '#A8D8B9',
+      borderRadius: 11,
+      padding: 11,
+      marginBottom: 12,
+    },
+
+    satisfactionSuccessText: {
+      color: '#22633A',
+      fontSize: 11,
+      lineHeight: 17,
+    },
+
+    satisfactionSubmitButton: {
+      height: 50,
+      borderRadius: 13,
+      backgroundColor:
+        '#0B2447',
+      alignItems: 'center',
+      justifyContent:
+        'center',
+    },
+
+    satisfactionSubmitButtonDisabled: {
+      opacity: 0.55,
+    },
+
+    satisfactionSubmitText: {
+      color: '#FFFFFF',
+      fontSize: 14,
+      fontWeight: '700',
+    },
+
+    satisfactionSavedText: {
+      color: '#8995A5',
+      fontSize: 10,
+      lineHeight: 16,
+      textAlign: 'center',
+      marginTop: 9,
     },
 
     footer: {

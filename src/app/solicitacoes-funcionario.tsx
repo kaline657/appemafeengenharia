@@ -146,6 +146,11 @@ type SolicitacaoFuncionario = {
 
   status: string;
 
+  classificacao_urgencia:
+    | 'urgente'
+    | 'nao_urgente'
+    | null;
+
 
 
   quantidade_fotos: number;
@@ -173,6 +178,10 @@ type FiltroStatus =
 
 
   | 'novos'
+
+
+
+  | 'urgentes'
 
 
 
@@ -850,56 +859,76 @@ export default function SolicitacoesFuncionarioScreen() {
 
       }
 
+      const itensBase =
+        (data ?? []).map(
+          (item: any) => ({
+            ...item,
+            quantidade_fotos:
+              Number(
+                item.quantidade_fotos
+              ) || 0,
+            classificacao_urgencia:
+              null as
+                | 'urgente'
+                | 'nao_urgente'
+                | null,
+          })
+        );
 
+      const itensComUrgencia =
+        await Promise.all(
+          itensBase.map(
+            async (item: any) => {
+              try {
+                const {
+                  data: urgenciaData,
+                  error: urgenciaError,
+                } =
+                  await supabase.rpc(
+                    'buscar_urgencia_solicitacao_funcionario',
+                    {
+                      p_solicitacao_id:
+                        item.solicitacao_id,
+                    }
+                  );
+
+                if (urgenciaError) {
+                  console.error(
+                    `Erro ao carregar urgência da solicitação ${item.solicitacao_id}:`,
+                    urgenciaError
+                  );
+
+                  return item;
+                }
+
+                const classificacao =
+                  urgenciaData?.[0]
+                    ?.classificacao_urgencia;
+
+                return {
+                  ...item,
+                  classificacao_urgencia:
+                    classificacao ===
+                      'urgente' ||
+                    classificacao ===
+                      'nao_urgente'
+                      ? classificacao
+                      : null,
+                };
+              } catch (error) {
+                console.error(
+                  `Erro inesperado ao carregar urgência da solicitação ${item.solicitacao_id}:`,
+                  error
+                );
+
+                return item;
+              }
+            }
+          )
+        );
 
       setSolicitacoes(
-
-
-
-        (
-
-
-
-          data ?? []
-
-
-
-        ).map(
-
-
-
-          (item: any) => ({
-
-
-
-            ...item,
-
-
-
-            quantidade_fotos:
-
-
-
-              Number(
-
-
-
-                item.quantidade_fotos
-
-
-
-              ) || 0,
-
-
-
-          })
-
-
-
-        )
-
-
-
+        itensComUrgencia
       );
 
 
@@ -1268,6 +1297,106 @@ export default function SolicitacoesFuncionarioScreen() {
 
 
 
+  function ehUrgente(
+    solicitacao:
+      SolicitacaoFuncionario
+  ) {
+    return (
+      solicitacao
+        .classificacao_urgencia ===
+      'urgente'
+    );
+  }
+
+  function textoStatusSolicitacao(
+    solicitacao:
+      SolicitacaoFuncionario
+  ) {
+    return textoStatus(
+      solicitacao.status
+    );
+  }
+
+  function estiloStatusSolicitacao(
+    solicitacao:
+      SolicitacaoFuncionario
+  ) {
+    return estiloStatus(
+      solicitacao.status
+    );
+  }
+
+  function textoUrgenciaSolicitacao(
+    solicitacao:
+      SolicitacaoFuncionario
+  ) {
+    if (
+      solicitacao
+        .classificacao_urgencia ===
+      'urgente'
+    ) {
+      return 'Urgente';
+    }
+
+    if (
+      solicitacao
+        .classificacao_urgencia ===
+      'nao_urgente'
+    ) {
+      return 'Não urgente';
+    }
+
+    return 'Não definida';
+  }
+
+  function estiloUrgenciaSolicitacao(
+    solicitacao:
+      SolicitacaoFuncionario
+  ) {
+    if (
+      solicitacao
+        .classificacao_urgencia ===
+      'urgente'
+    ) {
+      return styles.urgenciaBadgeUrgente;
+    }
+
+    if (
+      solicitacao
+        .classificacao_urgencia ===
+      'nao_urgente'
+    ) {
+      return styles.urgenciaBadgeNaoUrgente;
+    }
+
+    return styles.urgenciaBadgeNaoDefinida;
+  }
+
+  function estiloTextoUrgenciaSolicitacao(
+    solicitacao:
+      SolicitacaoFuncionario
+  ) {
+    if (
+      solicitacao
+        .classificacao_urgencia ===
+      'urgente'
+    ) {
+      return styles.urgenciaTextUrgente;
+    }
+
+    if (
+      solicitacao
+        .classificacao_urgencia ===
+      'nao_urgente'
+    ) {
+      return styles.urgenciaTextNaoUrgente;
+    }
+
+    return styles.urgenciaTextNaoDefinida;
+  }
+
+
+
   // ==========================================================
 
 
@@ -1405,6 +1534,14 @@ export default function SolicitacoesFuncionarioScreen() {
 
 
         );
+
+      case 'urgentes':
+        return (
+          solicitacao
+            .classificacao_urgencia ===
+          'urgente'
+        );
+
 
 
 
@@ -2545,6 +2682,22 @@ export default function SolicitacoesFuncionarioScreen() {
 
 
             <FiltroButton
+              texto="Urgentes"
+              ativo={
+                filtroStatus ===
+                'urgentes'
+              }
+              urgente
+              onPress={() =>
+                setFiltroStatus(
+                  'urgentes'
+                )
+              }
+            />
+
+
+
+            <FiltroButton
 
 
 
@@ -3546,6 +3699,16 @@ export default function SolicitacoesFuncionarioScreen() {
 
                 </Text>
 
+                <Text
+                  style={[
+                    styles.tableHeaderText,
+                    styles.colUrgencia,
+                  ]}
+                >
+                  Urgência
+                </Text>
+
+
 
 
                 <Text
@@ -4102,111 +4265,60 @@ export default function SolicitacoesFuncionarioScreen() {
 
                     {/***** STATUS *****/}
 
-
-
                     <View
-
-
-
                       style={
-
-
-
                         styles.colStatus
-
-
-
                       }
-
-
-
                     >
-
-
-
                       <View
-
-
-
                         style={[
-
-
-
                           styles.statusBadge,
-
-
-
-                          estiloStatus(
-
-
-
+                          estiloStatusSolicitacao(
                             solicitacao
-
-
-
-                              .status
-
-
-
                           ),
-
-
-
                         ]}
-
-
-
                       >
-
-
-
                         <Text
-
-
-
                           style={
-
-
-
                             styles.statusText
-
-
-
                           }
-
-
-
                         >
-
-
-
-                          {textoStatus(
-
-
-
+                          {textoStatusSolicitacao(
                             solicitacao
-
-
-
-                              .status
-
-
-
                           )}
-
-
-
                         </Text>
-
-
-
                       </View>
-
-
-
                     </View>
 
+                    {/***** URGÊNCIA *****/}
 
+                    <View
+                      style={
+                        styles.colUrgencia
+                      }
+                    >
+                      <View
+                        style={[
+                          styles.urgenciaBadge,
+                          estiloUrgenciaSolicitacao(
+                            solicitacao
+                          ),
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.urgenciaText,
+                            estiloTextoUrgenciaSolicitacao(
+                              solicitacao
+                            ),
+                          ]}
+                        >
+                          {textoUrgenciaSolicitacao(
+                            solicitacao
+                          )}
+                        </Text>
+                      </View>
+                    </View>
 
                     {/***** DATA *****/}
 
@@ -4581,81 +4693,50 @@ export default function SolicitacoesFuncionarioScreen() {
 
 
                     <View
-
-
-
-                      style={[
-
-
-
-                        styles.statusBadge,
-
-
-
-                        estiloStatus(
-
-
-
-                          solicitacao
-
-
-
-                            .status
-
-
-
-                        ),
-
-
-
-                      ]}
-
-
-
+                      style={
+                        styles.mobileBadgesRow
+                      }
                     >
-
-
-
-                      <Text
-
-
-
-                        style={
-
-
-
-                          styles.statusText
-
-
-
-                        }
-
-
-
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          estiloStatusSolicitacao(
+                            solicitacao
+                          ),
+                        ]}
                       >
+                        <Text
+                          style={
+                            styles.statusText
+                          }
+                        >
+                          {textoStatusSolicitacao(
+                            solicitacao
+                          )}
+                        </Text>
+                      </View>
 
-
-
-                        {textoStatus(
-
-
-
-                          solicitacao
-
-
-
-                            .status
-
-
-
-                        )}
-
-
-
-                      </Text>
-
-
-
+                      <View
+                        style={[
+                          styles.urgenciaBadge,
+                          estiloUrgenciaSolicitacao(
+                            solicitacao
+                          ),
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.urgenciaText,
+                            estiloTextoUrgenciaSolicitacao(
+                              solicitacao
+                            ),
+                          ]}
+                        >
+                          {textoUrgenciaSolicitacao(
+                            solicitacao
+                          )}
+                        </Text>
+                      </View>
                     </View>
 
 
@@ -5402,6 +5483,10 @@ function FiltroButton({
 
 
 
+
+
+  urgente = false,
+
 }: {
 
 
@@ -5415,6 +5500,8 @@ function FiltroButton({
 
 
   onPress: () => void;
+
+  urgente?: boolean;
 
 
 
@@ -5436,13 +5523,15 @@ function FiltroButton({
 
         styles.filterButton,
 
+        urgente &&
+          styles.filterButtonUrgente,
+
 
 
         ativo &&
-
-
-
-          styles.filterButtonActive,
+          (urgente
+            ? styles.filterButtonUrgenteActive
+            : styles.filterButtonActive),
 
 
 
@@ -5471,6 +5560,9 @@ function FiltroButton({
 
 
           styles.filterButtonText,
+
+          urgente &&
+            styles.filterButtonTextUrgente,
 
 
 
@@ -5900,6 +5992,20 @@ const styles =
 
     },
 
+    filterButtonUrgente: {
+      backgroundColor:
+        '#FFF1F1',
+      borderColor:
+        '#E3A3A3',
+    },
+
+    filterButtonUrgenteActive: {
+      backgroundColor:
+        '#B42318',
+      borderColor:
+        '#B42318',
+    },
+
 
 
     filterButtonText: {
@@ -5921,6 +6027,11 @@ const styles =
     },
 
 
+
+    filterButtonTextUrgente: {
+      color: '#B42318',
+      fontWeight: '800',
+    },
 
     filterButtonTextActive: {
 
@@ -6228,6 +6339,11 @@ const styles =
 
     },
 
+    colUrgencia: {
+      flex: 1.05,
+      paddingRight: 10,
+    },
+
 
 
     colDate: {
@@ -6418,6 +6534,54 @@ const styles =
 
 
 
+    statusUrgente: {
+      backgroundColor:
+        '#FDECEC',
+      borderWidth: 1,
+      borderColor:
+        '#E8A0A0',
+    },
+
+    urgenciaBadge: {
+      alignSelf: 'flex-start',
+      borderRadius: 20,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderWidth: 1,
+    },
+
+    urgenciaBadgeUrgente: {
+      backgroundColor: '#FDECEC',
+      borderColor: '#E8A0A0',
+    },
+
+    urgenciaBadgeNaoUrgente: {
+      backgroundColor: '#EEF7F1',
+      borderColor: '#B7D9C1',
+    },
+
+    urgenciaBadgeNaoDefinida: {
+      backgroundColor: '#F3F5F7',
+      borderColor: '#D9E0E7',
+    },
+
+    urgenciaText: {
+      fontSize: 9,
+      fontWeight: '800',
+    },
+
+    urgenciaTextUrgente: {
+      color: '#B42318',
+    },
+
+    urgenciaTextNaoUrgente: {
+      color: '#287A46',
+    },
+
+    urgenciaTextNaoDefinida: {
+      color: '#697789',
+    },
+
     statusNova: {
 
 
@@ -6548,13 +6712,27 @@ const styles =
 
     },
 
+    statusTextUrgente: {
+      color: '#B42318',
+      fontWeight: '900',
+    },
+
 
 
     // MOBILE
 
 
 
-    mobileCard: {
+    
+    mobileBadgesRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      flexWrap: 'wrap',
+      gap: 6,
+    },
+
+mobileCard: {
 
 
 

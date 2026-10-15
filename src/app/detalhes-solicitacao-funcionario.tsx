@@ -962,7 +962,6 @@ type FotoExecucaoSalva = {
 type EstadoAssinaturasForm03 = {
   modo_assinatura:
     | 'manual_app'
-    | 'externa_pdf'
     | null;
 
   status: string;
@@ -1027,6 +1026,10 @@ type DadosForm03 = {
   fotos_execucao: any[];
 };
 
+type ClassificacaoUrgencia =
+  | 'urgente'
+  | 'nao_urgente';
+
 // ============================================================
 // TELA
 // ============================================================
@@ -1046,6 +1049,34 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     solicitacao,
     setSolicitacao,
   ] = useState<Solicitacao | null>(null);
+
+
+  // ==========================================================
+  // URGÊNCIA
+  // ==========================================================
+
+  const [
+    classificacaoUrgencia,
+    setClassificacaoUrgencia,
+  ] =
+    useState<ClassificacaoUrgencia | null>(
+      null
+    );
+
+  const [
+    carregandoUrgencia,
+    setCarregandoUrgencia,
+  ] = useState(false);
+
+  const [
+    salvandoUrgencia,
+    setSalvandoUrgencia,
+  ] = useState(false);
+
+  const [
+    erroUrgencia,
+    setErroUrgencia,
+  ] = useState('');
 
   // ==========================================================
   // FOTOS
@@ -1513,7 +1544,6 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     setModoAssinaturaForm03,
   ] = useState<
     'manual_app' |
-    'externa_pdf' |
     null
   >(null);
 
@@ -1631,6 +1661,8 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       const dadosSolicitacao =
         await carregarSolicitacao();
 
+      await carregarUrgencia();
+
       const itens =
         await carregarItensGarantia();
 
@@ -1649,6 +1681,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       await carregarResponsaveisFuncionarios();
 
       await carregarResponsaveisAtendimento();
+
+      if (dadosSolicitacao?.status === 'concluida') {
+        await carregarDadosForm03();
+      }
 
       // ======================================================
       // SE JÁ EXISTIR ANÁLISE TÉCNICA
@@ -1852,6 +1888,172 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       );
 
       return null;
+    }
+  }
+
+  // ==========================================================
+  // URGÊNCIA DA SOLICITAÇÃO
+  // ==========================================================
+
+  async function carregarUrgencia() {
+    try {
+      setCarregandoUrgencia(true);
+      setErroUrgencia('');
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'buscar_urgencia_solicitacao_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao carregar urgência:',
+          error
+        );
+
+        setErroUrgencia(
+          'Não foi possível carregar a classificação de urgência.'
+        );
+
+        return;
+      }
+
+      const registro =
+        data?.[0] as
+          | {
+              classificacao_urgencia?:
+                | string
+                | null;
+            }
+          | undefined;
+
+      const valor =
+        registro
+          ?.classificacao_urgencia;
+
+      if (
+        valor === 'urgente' ||
+        valor === 'nao_urgente'
+      ) {
+        setClassificacaoUrgencia(
+          valor
+        );
+      } else {
+        setClassificacaoUrgencia(
+          null
+        );
+      }
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao carregar urgência:',
+        error
+      );
+
+      setErroUrgencia(
+        'Ocorreu um erro ao carregar a classificação de urgência.'
+      );
+    } finally {
+      setCarregandoUrgencia(
+        false
+      );
+    }
+  }
+
+  async function definirUrgencia(
+    novaClassificacao:
+      ClassificacaoUrgencia
+  ) {
+    if (
+      carregandoUrgencia ||
+      salvandoUrgencia
+    ) {
+      return;
+    }
+
+    if (
+      classificacaoUrgencia ===
+      novaClassificacao
+    ) {
+      return;
+    }
+
+    try {
+      setSalvandoUrgencia(true);
+      setErroUrgencia('');
+
+      const {
+        data,
+        error,
+      } = await supabase.rpc(
+        'definir_urgencia_solicitacao_funcionario',
+        {
+          p_solicitacao_id:
+            solicitacaoId,
+
+          p_classificacao_urgencia:
+            novaClassificacao,
+        }
+      );
+
+      if (error) {
+        console.error(
+          'Erro ao salvar urgência:',
+          error
+        );
+
+        setErroUrgencia(
+          'Não foi possível salvar a classificação de urgência.'
+        );
+
+        return;
+      }
+
+      const registro =
+        data?.[0] as
+          | {
+              classificacao_urgencia?:
+                | string
+                | null;
+            }
+          | undefined;
+
+      const valor =
+        registro
+          ?.classificacao_urgencia;
+
+      if (
+        valor !== 'urgente' &&
+        valor !== 'nao_urgente'
+      ) {
+        setErroUrgencia(
+          'O Supabase não confirmou a classificação selecionada.'
+        );
+
+        return;
+      }
+
+      setClassificacaoUrgencia(
+        valor
+      );
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao salvar urgência:',
+        error
+      );
+
+      setErroUrgencia(
+        'Ocorreu um erro ao salvar a classificação de urgência.'
+      );
+    } finally {
+      setSalvandoUrgencia(
+        false
+      );
     }
   }
 
@@ -4061,6 +4263,111 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+  async function avisarClienteWhatsAppExecucao() {
+    setErroAgendamentoExecucao('');
+
+    if (
+      !solicitacao ||
+      !propostaAgendamentoExecucao
+    ) {
+      setErroAgendamentoExecucao(
+        'Não há agendamento da execução para enviar ao cliente.'
+      );
+
+      return;
+    }
+
+    const telefone =
+      normalizarTelefoneWhatsApp(
+        solicitacao.telefone_contato
+      );
+
+    if (!telefone) {
+      setErroAgendamentoExecucao(
+        'O telefone do cliente está vazio ou inválido para abrir o WhatsApp.'
+      );
+
+      return;
+    }
+
+    const agendamentoConfirmado =
+      propostaAgendamentoExecucao.status ===
+        'confirmada' &&
+      propostaAgendamentoExecucao.data_confirmada &&
+      propostaAgendamentoExecucao.hora_confirmada;
+
+    const dataExecucao =
+      agendamentoConfirmado
+        ? propostaAgendamentoExecucao.data_confirmada
+        : propostaAgendamentoExecucao.opcao_1_data;
+
+    const horaExecucao =
+      agendamentoConfirmado
+        ? propostaAgendamentoExecucao.hora_confirmada
+        : propostaAgendamentoExecucao.opcao_1_hora;
+
+    if (
+      !dataExecucao ||
+      !horaExecucao
+    ) {
+      setErroAgendamentoExecucao(
+        'O agendamento ainda não possui data e horário válidos para envio.'
+      );
+
+      return;
+    }
+
+    const mensagem = agendamentoConfirmado
+      ? [
+          `Olá, ${solicitacao.cliente_nome}!`,
+          '',
+          'Aqui é da EMAFE Engenharia.',
+          `A execução do serviço do protocolo ${solicitacao.protocolo} está confirmada para ${formatarData(
+            dataExecucao
+          )} às ${formatarHora(
+            horaExecucao
+          )}.`,
+          `Imóvel: ${solicitacao.empreendimento} - Unidade ${solicitacao.unidade}.`,
+          '',
+          'Esta mensagem foi preparada pelo sistema da EMAFE. Para concluir o aviso, basta enviar esta mensagem no WhatsApp.',
+        ].join('\n')
+      : [
+          `Olá, ${solicitacao.cliente_nome}!`,
+          '',
+          'Aqui é da EMAFE Engenharia.',
+          `Foi proposto o agendamento da execução do serviço do protocolo ${solicitacao.protocolo} para ${formatarData(
+            dataExecucao
+          )} às ${formatarHora(
+            horaExecucao
+          )}.`,
+          `Imóvel: ${solicitacao.empreendimento} - Unidade ${solicitacao.unidade}.`,
+          '',
+          'Acesse o aplicativo da EMAFE para confirmar o agendamento ou solicitar reagendamento.',
+          '',
+          'Esta mensagem foi preparada pelo sistema da EMAFE. Para concluir o aviso, basta enviar esta mensagem no WhatsApp.',
+        ].join('\n');
+
+    const url =
+      `https://wa.me/${telefone}?text=${encodeURIComponent(
+        mensagem
+      )}`;
+
+    try {
+      await Linking.openURL(
+        url
+      );
+    } catch (error) {
+      console.error(
+        'Erro ao abrir WhatsApp para o agendamento da execução:',
+        error
+      );
+
+      setErroAgendamentoExecucao(
+        'Não foi possível abrir o WhatsApp neste dispositivo.'
+      );
+    }
+  }
+
   async function enviarPropostaAgendamentoExecucao() {
     setErroAgendamentoExecucao('');
     setSucessoAgendamentoExecucao('');
@@ -6136,7 +6443,19 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
     if (!dadosForm03) {
       setErroForm03(
-        'Carregue os dados do FORM 03 antes de gerar o PDF.'
+        'Carregue os dados do FORM 03 antes de gerar o PDF final.'
+      );
+
+      return;
+    }
+
+    if (
+      !estadoAssinaturasForm03?.assinatura_cliente_svg ||
+      !estadoAssinaturasForm03?.assinatura_funcionario_svg ||
+      estadoAssinaturasForm03.status !== 'assinado'
+    ) {
+      setErroForm03(
+        'O PDF final só pode ser gerado depois que cliente e responsável da EMAFE assinarem o FORM 03.'
       );
 
       return;
@@ -6176,7 +6495,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         );
 
         setMensagemAssinaturaForm03(
-          'FORM 03 preparado. Na janela aberta, use Imprimir e escolha “Salvar como PDF”.'
+          'FORM 03 final preparado com as duas assinaturas. Na janela aberta, use Imprimir e escolha “Salvar como PDF”.'
         );
 
         setTimeout(
@@ -6215,17 +6534,17 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       );
 
       setMensagemAssinaturaForm03(
-        'PDF do FORM 03 gerado com sucesso.'
+        'PDF final do FORM 03 gerado com sucesso.'
       );
     } catch (error: any) {
       console.error(
-        'Erro ao gerar PDF do FORM 03:',
+        'Erro ao gerar PDF final do FORM 03:',
         error
       );
 
       setErroForm03(
         error?.message ??
-          'Não foi possível gerar o PDF do FORM 03.'
+          'Não foi possível gerar o PDF final do FORM 03.'
       );
     } finally {
       setGerandoPdfForm03(
@@ -6275,20 +6594,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   }
 
   async function definirModoAssinaturaForm03(
-    modo:
-      | 'manual_app'
-      | 'externa_pdf'
+    modo: 'manual_app'
   ) {
     setErroForm03('');
     setMensagemAssinaturaForm03('');
-
-    if (!pdfForm03Gerado) {
-      setErroForm03(
-        'Gere o PDF do FORM 03 antes de escolher a forma de assinatura.'
-      );
-
-      return;
-    }
 
     try {
       setDefinindoModoAssinatura(
@@ -6340,18 +6649,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
       await carregarEstadoAssinaturasForm03();
 
-      if (
-        modo ===
-        'manual_app'
-      ) {
-        setMensagemAssinaturaForm03(
-          'Assinatura no aplicativo selecionada. A próxima etapa será coletar a assinatura do cliente e do responsável na tela.'
-        );
-      } else {
-        setMensagemAssinaturaForm03(
-          'Assinatura externa selecionada. Use o PDF gerado para assinatura eletrônica e depois envie o arquivo assinado ao protocolo.'
-        );
-      }
+      setMensagemAssinaturaForm03(
+        'Assinatura no aplicativo ativada. O cliente assina na Área do Cliente e o responsável pela execução assina nesta tela.'
+      );
     } catch (error) {
       console.error(
         'Erro inesperado ao definir assinatura:',
@@ -7449,6 +7749,186 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     </Text>
                   </View>
                 </View>
+
+                {/* URGÊNCIA */}
+
+                <Text
+                  style={
+                    styles.fieldNumber
+                  }
+                >
+                  Urgência do atendimento
+                </Text>
+
+                {carregandoUrgencia ? (
+                  <View
+                    style={
+                      styles.loadingInline
+                    }
+                  >
+                    <ActivityIndicator
+                      size="small"
+                      color="#0B2447"
+                    />
+
+                    <Text
+                      style={
+                        styles.loadingInlineText
+                      }
+                    >
+                      Carregando classificação...
+                    </Text>
+                  </View>
+                ) : (
+                  <View
+                    style={
+                      styles.optionGrid
+                    }
+                  >
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      disabled={
+                        salvandoUrgencia
+                      }
+                      onPress={() =>
+                        definirUrgencia(
+                          'urgente'
+                        )
+                      }
+                      style={[
+                        styles.optionButton,
+
+                        classificacaoUrgencia ===
+                          'urgente' &&
+                          styles.optionButtonActive,
+
+                        salvandoUrgencia &&
+                          styles.buttonDisabled,
+                      ]}
+                    >
+                      <Ionicons
+                        name={
+                          classificacaoUrgencia ===
+                          'urgente'
+                            ? 'warning'
+                            : 'warning-outline'
+                        }
+                        size={18}
+                        color={
+                          classificacaoUrgencia ===
+                          'urgente'
+                            ? '#FFFFFF'
+                            : '#42566D'
+                        }
+                      />
+
+                      <Text
+                        style={[
+                          styles.optionText,
+
+                          classificacaoUrgencia ===
+                            'urgente' &&
+                            styles.optionTextActive,
+                        ]}
+                      >
+                        Urgente
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      disabled={
+                        salvandoUrgencia
+                      }
+                      onPress={() =>
+                        definirUrgencia(
+                          'nao_urgente'
+                        )
+                      }
+                      style={[
+                        styles.optionButton,
+
+                        classificacaoUrgencia ===
+                          'nao_urgente' &&
+                          styles.optionButtonActive,
+
+                        salvandoUrgencia &&
+                          styles.buttonDisabled,
+                      ]}
+                    >
+                      <Ionicons
+                        name={
+                          classificacaoUrgencia ===
+                          'nao_urgente'
+                            ? 'checkmark-circle'
+                            : 'checkmark-circle-outline'
+                        }
+                        size={18}
+                        color={
+                          classificacaoUrgencia ===
+                          'nao_urgente'
+                            ? '#FFFFFF'
+                            : '#42566D'
+                        }
+                      />
+
+                      <Text
+                        style={[
+                          styles.optionText,
+
+                          classificacaoUrgencia ===
+                            'nao_urgente' &&
+                            styles.optionTextActive,
+                        ]}
+                      >
+                        Não urgente
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {salvandoUrgencia ? (
+                  <View
+                    style={
+                      styles.loadingInline
+                    }
+                  >
+                    <ActivityIndicator
+                      size="small"
+                      color="#0B2447"
+                    />
+
+                    <Text
+                      style={
+                        styles.loadingInlineText
+                      }
+                    >
+                      Salvando classificação...
+                    </Text>
+                  </View>
+                ) : null}
+
+                {erroUrgencia ? (
+                  <View
+                    style={
+                      styles.messageError
+                    }
+                  >
+                    <Ionicons
+                      name="alert-circle-outline"
+                      size={20}
+                      color="#9A3232"
+                    />
+
+                    <Text
+                      style={
+                        styles.messageErrorText
+                      }
+                    >
+                      {erroUrgencia}
+                    </Text>
+                  </View>
+                ) : null}
 
                 {carregandoItens ? (
                   <View
@@ -10261,7 +10741,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         styles.agendamentoExecucaoStatusText
                                       }
                                     >
-                                      As duas opções já foram enviadas. A execução ainda não pode ser iniciada.
+                                      O agendamento foi enviado. A execução ainda não pode ser iniciada até a confirmação do cliente.
                                     </Text>
                                   </View>
                                 </View>
@@ -10299,6 +10779,50 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     </Text>
                                   </View>
                                 </View>
+
+                                <TouchableOpacity
+                                  style={
+                                    styles.whatsAppVistoriaButton
+                                  }
+                                  onPress={
+                                    avisarClienteWhatsAppExecucao
+                                  }
+                                  activeOpacity={0.8}
+                                >
+                                  <Ionicons
+                                    name="logo-whatsapp"
+                                    size={20}
+                                    color="#FFFFFF"
+                                  />
+
+                                  <View
+                                    style={{
+                                      flex: 1,
+                                    }}
+                                  >
+                                    <Text
+                                      style={
+                                        styles.whatsAppVistoriaButtonText
+                                      }
+                                    >
+                                      Avisar cliente no WhatsApp
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.whatsAppVistoriaButtonSubtext
+                                      }
+                                    >
+                                      Abre a conversa com o agendamento da execução pronto para enviar.
+                                    </Text>
+                                  </View>
+
+                                  <Ionicons
+                                    name="open-outline"
+                                    size={18}
+                                    color="#FFFFFF"
+                                  />
+                                </TouchableOpacity>
                               </>
                             ) : propostaAgendamentoExecucao?.status ===
                               'confirmada' ? (
@@ -10342,6 +10866,50 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     </Text>
                                   </View>
                                 </View>
+
+                                <TouchableOpacity
+                                  style={
+                                    styles.whatsAppVistoriaButton
+                                  }
+                                  onPress={
+                                    avisarClienteWhatsAppExecucao
+                                  }
+                                  activeOpacity={0.8}
+                                >
+                                  <Ionicons
+                                    name="logo-whatsapp"
+                                    size={20}
+                                    color="#FFFFFF"
+                                  />
+
+                                  <View
+                                    style={{
+                                      flex: 1,
+                                    }}
+                                  >
+                                    <Text
+                                      style={
+                                        styles.whatsAppVistoriaButtonText
+                                      }
+                                    >
+                                      Enviar lembrete no WhatsApp
+                                    </Text>
+
+                                    <Text
+                                      style={
+                                        styles.whatsAppVistoriaButtonSubtext
+                                      }
+                                    >
+                                      Abre a conversa com a data confirmada da execução pronta para enviar.
+                                    </Text>
+                                  </View>
+
+                                  <Ionicons
+                                    name="open-outline"
+                                    size={18}
+                                    color="#FFFFFF"
+                                  />
+                                </TouchableOpacity>
 
                                 <View
                                   style={{
@@ -12636,10 +13204,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
                                     <Text
                                       style={
-                                        styles.form03PendingText
+                                        estadoAssinaturasForm03?.assinatura_cliente_svg
+                                          ? styles.form03SignedText
+                                          : styles.form03PendingText
                                       }
                                     >
-                                      Pendente
+                                      {estadoAssinaturasForm03?.assinatura_cliente_svg ? 'Assinado' : 'Pendente'}
                                     </Text>
                                   </View>
 
@@ -12658,10 +13228,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
                                     <Text
                                       style={
-                                        styles.form03PendingText
+                                        estadoAssinaturasForm03?.assinatura_funcionario_svg
+                                          ? styles.form03SignedText
+                                          : styles.form03PendingText
                                       }
                                     >
-                                      Pendente
+                                      {estadoAssinaturasForm03?.assinatura_funcionario_svg ? 'Assinado' : 'Pendente'}
                                     </Text>
                                   </View>
                                 </View>
@@ -12712,72 +13284,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </Text>
                                 </TouchableOpacity>
 
-                                <TouchableOpacity
-                                  style={[
-                                    styles.form03GerarPdfButton,
-
-                                    gerandoPdfForm03 &&
-                                      styles.buttonDisabled,
-                                  ]}
-                                  onPress={
-                                    gerarPdfForm03
-                                  }
-                                  disabled={
-                                    gerandoPdfForm03
-                                  }
-                                >
-                                  {gerandoPdfForm03 ? (
-                                    <ActivityIndicator
-                                      size="small"
-                                      color="#FFFFFF"
-                                    />
-                                  ) : (
-                                    <Ionicons
-                                      name="document-text-outline"
-                                      size={21}
-                                      color="#FFFFFF"
-                                    />
-                                  )}
-
-                                  <Text
-                                    style={
-                                      styles.form03GerarPdfButtonText
-                                    }
-                                  >
-                                    {gerandoPdfForm03
-                                      ? 'Gerando PDF...'
-                                      : 'Gerar PDF do FORM 03'}
-                                  </Text>
-                                </TouchableOpacity>
-
-                                {pdfForm03Uri &&
-                                Platform.OS !==
-                                  'web' ? (
-                                  <TouchableOpacity
-                                    style={
-                                      styles.form03SecondaryButton
-                                    }
-                                    onPress={
-                                      compartilharPdfForm03
-                                    }
-                                  >
-                                    <Ionicons
-                                      name="share-outline"
-                                      size={18}
-                                      color="#0B5EA8"
-                                    />
-
-                                    <Text
-                                      style={
-                                        styles.form03SecondaryButtonText
-                                      }
-                                    >
-                                      Compartilhar / salvar PDF
-                                    </Text>
-                                  </TouchableOpacity>
-                                ) : null}
-
-                                {pdfForm03Gerado ? (
+                                {dadosForm03 ? (
                                   <View
                                     style={
                                       styles.form03AssinaturaBox
@@ -12796,7 +13303,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         styles.form03AssinaturaText
                                       }
                                     >
-                                      As assinaturas serão realizadas manualmente no aplicativo EMAFE.
+                                      O FORM 03 utiliza assinatura manual no aplicativo EMAFE.
                                     </Text>
 
                                     <TouchableOpacity
@@ -13067,7 +13574,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         {estadoAssinaturasForm03
                                           ?.assinatura_cliente_svg &&
                                         estadoAssinaturasForm03
-                                          ?.assinatura_funcionario_svg ? (
+                                          ?.assinatura_funcionario_svg &&
+                                        estadoAssinaturasForm03
+                                          ?.status === 'assinado' ? (
+                                          <>
                                           <View
                                             style={
                                               styles.messageSuccess
@@ -13084,9 +13594,67 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                                 styles.messageSuccessText
                                               }
                                             >
-                                              As duas assinaturas foram coletadas. Agora o FORM 03 pode ser gerado com as assinaturas.
+                                              As duas assinaturas foram coletadas. O FORM 03 está finalizado e o PDF final já pode ser gerado.
                                             </Text>
                                           </View>
+
+                                          <TouchableOpacity
+                                            style={[
+                                              styles.form03GerarPdfButton,
+                                              gerandoPdfForm03 &&
+                                                styles.buttonDisabled,
+                                            ]}
+                                            onPress={gerarPdfForm03}
+                                            disabled={gerandoPdfForm03}
+                                          >
+                                            {gerandoPdfForm03 ? (
+                                              <ActivityIndicator
+                                                size="small"
+                                                color="#FFFFFF"
+                                              />
+                                            ) : (
+                                              <Ionicons
+                                                name="document-text-outline"
+                                                size={21}
+                                                color="#FFFFFF"
+                                              />
+                                            )}
+
+                                            <Text
+                                              style={
+                                                styles.form03GerarPdfButtonText
+                                              }
+                                            >
+                                              {gerandoPdfForm03
+                                                ? 'Gerando PDF final...'
+                                                : 'Gerar PDF final do FORM 03'}
+                                            </Text>
+                                          </TouchableOpacity>
+
+                                          {pdfForm03Uri &&
+                                          Platform.OS !== 'web' ? (
+                                            <TouchableOpacity
+                                              style={
+                                                styles.form03SecondaryButton
+                                              }
+                                              onPress={compartilharPdfForm03}
+                                            >
+                                              <Ionicons
+                                                name="share-outline"
+                                                size={18}
+                                                color="#0B5EA8"
+                                              />
+
+                                              <Text
+                                                style={
+                                                  styles.form03SecondaryButtonText
+                                                }
+                                              >
+                                                Compartilhar / salvar PDF final
+                                              </Text>
+                                            </TouchableOpacity>
+                                          ) : null}
+                                          </>
                                         ) : null}
                                       </View>
                                     ) : null}
@@ -16481,6 +17049,8 @@ const styles = StyleSheet.create({
     padding: 12,
     marginTop: 10,
   },
+
+  form03SignedText: { color: '#287A46', fontSize: 12, fontWeight: '800' },
 
   form03PendingText: {
     color: '#9A6A00',
