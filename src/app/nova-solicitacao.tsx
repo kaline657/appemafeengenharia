@@ -73,6 +73,21 @@ type DiaCalendario = {
   disponivel: boolean;
 };
 
+type ProblemaAdicional = {
+  id: string;
+  comodoSelecionado: string;
+  outroComodo: string;
+  descricaoProblema: string;
+  fotos: ImagePicker.ImagePickerAsset[];
+};
+
+type ProblemaRegistrado = {
+  problema_id: string;
+  numero: number;
+  comodo: string;
+  descricao_problema: string;
+};
+
 export default function NovaSolicitacaoScreen() {
   const [
     unidades,
@@ -113,6 +128,11 @@ export default function NovaSolicitacaoScreen() {
     useState<
       ImagePicker.ImagePickerAsset[]
     >([]);
+
+  const [
+    problemasAdicionais,
+    setProblemasAdicionais,
+  ] = useState<ProblemaAdicional[]>([]);
 
   const [
     telefoneContato,
@@ -820,6 +840,303 @@ export default function NovaSolicitacaoScreen() {
       ? outroComodo.trim()
       : comodoSelecionado;
 
+  function comodoFinalProblemaAdicional(
+    problema: ProblemaAdicional
+  ) {
+    return problema.comodoSelecionado === 'Outro'
+      ? problema.outroComodo.trim()
+      : problema.comodoSelecionado;
+  }
+
+  function adicionarOutroProblema() {
+    setProblemasAdicionais(
+      (atuais) => [
+        ...atuais,
+        {
+          id: `${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2, 8)}`,
+          comodoSelecionado: '',
+          outroComodo: '',
+          descricaoProblema: '',
+          fotos: [],
+        },
+      ]
+    );
+
+    setErro('');
+  }
+
+  function atualizarProblemaAdicional(
+    indice: number,
+    alteracoes: Partial<ProblemaAdicional>
+  ) {
+    setProblemasAdicionais(
+      (atuais) =>
+        atuais.map(
+          (problema, index) =>
+            index === indice
+              ? {
+                  ...problema,
+                  ...alteracoes,
+                }
+              : problema
+        )
+    );
+
+    setErro('');
+  }
+
+  function removerProblemaAdicional(
+    indice: number
+  ) {
+    setProblemasAdicionais(
+      (atuais) =>
+        atuais.filter(
+          (_, index) =>
+            index !== indice
+        )
+    );
+
+    setErro('');
+  }
+
+  function adicionarFotosProblemaAdicional(
+    indiceProblema: number,
+    novasFotos:
+      ImagePicker.ImagePickerAsset[]
+  ) {
+    setProblemasAdicionais(
+      (atuais) =>
+        atuais.map(
+          (problema, index) => {
+            if (
+              index !==
+              indiceProblema
+            ) {
+              return problema;
+            }
+
+            const quantidadeDisponivel =
+              MAXIMO_FOTOS -
+              problema.fotos.length;
+
+            if (
+              quantidadeDisponivel <= 0
+            ) {
+              setErro(
+                `Você pode anexar no máximo ${MAXIMO_FOTOS} fotos por problema.`
+              );
+
+              return problema;
+            }
+
+            const semDuplicadas =
+              novasFotos.filter(
+                (novaFoto) =>
+                  !problema.fotos.some(
+                    (fotoAtual) =>
+                      fotoAtual.uri ===
+                      novaFoto.uri
+                  )
+              );
+
+            return {
+              ...problema,
+              fotos: [
+                ...problema.fotos,
+                ...semDuplicadas.slice(
+                  0,
+                  quantidadeDisponivel
+                ),
+              ],
+            };
+          }
+        )
+    );
+  }
+
+  async function tirarFotoProblemaAdicional(
+    indiceProblema: number
+  ) {
+    try {
+      setErro('');
+
+      const problema =
+        problemasAdicionais[
+          indiceProblema
+        ];
+
+      if (
+        !problema ||
+        problema.fotos.length >=
+          MAXIMO_FOTOS
+      ) {
+        setErro(
+          `Você pode anexar no máximo ${MAXIMO_FOTOS} fotos por problema.`
+        );
+
+        return;
+      }
+
+      if (
+        Platform.OS !== 'web'
+      ) {
+        const permissao =
+          await ImagePicker
+            .requestCameraPermissionsAsync();
+
+        if (
+          !permissao.granted
+        ) {
+          setErro(
+            'Precisamos da permissão da câmera para tirar a foto.'
+          );
+
+          return;
+        }
+      }
+
+      const resultado =
+        await ImagePicker
+          .launchCameraAsync({
+            mediaTypes:
+              ImagePicker
+                .MediaTypeOptions
+                .Images,
+            allowsEditing: false,
+            quality: 0.75,
+          });
+
+      if (
+        !resultado.canceled &&
+        resultado.assets?.length
+      ) {
+        adicionarFotosProblemaAdicional(
+          indiceProblema,
+          resultado.assets
+        );
+      }
+    } catch (error) {
+      console.error(
+        'Erro ao abrir câmera:',
+        error
+      );
+
+      setErro(
+        'Não foi possível abrir a câmera.'
+      );
+    }
+  }
+
+  async function escolherGaleriaProblemaAdicional(
+    indiceProblema: number
+  ) {
+    try {
+      setErro('');
+
+      const problema =
+        problemasAdicionais[
+          indiceProblema
+        ];
+
+      if (!problema) {
+        return;
+      }
+
+      if (
+        problema.fotos.length >=
+        MAXIMO_FOTOS
+      ) {
+        setErro(
+          `Você pode anexar no máximo ${MAXIMO_FOTOS} fotos por problema.`
+        );
+
+        return;
+      }
+
+      if (
+        Platform.OS !== 'web'
+      ) {
+        const permissao =
+          await ImagePicker
+            .requestMediaLibraryPermissionsAsync();
+
+        if (
+          !permissao.granted
+        ) {
+          setErro(
+            'Precisamos da permissão para acessar suas fotos.'
+          );
+
+          return;
+        }
+      }
+
+      const resultado =
+        await ImagePicker
+          .launchImageLibraryAsync({
+            mediaTypes:
+              ImagePicker
+                .MediaTypeOptions
+                .Images,
+            allowsMultipleSelection:
+              true,
+            selectionLimit:
+              MAXIMO_FOTOS -
+              problema.fotos.length,
+            quality: 0.75,
+          });
+
+      if (
+        !resultado.canceled &&
+        resultado.assets?.length
+      ) {
+        adicionarFotosProblemaAdicional(
+          indiceProblema,
+          resultado.assets
+        );
+      }
+    } catch (error) {
+      console.error(
+        'Erro ao abrir galeria:',
+        error
+      );
+
+      setErro(
+        'Não foi possível abrir sua galeria.'
+      );
+    }
+  }
+
+  function removerFotoProblemaAdicional(
+    indiceProblema: number,
+    indiceFoto: number
+  ) {
+    setProblemasAdicionais(
+      (atuais) =>
+        atuais.map(
+          (problema, index) =>
+            index ===
+            indiceProblema
+              ? {
+                  ...problema,
+                  fotos:
+                    problema.fotos.filter(
+                      (
+                        _,
+                        fotoIndex
+                      ) =>
+                        fotoIndex !==
+                        indiceFoto
+                    ),
+                }
+              : problema
+        )
+    );
+  }
+
+
   // ==========================================================
   // FOTOS
   // ==========================================================
@@ -1108,7 +1425,8 @@ export default function NovaSolicitacaoScreen() {
       ImagePicker.ImagePickerAsset,
     indice: number,
     solicitacaoId: string,
-    clienteId: string
+    clienteId: string,
+    problemaId: string
   ) {
     const extensao =
       extensaoDaFoto(foto);
@@ -1166,10 +1484,13 @@ export default function NovaSolicitacaoScreen() {
       error: registroError,
     } =
       await supabase.rpc(
-        'registrar_foto_solicitacao',
+        'registrar_foto_problema_solicitacao',
         {
           p_solicitacao_id:
             solicitacaoId,
+
+          p_problema_id:
+            problemaId,
 
           p_caminho_storage:
             caminhoStorage,
@@ -1309,6 +1630,19 @@ export default function NovaSolicitacaoScreen() {
         fotos.length
     );
 
+  const problemasAdicionaisValidos =
+    problemasAdicionais.every(
+      (problema) =>
+        !!comodoFinalProblemaAdicional(
+          problema
+        ) &&
+        problema.descricaoProblema
+          .trim()
+          .length > 0 &&
+        problema.fotos.length >=
+          MINIMO_FOTOS
+    );
+
   const podeEnviar =
     !!cidadeSelecionada &&
     !!unidadeSelecionada &&
@@ -1318,6 +1652,7 @@ export default function NovaSolicitacaoScreen() {
       .length > 0 &&
     fotos.length >=
       MINIMO_FOTOS &&
+    problemasAdicionaisValidos &&
     telefoneContato
       .trim()
       .length > 0 &&
@@ -1382,6 +1717,54 @@ export default function NovaSolicitacaoScreen() {
       return;
     }
 
+    for (
+      let indice = 0;
+      indice <
+      problemasAdicionais.length;
+      indice++
+    ) {
+      const problema =
+        problemasAdicionais[
+          indice
+        ];
+
+      const numeroProblema =
+        indice + 2;
+
+      if (
+        !comodoFinalProblemaAdicional(
+          problema
+        )
+      ) {
+        setErro(
+          `Informe onde está o problema ${numeroProblema}.`
+        );
+
+        return;
+      }
+
+      if (
+        !problema.descricaoProblema.trim()
+      ) {
+        setErro(
+          `Descreva o problema ${numeroProblema}.`
+        );
+
+        return;
+      }
+
+      if (
+        problema.fotos.length <
+        MINIMO_FOTOS
+      ) {
+        setErro(
+          `Adicione pelo menos ${MINIMO_FOTOS} fotos do problema ${numeroProblema}.`
+        );
+
+        return;
+      }
+    }
+
     if (
       !telefoneContato.trim()
     ) {
@@ -1443,23 +1826,39 @@ export default function NovaSolicitacaoScreen() {
       // 1. CRIA A SOLICITAÇÃO
       // ------------------------------------------------------
 
+      const problemasParaEnviar = [
+        {
+          comodo:
+            comodoFinal,
+          descricao_problema:
+            descricaoProblema.trim(),
+        },
+
+        ...problemasAdicionais.map(
+          (problema) => ({
+            comodo:
+              comodoFinalProblemaAdicional(
+                problema
+              ),
+            descricao_problema:
+              problema.descricaoProblema.trim(),
+          })
+        ),
+      ];
+
       const {
         data,
         error,
       } =
         await supabase.rpc(
-          'abrir_solicitacao_com_vistoria_cliente',
+          'abrir_solicitacao_multiplos_problemas_cliente',
           {
             p_unidade_id:
               unidadeSelecionada
                 .unidade_id,
 
-            p_comodo:
-              comodoFinal,
-
-            p_descricao_problema:
-              descricaoProblema
-                .trim(),
+            p_problemas:
+              problemasParaEnviar,
 
             p_telefone_contato:
               telefoneContato
@@ -1543,42 +1942,130 @@ export default function NovaSolicitacaoScreen() {
         usuarioData.user.id;
 
       // ------------------------------------------------------
-      // 3. ENVIA AS FOTOS
+      // 3. IDENTIFICA OS PROBLEMAS CRIADOS E ENVIA AS FOTOS
       // ------------------------------------------------------
+
+      const {
+        data: problemasRegistradosData,
+        error:
+          problemasRegistradosError,
+      } = await supabase.rpc(
+        'listar_problemas_minha_solicitacao_cliente',
+        {
+          p_solicitacao_id:
+            novaSolicitacao
+              .solicitacao_id,
+        }
+      );
+
+      if (
+        problemasRegistradosError
+      ) {
+        console.error(
+          'Erro ao localizar problemas criados:',
+          problemasRegistradosError
+        );
+
+        setSolicitacaoCriada(
+          novaSolicitacao
+        );
+
+        setAvisoFotos(
+          'O protocolo foi criado, mas não foi possível identificar os problemas para enviar as fotos.'
+        );
+
+        return;
+      }
+
+      const problemasRegistrados =
+        (
+          problemasRegistradosData ??
+          []
+        ) as ProblemaRegistrado[];
+
+      const gruposDeFotos = [
+        {
+          numero: 1,
+          fotos,
+        },
+
+        ...problemasAdicionais.map(
+          (
+            problema,
+            indice
+          ) => ({
+            numero:
+              indice + 2,
+            fotos:
+              problema.fotos,
+          })
+        ),
+      ];
 
       let enviadas = 0;
 
       const errosFotos:
-        number[] = [];
+        string[] = [];
+
+      let ordemGlobal = 0;
 
       for (
-        let indice = 0;
-        indice < fotos.length;
-        indice++
+        const grupo of
+        gruposDeFotos
       ) {
-        try {
-          await enviarFoto(
-            fotos[indice],
-            indice,
-            novaSolicitacao
-              .solicitacao_id,
-            clienteId
+        const problemaRegistrado =
+          problemasRegistrados.find(
+            (item) =>
+              item.numero ===
+              grupo.numero
           );
 
-          enviadas++;
-
-          setQuantidadeFotosEnviadas(
-            enviadas
-          );
-        } catch (error) {
-          console.error(
-            `Erro na foto ${indice + 1}:`,
-            error
-          );
-
+        if (
+          !problemaRegistrado
+        ) {
           errosFotos.push(
-            indice + 1
+            `Problema ${grupo.numero}`
           );
+
+          continue;
+        }
+
+        for (
+          let indice = 0;
+          indice <
+          grupo.fotos.length;
+          indice++
+        ) {
+          ordemGlobal++;
+
+          try {
+            await enviarFoto(
+              grupo.fotos[
+                indice
+              ],
+              ordemGlobal - 1,
+              novaSolicitacao
+                .solicitacao_id,
+              clienteId,
+              problemaRegistrado
+                .problema_id
+            );
+
+            enviadas++;
+
+            setQuantidadeFotosEnviadas(
+              enviadas
+            );
+          } catch (error) {
+            console.error(
+              `Erro na foto ${indice + 1} do problema ${grupo.numero}:`,
+              error
+            );
+
+            errosFotos.push(
+              `Problema ${grupo.numero} - foto ${indice + 1}`
+            );
+          }
         }
       }
 
@@ -1590,12 +2077,19 @@ export default function NovaSolicitacaoScreen() {
       // 4. VERIFICA SE TEM AS 3 FOTOS OBRIGATÓRIAS
       // ------------------------------------------------------
 
+      const minimoTotalFotos =
+        MINIMO_FOTOS *
+        (
+          1 +
+          problemasAdicionais.length
+        );
+
       if (
         enviadas <
-        MINIMO_FOTOS
+        minimoTotalFotos
       ) {
         setAvisoFotos(
-          `O protocolo foi criado, mas apenas ${enviadas} foto(s) foram enviadas. A notificação automática ainda não foi enviada porque o chamado precisa de pelo menos ${MINIMO_FOTOS} fotos.`
+          `O protocolo foi criado, mas apenas ${enviadas} foto(s) foram enviadas. A notificação automática ainda não foi enviada porque cada problema precisa de pelo menos ${MINIMO_FOTOS} fotos.`
         );
 
         setSolicitacaoCriada(
@@ -1667,6 +2161,10 @@ export default function NovaSolicitacaoScreen() {
     );
 
     setFotos([]);
+
+    setProblemasAdicionais(
+      []
+    );
 
     setDataVistoriaSelecionada(
       ''
@@ -1813,6 +2311,21 @@ export default function NovaSolicitacaoScreen() {
               }
             >
               Recebemos sua solicitação de manutenção.
+            </Text>
+
+            <Text
+              style={
+                styles.protocolInfo
+              }
+            >
+              {1 +
+                problemasAdicionais.length}{' '}
+              {1 +
+                problemasAdicionais.length ===
+              1
+                ? 'problema foi registrado'
+                : 'problemas foram registrados'}{' '}
+              neste protocolo.
             </Text>
 
             {/* PROTOCOLO */}
@@ -2567,7 +3080,7 @@ export default function NovaSolicitacaoScreen() {
                     styles.warningText
                   }
                 >
-                  Registre uma solicitação separada para cada problema ou serviço. Não inclua problemas diferentes no mesmo chamado.
+                  Você pode informar vários problemas do mesmo imóvel nesta solicitação. Cada problema será analisado separadamente pela equipe da EMAFE, mas todos ficarão no mesmo protocolo.
                 </Text>
               </View>
 
@@ -2873,6 +3386,560 @@ export default function NovaSolicitacaoScreen() {
                   )}
                 </View>
               ) : null}
+
+              {/* OUTROS PROBLEMAS DO MESMO PROTOCOLO */}
+
+              <View
+                style={
+                  styles.multiProblemIntro
+                }
+              >
+                <View
+                  style={
+                    styles.multiProblemIntroHeader
+                  }
+                >
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={22}
+                    color="#0B5EA8"
+                  />
+
+                  <Text
+                    style={
+                      styles.multiProblemIntroTitle
+                    }
+                  >
+                    Tem outro problema neste imóvel?
+                  </Text>
+                </View>
+
+                <Text
+                  style={
+                    styles.multiProblemIntroText
+                  }
+                >
+                  Adicione quantos problemas forem necessários. Todos ficarão vinculados ao mesmo protocolo e à mesma vistoria.
+                </Text>
+
+                <TouchableOpacity
+                  style={
+                    styles.addProblemButton
+                  }
+                  onPress={
+                    adicionarOutroProblema
+                  }
+                  disabled={
+                    enviando
+                  }
+                  activeOpacity={
+                    0.85
+                  }
+                >
+                  <Ionicons
+                    name="add"
+                    size={20}
+                    color="#FFFFFF"
+                  />
+
+                  <Text
+                    style={
+                      styles.addProblemButtonText
+                    }
+                  >
+                    Adicionar outro problema
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {problemasAdicionais.map(
+                (
+                  problema,
+                  indiceProblema
+                ) => {
+                  const numeroProblema =
+                    indiceProblema +
+                    2;
+
+                  const faltamFotos =
+                    Math.max(
+                      0,
+                      MINIMO_FOTOS -
+                        problema
+                          .fotos
+                          .length
+                    );
+
+                  return (
+                    <View
+                      key={
+                        problema.id
+                      }
+                      style={
+                        styles.additionalProblemCard
+                      }
+                    >
+                      <View
+                        style={
+                          styles.additionalProblemHeader
+                        }
+                      >
+                        <View
+                          style={
+                            styles.problemNumberBadge
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.problemNumberBadgeText
+                            }
+                          >
+                            {
+                              numeroProblema
+                            }
+                          </Text>
+                        </View>
+
+                        <View
+                          style={{
+                            flex: 1,
+                          }}
+                        >
+                          <Text
+                            style={
+                              styles.additionalProblemTitle
+                            }
+                          >
+                            Problema{' '}
+                            {
+                              numeroProblema
+                            }
+                          </Text>
+
+                          <Text
+                            style={
+                              styles.additionalProblemSubtitle
+                            }
+                          >
+                            Este problema fará parte do mesmo protocolo.
+                          </Text>
+                        </View>
+
+                        <TouchableOpacity
+                          style={
+                            styles.removeProblemButton
+                          }
+                          onPress={() =>
+                            removerProblemaAdicional(
+                              indiceProblema
+                            )
+                          }
+                          disabled={
+                            enviando
+                          }
+                        >
+                          <Ionicons
+                            name="trash-outline"
+                            size={19}
+                            color="#9A3232"
+                          />
+                        </TouchableOpacity>
+                      </View>
+
+                      <Text
+                        style={
+                          styles.problemFieldTitle
+                        }
+                      >
+                        Onde está o problema?
+                      </Text>
+
+                      <View
+                        style={
+                          styles.roomGrid
+                        }
+                      >
+                        {COMODOS.map(
+                          (
+                            comodo
+                          ) => {
+                            const selecionado =
+                              problema
+                                .comodoSelecionado ===
+                              comodo;
+
+                            return (
+                              <TouchableOpacity
+                                key={
+                                  comodo
+                                }
+                                style={[
+                                  styles.roomButton,
+
+                                  selecionado &&
+                                    styles.roomButtonSelected,
+                                ]}
+                                activeOpacity={
+                                  0.85
+                                }
+                                disabled={
+                                  enviando
+                                }
+                                onPress={() =>
+                                  atualizarProblemaAdicional(
+                                    indiceProblema,
+                                    {
+                                      comodoSelecionado:
+                                        comodo,
+
+                                      outroComodo:
+                                        comodo ===
+                                        'Outro'
+                                          ? problema
+                                              .outroComodo
+                                          : '',
+                                    }
+                                  )
+                                }
+                              >
+                                <Text
+                                  style={[
+                                    styles.roomButtonText,
+
+                                    selecionado &&
+                                      styles.roomButtonTextSelected,
+                                  ]}
+                                >
+                                  {
+                                    comodo
+                                  }
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          }
+                        )}
+                      </View>
+
+                      {problema
+                        .comodoSelecionado ===
+                      'Outro' ? (
+                        <TextInput
+                          style={
+                            styles.input
+                          }
+                          placeholder="Digite onde está o problema"
+                          placeholderTextColor="#8995A5"
+                          value={
+                            problema
+                              .outroComodo
+                          }
+                          onChangeText={(
+                            valor
+                          ) =>
+                            atualizarProblemaAdicional(
+                              indiceProblema,
+                              {
+                                outroComodo:
+                                  valor,
+                              }
+                            )
+                          }
+                          maxLength={
+                            80
+                          }
+                          editable={
+                            !enviando
+                          }
+                        />
+                      ) : null}
+
+                      <Text
+                        style={
+                          styles.problemFieldTitle
+                        }
+                      >
+                        Descreva o problema
+                      </Text>
+
+                      <TextInput
+                        style={
+                          styles.descriptionInput
+                        }
+                        placeholder="Explique o que está acontecendo."
+                        placeholderTextColor="#8995A5"
+                        multiline
+                        textAlignVertical="top"
+                        value={
+                          problema
+                            .descricaoProblema
+                        }
+                        onChangeText={(
+                          valor
+                        ) =>
+                          atualizarProblemaAdicional(
+                            indiceProblema,
+                            {
+                              descricaoProblema:
+                                valor,
+                            }
+                          )
+                        }
+                        maxLength={
+                          1500
+                        }
+                        editable={
+                          !enviando
+                        }
+                      />
+
+                      <Text
+                        style={
+                          styles.counterText
+                        }
+                      >
+                        {
+                          problema
+                            .descricaoProblema
+                            .length
+                        }
+                        /1500
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.problemFieldTitle
+                        }
+                      >
+                        Fotos do problema
+                      </Text>
+
+                      <Text
+                        style={
+                          problema
+                            .fotos
+                            .length >=
+                          MINIMO_FOTOS
+                            ? styles.photoCounterSuccess
+                            : styles.photoCounterPending
+                        }
+                      >
+                        {
+                          problema
+                            .fotos
+                            .length
+                        }
+                        /
+                        {
+                          MINIMO_FOTOS
+                        }{' '}
+                        fotos obrigatórias
+                      </Text>
+
+                      {faltamFotos >
+                      0 ? (
+                        <Text
+                          style={
+                            styles.additionalPhotoHint
+                          }
+                        >
+                          Faltam{' '}
+                          {
+                            faltamFotos
+                          }{' '}
+                          {faltamFotos ===
+                          1
+                            ? 'foto'
+                            : 'fotos'}{' '}
+                          neste problema.
+                        </Text>
+                      ) : (
+                        <Text
+                          style={
+                            styles.additionalPhotoReady
+                          }
+                        >
+                          Fotos mínimas adicionadas.
+                        </Text>
+                      )}
+
+                      <View
+                        style={
+                          styles.photoButtons
+                        }
+                      >
+                        <TouchableOpacity
+                          style={
+                            styles.photoButton
+                          }
+                          onPress={() =>
+                            tirarFotoProblemaAdicional(
+                              indiceProblema
+                            )
+                          }
+                          disabled={
+                            enviando
+                          }
+                        >
+                          <View
+                            style={
+                              styles.photoIconContainer
+                            }
+                          >
+                            <Ionicons
+                              name="camera-outline"
+                              size={25}
+                              color="#0B2447"
+                            />
+                          </View>
+
+                          <View
+                            style={
+                              styles.photoButtonContent
+                            }
+                          >
+                            <Text
+                              style={
+                                styles.photoButtonText
+                              }
+                            >
+                              Tirar foto
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.photoButtonSubtext
+                              }
+                            >
+                              Usar a câmera
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={
+                            styles.photoButton
+                          }
+                          onPress={() =>
+                            escolherGaleriaProblemaAdicional(
+                              indiceProblema
+                            )
+                          }
+                          disabled={
+                            enviando
+                          }
+                        >
+                          <View
+                            style={
+                              styles.photoIconContainer
+                            }
+                          >
+                            <Ionicons
+                              name="images-outline"
+                              size={25}
+                              color="#0B2447"
+                            />
+                          </View>
+
+                          <View
+                            style={
+                              styles.photoButtonContent
+                            }
+                          >
+                            <Text
+                              style={
+                                styles.photoButtonText
+                              }
+                            >
+                              Galeria
+                            </Text>
+
+                            <Text
+                              style={
+                                styles.photoButtonSubtext
+                              }
+                            >
+                              Escolher fotos
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      </View>
+
+                      {problema
+                        .fotos
+                        .length >
+                      0 ? (
+                        <View
+                          style={
+                            styles.photoGrid
+                          }
+                        >
+                          {problema.fotos.map(
+                            (
+                              foto,
+                              indiceFoto
+                            ) => (
+                              <View
+                                key={`${foto.uri}-${indiceFoto}`}
+                                style={
+                                  styles.photoPreviewContainer
+                                }
+                              >
+                                <Image
+                                  source={{
+                                    uri:
+                                      foto.uri,
+                                  }}
+                                  style={
+                                    styles.photoPreview
+                                  }
+                                />
+
+                                <View
+                                  style={
+                                    styles.photoNumberBadge
+                                  }
+                                >
+                                  <Text
+                                    style={
+                                      styles.photoNumberText
+                                    }
+                                  >
+                                    {
+                                      indiceFoto +
+                                      1
+                                    }
+                                  </Text>
+                                </View>
+
+                                <TouchableOpacity
+                                  style={
+                                    styles.removePhotoButton
+                                  }
+                                  onPress={() =>
+                                    removerFotoProblemaAdicional(
+                                      indiceProblema,
+                                      indiceFoto
+                                    )
+                                  }
+                                  disabled={
+                                    enviando
+                                  }
+                                >
+                                  <Ionicons
+                                    name="close"
+                                    size={18}
+                                    color="#FFFFFF"
+                                  />
+                                </TouchableOpacity>
+                              </View>
+                            )
+                          )}
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                }
+              )}
 
               {/* TELEFONE */}
 
@@ -3547,6 +4614,139 @@ const styles =
       textAlign: 'center',
       marginTop: 8,
       marginBottom: 28,
+    },
+
+    multiProblemIntro: {
+      marginTop: 28,
+      backgroundColor:
+        '#EEF5FB',
+      borderWidth: 1,
+      borderColor:
+        '#C9DDEF',
+      borderRadius: 16,
+      padding: 16,
+    },
+
+    multiProblemIntroHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 9,
+    },
+
+    multiProblemIntroTitle: {
+      flex: 1,
+      color: '#0B2447',
+      fontSize: 15,
+      fontWeight: '800',
+    },
+
+    multiProblemIntroText: {
+      color: '#5F6F82',
+      fontSize: 12,
+      lineHeight: 18,
+      marginTop: 8,
+      marginBottom: 14,
+    },
+
+    addProblemButton: {
+      minHeight: 48,
+      borderRadius: 13,
+      backgroundColor:
+        '#0B5EA8',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent:
+        'center',
+      gap: 8,
+      paddingHorizontal: 16,
+    },
+
+    addProblemButtonText: {
+      color: '#FFFFFF',
+      fontSize: 14,
+      fontWeight: '700',
+    },
+
+    additionalProblemCard: {
+      marginTop: 18,
+      backgroundColor:
+        '#FFFFFF',
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor:
+        '#D8DEE7',
+      padding: 18,
+    },
+
+    additionalProblemHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 11,
+      marginBottom: 18,
+    },
+
+    problemNumberBadge: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor:
+        '#0B2447',
+      alignItems: 'center',
+      justifyContent:
+        'center',
+    },
+
+    problemNumberBadgeText: {
+      color: '#FFFFFF',
+      fontSize: 15,
+      fontWeight: '800',
+    },
+
+    additionalProblemTitle: {
+      color: '#0B2447',
+      fontSize: 16,
+      fontWeight: '800',
+    },
+
+    additionalProblemSubtitle: {
+      color: '#697789',
+      fontSize: 11,
+      lineHeight: 16,
+      marginTop: 2,
+    },
+
+    removeProblemButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor:
+        '#FDECEC',
+      alignItems: 'center',
+      justifyContent:
+        'center',
+    },
+
+    problemFieldTitle: {
+      color: '#24364B',
+      fontSize: 14,
+      fontWeight: '700',
+      marginTop: 16,
+      marginBottom: 9,
+    },
+
+    additionalPhotoHint: {
+      color: '#7B5A12',
+      fontSize: 11,
+      marginTop: 7,
+      marginBottom: 4,
+    },
+
+    additionalPhotoReady: {
+      color: '#357A4F',
+      fontSize: 11,
+      marginTop: 7,
+      marginBottom: 4,
+      fontWeight: '600',
     },
 
     sectionTitle: {

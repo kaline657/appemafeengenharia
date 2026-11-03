@@ -125,6 +125,26 @@ type ResultadoGarantia = {
   aviso: string | null;
 };
 
+type ProblemaSolicitacaoFuncionario = {
+  id: string;
+  solicitacao_id: string;
+  numero: number;
+  comodo: string | null;
+  descricao_problema: string;
+  item_garantia_id: string | null;
+  categoria: string | null;
+  elemento_construtivo: string | null;
+  manifestacao_patologica: string | null;
+  status_garantia: string | null;
+  data_base_garantia: string | null;
+  data_limite_garantia: string | null;
+  prazo_quantidade: number | null;
+  prazo_unidade: string | null;
+  dias_restantes: number | null;
+  aviso_garantia: string | null;
+  status_problema: string;
+};
+
 type AgendamentoVistoria = {
   agendamento_id: string;
   solicitacao_id: string;
@@ -1093,6 +1113,25 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   ] = useState<FotoSolicitacao | null>(null);
 
   // ==========================================================
+  // PROBLEMAS DO PROTOCOLO
+  // ==========================================================
+
+  const [
+    problemasSolicitacao,
+    setProblemasSolicitacao,
+  ] = useState<ProblemaSolicitacaoFuncionario[]>([]);
+
+  const [
+    problemaSelecionadoId,
+    setProblemaSelecionadoId,
+  ] = useState('');
+
+  const [
+    carregandoProblemasSolicitacao,
+    setCarregandoProblemasSolicitacao,
+  ] = useState(false);
+
+  // ==========================================================
   // GARANTIA
   // ==========================================================
 
@@ -1661,6 +1700,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       const dadosSolicitacao =
         await carregarSolicitacao();
 
+      const problemasCarregados =
+        await carregarProblemasSolicitacao();
+
       await carregarUrgencia();
 
       const itens =
@@ -1687,69 +1729,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       }
 
       // ======================================================
-      // SE JÁ EXISTIR ANÁLISE TÉCNICA
+      // CARREGA A ANÁLISE DO PRIMEIRO PROBLEMA
       // ======================================================
 
       if (
-        dadosSolicitacao &&
-        dadosSolicitacao.item_garantia_id
+        problemasCarregados.length > 0
       ) {
-        setCategoriaSelecionada(
-          dadosSolicitacao.categoria ?? ''
+        aplicarProblemaNaAnalise(
+          problemasCarregados[0],
+          itens
         );
-
-        setElementoSelecionado(
-          dadosSolicitacao.elemento_construtivo ??
-            ''
-        );
-
-        setItemSelecionadoId(
-          dadosSolicitacao.item_garantia_id
-        );
-
-        setResultadoGarantia({
-          item_garantia_id:
-            dadosSolicitacao.item_garantia_id,
-
-          categoria:
-            dadosSolicitacao.categoria ?? '',
-
-          elemento_construtivo:
-            dadosSolicitacao.elemento_construtivo ??
-            '',
-
-          manifestacao_patologica:
-            dadosSolicitacao.manifestacao_patologica ??
-            '',
-
-          regra_data_base:
-            itens.find(
-              (item) =>
-                item.item_garantia_id ===
-                dadosSolicitacao.item_garantia_id
-            )?.regra_data_base ?? null,
-
-          data_base:
-            dadosSolicitacao.data_base_garantia,
-
-          prazo_quantidade:
-            dadosSolicitacao.prazo_quantidade,
-
-          prazo_unidade:
-            dadosSolicitacao.prazo_unidade,
-
-          data_limite_garantia:
-            dadosSolicitacao.data_limite_garantia,
-
-          status_garantia:
-            dadosSolicitacao.status_garantia,
-
-          dias_restantes:
-            dadosSolicitacao.dias_restantes,
-
-          aviso:
-            dadosSolicitacao.aviso_garantia,
-        });
       }
     } catch (error) {
       console.error(
@@ -2055,6 +2044,154 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         false
       );
     }
+  }
+
+  // ==========================================================
+  // PROBLEMAS DO PROTOCOLO
+  // ==========================================================
+
+  async function carregarProblemasSolicitacao() {
+    try {
+      setCarregandoProblemasSolicitacao(true);
+
+      const { data, error } =
+        await supabase
+          .from('solicitacao_problemas')
+          .select(`
+            id,
+            solicitacao_id,
+            numero,
+            comodo,
+            descricao_problema,
+            item_garantia_id,
+            categoria,
+            elemento_construtivo,
+            manifestacao_patologica,
+            status_garantia,
+            data_base_garantia,
+            data_limite_garantia,
+            prazo_quantidade,
+            prazo_unidade,
+            dias_restantes,
+            aviso_garantia,
+            status_problema
+          `)
+          .eq(
+            'solicitacao_id',
+            solicitacaoId
+          )
+          .order(
+            'numero',
+            { ascending: true }
+          );
+
+      if (error) {
+        console.error(
+          'Erro ao carregar problemas do protocolo:',
+          error
+        );
+        setErroAnalise(
+          'Não foi possível carregar os problemas deste protocolo.'
+        );
+        return [];
+      }
+
+      const registros =
+        (data ?? []) as ProblemaSolicitacaoFuncionario[];
+
+      setProblemasSolicitacao(
+        registros
+      );
+
+      setProblemaSelecionadoId(
+        (atual) =>
+          atual &&
+          registros.some(
+            (item) =>
+              item.id === atual
+          )
+            ? atual
+            : registros[0]?.id ?? ''
+      );
+
+      return registros;
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao carregar problemas:',
+        error
+      );
+      setErroAnalise(
+        'Ocorreu um erro ao carregar os problemas do protocolo.'
+      );
+      return [];
+    } finally {
+      setCarregandoProblemasSolicitacao(false);
+    }
+  }
+
+  function aplicarProblemaNaAnalise(
+    problema: ProblemaSolicitacaoFuncionario,
+    itens: ItemGarantia[] = itensGarantia
+  ) {
+    setProblemaSelecionadoId(
+      problema.id
+    );
+    setCategoriaDropdownAberto(false);
+    setBuscaCategoria('');
+    setCategoriaSelecionada(
+      problema.categoria ?? ''
+    );
+    setElementoSelecionado(
+      problema.elemento_construtivo ?? ''
+    );
+    setItemSelecionadoId(
+      problema.item_garantia_id ?? ''
+    );
+    setErroAnalise('');
+    setSucessoAnalise('');
+
+    if (problema.item_garantia_id) {
+      setResultadoGarantia({
+        item_garantia_id:
+          problema.item_garantia_id,
+        categoria:
+          problema.categoria ?? '',
+        elemento_construtivo:
+          problema.elemento_construtivo ?? '',
+        manifestacao_patologica:
+          problema.manifestacao_patologica ?? '',
+        regra_data_base:
+          itens.find(
+            (item) =>
+              item.item_garantia_id ===
+              problema.item_garantia_id
+          )?.regra_data_base ?? null,
+        data_base:
+          problema.data_base_garantia,
+        prazo_quantidade:
+          problema.prazo_quantidade,
+        prazo_unidade:
+          problema.prazo_unidade,
+        data_limite_garantia:
+          problema.data_limite_garantia,
+        status_garantia:
+          problema.status_garantia,
+        dias_restantes:
+          problema.dias_restantes,
+        aviso:
+          problema.aviso_garantia,
+      });
+    } else {
+      setResultadoGarantia(null);
+    }
+  }
+
+  function selecionarProblemaDoProtocolo(
+    problema: ProblemaSolicitacaoFuncionario
+  ) {
+    aplicarProblemaNaAnalise(
+      problema
+    );
   }
 
   // ==========================================================
@@ -2657,19 +2794,55 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   // ANÁLISE JÁ CONFIRMADA
   // ==========================================================
 
+  const problemaSelecionado =
+    useMemo(
+      () =>
+        problemasSolicitacao.find(
+          (item) =>
+            item.id ===
+            problemaSelecionadoId
+        ) ?? null,
+      [
+        problemasSolicitacao,
+        problemaSelecionadoId,
+      ]
+    );
+
   const analiseConfirmada =
-    !!solicitacao?.item_garantia_id &&
-    solicitacao?.status !== 'aberta';
+    !!problemaSelecionado?.item_garantia_id;
 
   const dentroDaGarantia =
-    solicitacao?.status_garantia ===
+    problemaSelecionado?.status_garantia ===
       'dentro_garantia' ||
-    solicitacao?.status_garantia ===
+    problemaSelecionado?.status_garantia ===
       'dentro_da_garantia';
 
   const foraDaGarantia =
     analiseConfirmada &&
     !dentroDaGarantia;
+
+  const todosProblemasAnalisados =
+    problemasSolicitacao.length > 0 &&
+    problemasSolicitacao.every(
+      (item) =>
+        !!item.item_garantia_id
+    );
+
+  const algumProblemaDentroGarantia =
+    problemasSolicitacao.some(
+      (item) =>
+        item.status_garantia ===
+          'dentro_garantia' ||
+        item.status_garantia ===
+          'dentro_da_garantia'
+    );
+
+  // REGRA DO PROTOCOLO:
+  // - a garantia continua sendo calculada individualmente por problema;
+  // - a vistoria e a execução continuam quando pelo menos um problema
+  //   possui cobertura de garantia;
+  // - o protocolo só fica totalmente fora da garantia quando todos os
+  //   problemas foram analisados e nenhum possui cobertura.
 
   const nomeResponsavelVistoriaExibicao =
     useMemo(() => {
@@ -2768,6 +2941,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return;
     }
 
+    if (!problemaSelecionadoId) {
+      setErroAnalise(
+        'Selecione o problema do protocolo que será analisado.'
+      );
+      return;
+    }
+
     if (!itemSelecionadoId) {
       setErroAnalise(
         'Selecione o problema técnico antes de calcular a garantia.'
@@ -2785,10 +2965,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         data,
         error,
       } = await supabase.rpc(
-        'calcular_garantia_solicitacao_funcionario',
+        'calcular_garantia_problema_funcionario',
         {
           p_solicitacao_id:
             solicitacaoId,
+
+          p_problema_id:
+            problemaSelecionadoId,
 
           p_item_garantia_id:
             itemSelecionadoId,
@@ -2858,6 +3041,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return;
     }
 
+    if (!problemaSelecionadoId) {
+      setErroAnalise(
+        'Selecione o problema do protocolo que será analisado.'
+      );
+      return;
+    }
+
     if (!itemSelecionadoId) {
       setErroAnalise(
         'Selecione o problema técnico.'
@@ -2883,10 +3073,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         data,
         error,
       } = await supabase.rpc(
-        'confirmar_analise_solicitacao_funcionario',
+        'confirmar_analise_problema_funcionario',
         {
           p_solicitacao_id:
             solicitacaoId,
+
+          p_problema_id:
+            problemaSelecionadoId,
 
           p_item_garantia_id:
             itemSelecionadoId,
@@ -2910,10 +3103,30 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       }
 
       setSucessoAnalise(
-        'Análise técnica confirmada com sucesso.'
+        'Análise deste problema confirmada com sucesso.'
       );
 
       await carregarSolicitacao();
+
+      const problemasAtualizados =
+        await carregarProblemasSolicitacao();
+
+      const problemaAtualizado =
+        problemasAtualizados.find(
+          (item) =>
+            item.id ===
+            problemaSelecionadoId
+        );
+
+      if (problemaAtualizado) {
+        aplicarProblemaNaAnalise(
+          problemaAtualizado
+        );
+
+        setSucessoAnalise(
+          'Análise deste problema confirmada com sucesso.'
+        );
+      }
     } catch (error) {
       console.error(
         'Erro ao confirmar análise:',
@@ -3009,9 +3222,17 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     setErroVistoria('');
     setSucessoVistoria('');
 
-    if (!analiseConfirmada) {
+    if (!todosProblemasAnalisados) {
       setErroVistoria(
-        'Confirme a análise técnica antes de alterar a vistoria.'
+        'Confirme a análise técnica de todos os problemas antes de alterar a vistoria.'
+      );
+
+      return;
+    }
+
+    if (!algumProblemaDentroGarantia) {
+      setErroVistoria(
+        'Nenhum problema deste protocolo possui cobertura de garantia para seguir com a vistoria.'
       );
 
       return;
@@ -7743,12 +7964,190 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         styles.analysisIntroText
                       }
                     >
-                      {analiseConfirmada
-                        ? 'A análise técnica deste protocolo já foi confirmada.'
+                      {problemasSolicitacao.length > 1
+                        ? 'Analise cada problema individualmente. Todos permanecem vinculados ao mesmo protocolo.'
+                        : analiseConfirmada
+                        ? 'A análise técnica deste problema já foi confirmada.'
                         : 'Classifique o problema utilizando o modelo de garantia vinculado ao imóvel.'}
                     </Text>
                   </View>
                 </View>
+
+                {/* PROBLEMA DO PROTOCOLO */}
+
+                <Text
+                  style={
+                    styles.fieldNumber
+                  }
+                >
+                  Problema do protocolo
+                </Text>
+
+                {carregandoProblemasSolicitacao ? (
+                  <View
+                    style={
+                      styles.loadingInline
+                    }
+                  >
+                    <ActivityIndicator
+                      size="small"
+                      color="#0B2447"
+                    />
+                    <Text
+                      style={
+                        styles.loadingInlineText
+                      }
+                    >
+                      Carregando problemas...
+                    </Text>
+                  </View>
+                ) : (
+                  <View
+                    style={
+                      styles.protocolProblemsList
+                    }
+                  >
+                    {problemasSolicitacao.map(
+                      (problema) => {
+                        const ativo =
+                          problema.id ===
+                          problemaSelecionadoId;
+                        const analisado =
+                          !!problema.item_garantia_id;
+
+                        return (
+                          <TouchableOpacity
+                            key={problema.id}
+                            activeOpacity={0.85}
+                            onPress={() =>
+                              selecionarProblemaDoProtocolo(
+                                problema
+                              )
+                            }
+                            style={[
+                              styles.protocolProblemCard,
+                              ativo &&
+                                styles.protocolProblemCardActive,
+                            ]}
+                          >
+                            <View
+                              style={[
+                                styles.protocolProblemNumber,
+                                ativo &&
+                                  styles.protocolProblemNumberActive,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.protocolProblemNumberText,
+                                  ativo &&
+                                    styles.protocolProblemNumberTextActive,
+                                ]}
+                              >
+                                {problema.numero}
+                              </Text>
+                            </View>
+
+                            <View
+                              style={{
+                                flex: 1,
+                              }}
+                            >
+                              <Text
+                                style={[
+                                  styles.protocolProblemTitle,
+                                  ativo &&
+                                    styles.protocolProblemTitleActive,
+                                ]}
+                              >
+                                Problema {problema.numero}
+                                {problema.comodo
+                                  ? ` • ${problema.comodo}`
+                                  : ''}
+                              </Text>
+
+                              <Text
+                                numberOfLines={2}
+                                style={[
+                                  styles.protocolProblemDescription,
+                                  ativo &&
+                                    styles.protocolProblemDescriptionActive,
+                                ]}
+                              >
+                                {problema.descricao_problema}
+                              </Text>
+
+                              <Text
+                                style={[
+                                  styles.protocolProblemStatus,
+                                  analisado &&
+                                    styles.protocolProblemStatusDone,
+                                ]}
+                              >
+                                {analisado
+                                  ? `Garantia: ${textoGarantia(
+                                      problema.status_garantia
+                                    )}`
+                                  : 'Garantia: aguardando análise'}
+                              </Text>
+                            </View>
+
+                            <Ionicons
+                              name={
+                                ativo
+                                  ? 'checkmark-circle'
+                                  : analisado
+                                  ? 'shield-checkmark-outline'
+                                  : 'chevron-forward'
+                              }
+                              size={21}
+                              color={
+                                ativo
+                                  ? '#FFFFFF'
+                                  : analisado
+                                  ? '#287A46'
+                                  : '#8995A5'
+                              }
+                            />
+                          </TouchableOpacity>
+                        );
+                      }
+                    )}
+                  </View>
+                )}
+
+                {problemaSelecionado ? (
+                  <View
+                    style={
+                      styles.selectedProblemSummary
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.selectedProblemSummaryLabel
+                      }
+                    >
+                      PROBLEMA SELECIONADO
+                    </Text>
+                    <Text
+                      style={
+                        styles.selectedProblemSummaryTitle
+                      }
+                    >
+                      Problema {problemaSelecionado.numero}
+                      {problemaSelecionado.comodo
+                        ? ` • ${problemaSelecionado.comodo}`
+                        : ''}
+                    </Text>
+                    <Text
+                      style={
+                        styles.selectedProblemSummaryText
+                      }
+                    >
+                      {problemaSelecionado.descricao_problema}
+                    </Text>
+                  </View>
+                ) : null}
 
                 {/* URGÊNCIA */}
 
@@ -8365,7 +8764,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       styles.sectionTitle
                     }
                   >
-                    Resultado da garantia
+                    Resultado da garantia do problema selecionado
                   </Text>
 
                   <View
@@ -8512,8 +8911,8 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   VISTORIA
               ================================================= */}
 
-              {analiseConfirmada &&
-              dentroDaGarantia ? (
+              {todosProblemasAnalisados &&
+              algumProblemaDentroGarantia ? (
                 <>
                   <Text
                     style={
@@ -14164,7 +14563,8 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 </>
               ) : null}
 
-              {foraDaGarantia ? (
+              {todosProblemasAnalisados &&
+              !algumProblemaDentroGarantia ? (
                 <>
                   <Text
                     style={
@@ -14203,7 +14603,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           styles.foraGarantiaTexto
                         }
                       >
-                        Este item não possui cobertura de garantia vigente. O agendamento de vistoria de garantia não está disponível para este chamado.
+                        Todos os problemas deste protocolo foram analisados e nenhum possui cobertura de garantia vigente. O atendimento de garantia não seguirá para vistoria.
                       </Text>
                     </View>
                   </View>
@@ -15044,6 +15444,112 @@ const styles = StyleSheet.create({
   // ==========================================================
   // ANÁLISE
   // ==========================================================
+
+  protocolProblemsList: {
+    gap: 10,
+    marginBottom: 14,
+  },
+
+  protocolProblemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    borderRadius: 14,
+    padding: 13,
+    backgroundColor: '#FFFFFF',
+  },
+
+  protocolProblemCardActive: {
+    backgroundColor: '#0B2447',
+    borderColor: '#0B2447',
+  },
+
+  protocolProblemNumber: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E9F0F7',
+  },
+
+  protocolProblemNumberActive: {
+    backgroundColor: '#FFFFFF',
+  },
+
+  protocolProblemNumberText: {
+    color: '#0B2447',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  protocolProblemNumberTextActive: {
+    color: '#0B2447',
+  },
+
+  protocolProblemTitle: {
+    color: '#24364B',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  protocolProblemTitleActive: {
+    color: '#FFFFFF',
+  },
+
+  protocolProblemDescription: {
+    color: '#65758A',
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+
+  protocolProblemDescriptionActive: {
+    color: '#DCE7F4',
+  },
+
+  protocolProblemStatus: {
+    color: '#7B5A12',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 5,
+  },
+
+  protocolProblemStatusDone: {
+    color: '#287A46',
+  },
+
+  selectedProblemSummary: {
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    backgroundColor: '#F3F7FB',
+    borderWidth: 1,
+    borderColor: '#D6E2EE',
+  },
+
+  selectedProblemSummaryLabel: {
+    color: '#0B5EA8',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+
+  selectedProblemSummaryTitle: {
+    color: '#0B2447',
+    fontSize: 14,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+
+  selectedProblemSummaryText: {
+    color: '#5F6F82',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 5,
+  },
 
   analysisCard: {
     backgroundColor:
