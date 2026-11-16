@@ -15,6 +15,7 @@ import {
   useState,
 } from 'react';
 
+
 import {
   ActivityIndicator,
   Image,
@@ -31,56 +32,73 @@ import {
   View,
 } from 'react-native';
 
+
 import Svg, { Path as SvgPath } from 'react-native-svg';
 
+
 import { supabase } from '../lib/supabase';
+
 
 // ============================================================
 // TIPOS
 // ============================================================
 
+
 type Solicitacao = {
   solicitacao_id: string;
   protocolo: string;
+
 
   cliente_id: string;
   cliente_nome: string;
   cliente_cpf_cnpj: string | null;
 
+
   telefone_contato: string | null;
   email_contato: string | null;
+
 
   cidade: string | null;
   empreendimento: string;
   unidade: string;
   comodo: string | null;
 
+
   descricao_problema: string;
   disponibilidade_visita: string | null;
+
 
   categoria: string | null;
   elemento_construtivo: string | null;
   manifestacao_patologica: string | null;
 
+
   item_garantia_id: string | null;
+
 
   status_garantia: string | null;
   data_base_garantia: string | null;
   data_limite_garantia: string | null;
 
+
   prazo_quantidade: number | null;
   prazo_unidade: string | null;
   dias_restantes: number | null;
 
+
   aviso_garantia: string | null;
+
 
   status: string;
 
+
   quantidade_fotos: number;
+
 
   created_at: string;
   updated_at: string;
 };
+
 
 type FotoSolicitacao = {
   id: string;
@@ -91,6 +109,7 @@ type FotoSolicitacao = {
   ordem: number | null;
   url: string;
 };
+
 
 type ItemGarantia = {
   item_garantia_id: string;
@@ -105,10 +124,12 @@ type ItemGarantia = {
   ordem_exibicao: number | null;
 };
 
+
 type ResponsavelFuncionario = {
   responsavel_id: string;
   nome: string;
 };
+
 
 type ResultadoGarantia = {
   item_garantia_id: string;
@@ -124,6 +145,7 @@ type ResultadoGarantia = {
   dias_restantes: number | null;
   aviso: string | null;
 };
+
 
 type ProblemaSolicitacaoFuncionario = {
   id: string;
@@ -145,6 +167,66 @@ type ProblemaSolicitacaoFuncionario = {
   status_problema: string;
 };
 
+
+type AvaliacaoProblemaVistoria = {
+  avaliacao_id: string;
+  problema_id: string;
+  resultado: 'procedente' | 'improcedente';
+  problema_constatado: boolean;
+  parecer_tecnico: string;
+  servico_necessario: string | null;
+  justificativa_improcedencia: string | null;
+  atualizado_em: string;
+};
+
+
+function formatarDataDigitada(valor: string): string {
+  const n = valor.replace(/\D/g, '').slice(0, 8);
+  if (n.length <= 2) return n;
+  if (n.length <= 4) return `${n.slice(0, 2)}/${n.slice(2)}`;
+  return `${n.slice(0, 2)}/${n.slice(2, 4)}/${n.slice(4)}`;
+}
+function formatarHoraDigitada(valor: string): string {
+  const n = valor.replace(/\D/g, '').slice(0, 4);
+  return n.length <= 2 ? n : `${n.slice(0, 2)}:${n.slice(2)}`;
+}
+
+function partesInicioRealDoServico(iso: string | null): { data: string; hora: string } {
+  if (!iso) return { data: '', hora: '' };
+  const valor = new Date(iso);
+  if (Number.isNaN(valor.getTime())) return { data: '', hora: '' };
+  return {
+    data: valor.toLocaleDateString('pt-BR', { timeZone: 'America/Fortaleza' }),
+    hora: valor.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Fortaleza' }),
+  };
+}
+
+function formatarInicioRealDoServico(iso: string | null): string {
+  if (!iso) return 'Não informado';
+  const data = new Date(iso);
+  if (Number.isNaN(data.getTime())) return 'Não informado';
+  return `${data.toLocaleDateString('pt-BR', { timeZone: 'America/Fortaleza' })} às ${data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Fortaleza' })}`;
+}
+
+
+type RascunhoAvaliacao = {
+  resultado: 'procedente' | 'improcedente' | null;
+  problemaConstatado: boolean | null;
+  parecer: string;
+  servico: string;
+  justificativa: string;
+};
+
+
+const rascunhoVazio = (): RascunhoAvaliacao => ({
+  resultado: null,
+  problemaConstatado: null,
+  parecer: '',
+  servico: '',
+  justificativa: '',
+});
+
+
 type AgendamentoVistoria = {
   agendamento_id: string;
   solicitacao_id: string;
@@ -162,6 +244,7 @@ type AgendamentoVistoria = {
   motivo_cancelamento: string | null;
 };
 
+
 type HorarioVistoriaDisponivel = {
   data_vistoria: string;
   dia_semana: number;
@@ -172,12 +255,15 @@ type HorarioVistoriaDisponivel = {
 };
 
 
+
+
 type DiaCalendarioAgenda = {
   iso: string;
   dia: number;
   pertenceAoMes: boolean;
   disponivel: boolean;
 };
+
 
 type AgendaCalendarPickerProps = {
   horarios: HorarioVistoriaDisponivel[];
@@ -188,6 +274,7 @@ type AgendaCalendarPickerProps = {
     horario: HorarioVistoriaDisponivel
   ) => void;
 };
+
 
 function AgendaCalendarPicker({
   horarios,
@@ -201,6 +288,7 @@ function AgendaCalendarPicker({
     setMesCalendario,
   ] = useState<Date | null>(null);
 
+
   function dataIsoParaLocal(
     iso: string
   ) {
@@ -212,6 +300,7 @@ function AgendaCalendarPicker({
       .split('-')
       .map(Number);
 
+
     return new Date(
       ano,
       mes - 1,
@@ -219,24 +308,29 @@ function AgendaCalendarPicker({
     );
   }
 
+
   function dataLocalParaIso(
     data: Date
   ) {
     const ano =
       data.getFullYear();
 
+
     const mes =
       String(
         data.getMonth() + 1
       ).padStart(2, '0');
+
 
     const dia =
       String(
         data.getDate()
       ).padStart(2, '0');
 
+
     return `${ano}-${mes}-${dia}`;
   }
+
 
   function formatarDataAgenda(
     iso: string
@@ -244,6 +338,7 @@ function AgendaCalendarPicker({
     if (!iso) {
       return '-';
     }
+
 
     return dataIsoParaLocal(
       iso
@@ -258,6 +353,7 @@ function AgendaCalendarPicker({
     );
   }
 
+
   function formatarHoraAgenda(
     hora: string
   ) {
@@ -265,6 +361,7 @@ function AgendaCalendarPicker({
       ? hora.substring(0, 5)
       : '-';
   }
+
 
   useEffect(() => {
     if (
@@ -274,17 +371,21 @@ function AgendaCalendarPicker({
         null
       );
 
+
       return;
     }
+
 
     const referencia =
       dataSelecionada ||
       horarios[0].data_vistoria;
 
+
     const data =
       dataIsoParaLocal(
         referencia
       );
+
 
     setMesCalendario(
       new Date(
@@ -297,6 +398,7 @@ function AgendaCalendarPicker({
     horarios,
   ]);
 
+
   const datasComHorario =
     useMemo(
       () =>
@@ -308,6 +410,7 @@ function AgendaCalendarPicker({
         ),
       [horarios]
     );
+
 
   const horariosDaData =
     useMemo(
@@ -323,6 +426,7 @@ function AgendaCalendarPicker({
       ]
     );
 
+
   const limiteMesAnterior =
     useMemo(() => {
       if (
@@ -332,11 +436,13 @@ function AgendaCalendarPicker({
         return null;
       }
 
+
       const data =
         dataIsoParaLocal(
           horarios[0]
             .data_vistoria
         );
+
 
       return new Date(
         data.getFullYear(),
@@ -344,6 +450,7 @@ function AgendaCalendarPicker({
         1
       );
     }, [horarios]);
+
 
   const limiteMesPosterior =
     useMemo(() => {
@@ -354,6 +461,7 @@ function AgendaCalendarPicker({
         return null;
       }
 
+
       const data =
         dataIsoParaLocal(
           horarios[
@@ -361,12 +469,14 @@ function AgendaCalendarPicker({
           ].data_vistoria
         );
 
+
       return new Date(
         data.getFullYear(),
         data.getMonth(),
         1
       );
     }, [horarios]);
+
 
   const diasDoCalendario =
     useMemo<
@@ -376,11 +486,14 @@ function AgendaCalendarPicker({
         return [];
       }
 
+
       const ano =
         mesCalendario.getFullYear();
 
+
       const mes =
         mesCalendario.getMonth();
+
 
       const primeiroDiaMes =
         new Date(
@@ -388,6 +501,7 @@ function AgendaCalendarPicker({
           mes,
           1
         );
+
 
       const inicioGrade =
         new Date(
@@ -397,9 +511,11 @@ function AgendaCalendarPicker({
             primeiroDiaMes.getDay()
         );
 
+
       const dias:
         DiaCalendarioAgenda[] =
           [];
+
 
       for (
         let indice = 0;
@@ -411,26 +527,31 @@ function AgendaCalendarPicker({
             inicioGrade
           );
 
+
         data.setDate(
           inicioGrade.getDate() +
             indice
         );
+
 
         const iso =
           dataLocalParaIso(
             data
           );
 
+
         dias.push({
           iso,
           dia:
             data.getDate(),
+
 
           pertenceAoMes:
             data.getMonth() ===
               mes &&
             data.getFullYear() ===
               ano,
+
 
           disponivel:
             datasComHorario.has(
@@ -439,17 +560,20 @@ function AgendaCalendarPicker({
         });
       }
 
+
       return dias;
     }, [
       mesCalendario,
       datasComHorario,
     ]);
 
+
   const tituloMesCalendario =
     useMemo(() => {
       if (!mesCalendario) {
         return '';
       }
+
 
       const texto =
         mesCalendario
@@ -461,12 +585,14 @@ function AgendaCalendarPicker({
             }
           );
 
+
       return (
         texto.charAt(0)
           .toUpperCase() +
         texto.slice(1)
       );
     }, [mesCalendario]);
+
 
   function compararMeses(
     primeiro: Date,
@@ -484,6 +610,7 @@ function AgendaCalendarPicker({
     );
   }
 
+
   const podeVoltarMes =
     !!mesCalendario &&
     !!limiteMesAnterior &&
@@ -491,6 +618,7 @@ function AgendaCalendarPicker({
       mesCalendario,
       limiteMesAnterior
     ) > 0;
+
 
   const podeAvancarMes =
     !!mesCalendario &&
@@ -500,12 +628,14 @@ function AgendaCalendarPicker({
       limiteMesPosterior
     ) < 0;
 
+
   function mudarMes(
     quantidade: number
   ) {
     if (!mesCalendario) {
       return;
     }
+
 
     setMesCalendario(
       new Date(
@@ -516,6 +646,7 @@ function AgendaCalendarPicker({
       )
     );
   }
+
 
   if (
     horarios.length === 0 ||
@@ -533,6 +664,7 @@ function AgendaCalendarPicker({
           color="#0B5EA8"
         />
 
+
         <Text
           style={
             styles.agendaHintText
@@ -543,6 +675,7 @@ function AgendaCalendarPicker({
       </View>
     );
   }
+
 
   return (
     <>
@@ -559,6 +692,7 @@ function AgendaCalendarPicker({
           <TouchableOpacity
             style={[
               styles.calendarArrowButton,
+
 
               !podeVoltarMes &&
                 styles.calendarArrowButtonDisabled,
@@ -581,6 +715,7 @@ function AgendaCalendarPicker({
             />
           </TouchableOpacity>
 
+
           <Text
             style={
               styles.calendarMonthTitle
@@ -589,9 +724,11 @@ function AgendaCalendarPicker({
             {tituloMesCalendario}
           </Text>
 
+
           <TouchableOpacity
             style={[
               styles.calendarArrowButton,
+
 
               !podeAvancarMes &&
                 styles.calendarArrowButtonDisabled,
@@ -614,6 +751,7 @@ function AgendaCalendarPicker({
             />
           </TouchableOpacity>
         </View>
+
 
         <View
           style={
@@ -644,6 +782,7 @@ function AgendaCalendarPicker({
           )}
         </View>
 
+
         <View
           style={
             styles.calendarGrid
@@ -655,9 +794,11 @@ function AgendaCalendarPicker({
                 dataSelecionada ===
                 dia.iso;
 
+
               const podeSelecionar =
                 dia.pertenceAoMes &&
                 dia.disponivel;
+
 
               return (
                 <View
@@ -672,15 +813,19 @@ function AgendaCalendarPicker({
                     style={[
                       styles.calendarDay,
 
+
                       !dia.pertenceAoMes &&
                         styles.calendarDayOutside,
+
 
                       dia.pertenceAoMes &&
                         !dia.disponivel &&
                         styles.calendarDayUnavailable,
 
+
                       podeSelecionar &&
                         styles.calendarDayAvailable,
+
 
                       selecionado &&
                         styles.calendarDaySelected,
@@ -698,15 +843,19 @@ function AgendaCalendarPicker({
                       style={[
                         styles.calendarDayText,
 
+
                         !dia.pertenceAoMes &&
                           styles.calendarDayTextOutside,
+
 
                         dia.pertenceAoMes &&
                           !dia.disponivel &&
                           styles.calendarDayTextUnavailable,
 
+
                         podeSelecionar &&
                           styles.calendarDayTextAvailable,
+
 
                         selecionado &&
                           styles.calendarDayTextSelected,
@@ -720,6 +869,7 @@ function AgendaCalendarPicker({
             }
           )}
         </View>
+
 
         <View
           style={
@@ -737,6 +887,7 @@ function AgendaCalendarPicker({
               }
             />
 
+
             <Text
               style={
                 styles.calendarLegendText
@@ -745,6 +896,7 @@ function AgendaCalendarPicker({
               Data disponível
             </Text>
           </View>
+
 
           <View
             style={
@@ -757,6 +909,7 @@ function AgendaCalendarPicker({
               }
             />
 
+
             <Text
               style={
                 styles.calendarLegendText
@@ -767,6 +920,7 @@ function AgendaCalendarPicker({
           </View>
         </View>
       </View>
+
 
       {dataSelecionada ? (
         <View
@@ -785,6 +939,7 @@ function AgendaCalendarPicker({
               color="#0B2447"
             />
 
+
             <View
               style={{
                 flex: 1,
@@ -798,6 +953,7 @@ function AgendaCalendarPicker({
                 Escolha o horário
               </Text>
 
+
               <Text
                 style={
                   styles.timeSelectionDate
@@ -810,6 +966,7 @@ function AgendaCalendarPicker({
             </View>
           </View>
 
+
           <View
             style={
               styles.timeButtonsContainer
@@ -821,6 +978,7 @@ function AgendaCalendarPicker({
                   horarioSelecionadoId ===
                   horario.horario_vistoria_id;
 
+
                 return (
                   <TouchableOpacity
                     key={
@@ -828,6 +986,7 @@ function AgendaCalendarPicker({
                     }
                     style={[
                       styles.timeButton,
+
 
                       selecionado &&
                         styles.timeButtonSelected,
@@ -852,9 +1011,11 @@ function AgendaCalendarPicker({
                       }
                     />
 
+
                     <Text
                       style={[
                         styles.timeButtonText,
+
 
                         selecionado &&
                           styles.timeButtonTextSelected,
@@ -886,6 +1047,7 @@ function AgendaCalendarPicker({
             color="#0B5EA8"
           />
 
+
           <Text
             style={
               styles.agendaHintText
@@ -898,6 +1060,7 @@ function AgendaCalendarPicker({
     </>
   );
 }
+
 
 type VistoriaTecnica = {
   vistoria_id: string;
@@ -914,6 +1077,7 @@ type VistoriaTecnica = {
   finalizada_em: string | null;
 };
 
+
 type FotoVistoriaSalva = {
   id: string;
   vistoria_id: string;
@@ -924,20 +1088,26 @@ type FotoVistoriaSalva = {
   url: string;
 };
 
+
 type PropostaAgendamentoExecucao = {
   proposta_id: string;
   solicitacao_id?: string;
 
+
   opcao_1_data: string;
   opcao_1_hora: string;
+
 
   opcao_2_data: string;
   opcao_2_hora: string;
 
+
   opcao_confirmada: number | null;
+
 
   data_confirmada: string | null;
   hora_confirmada: string | null;
+
 
   status:
     | 'aguardando_cliente'
@@ -946,14 +1116,18 @@ type PropostaAgendamentoExecucao = {
     | 'cancelada'
     | string;
 
+
   motivo_reagendamento: string | null;
+
 
   proposto_por?: string | null;
   proposto_por_nome?: string | null;
 
+
   respondido_em: string | null;
   created_at: string;
 };
+
 
 type ExecucaoServico = {
   execucao_id: string;
@@ -969,6 +1143,7 @@ type ExecucaoServico = {
   concluida_em?: string | null;
 };
 
+
 type FotoExecucaoSalva = {
   id: string;
   execucao_id: string;
@@ -979,29 +1154,36 @@ type FotoExecucaoSalva = {
   url: string;
 };
 
+
 type EstadoAssinaturasForm03 = {
   modo_assinatura:
     | 'manual_app'
     | null;
 
+
   status: string;
+
 
   assinatura_cliente_svg: string | null;
   assinatura_cliente_nome: string | null;
   assinado_cliente_em: string | null;
+
 
   assinatura_funcionario_svg: string | null;
   assinatura_funcionario_nome: string | null;
   assinado_funcionario_em: string | null;
 };
 
+
 type DadosForm03 = {
   form03_id: string | null;
   form03_status: string | null;
 
+
   solicitacao_id: string;
   protocolo: string;
   data_reclamacao: string;
+
 
   cliente_id: string;
   solicitante: string;
@@ -1009,11 +1191,14 @@ type DadosForm03 = {
   email: string | null;
   disponibilidade: string | null;
 
+
   empreendimento: string;
   unidade: string;
   comodo: string | null;
 
+
   problema_relatado: string;
+
 
   categoria: string | null;
   elemento_construtivo: string | null;
@@ -1022,6 +1207,7 @@ type DadosForm03 = {
   prazo_quantidade: number | null;
   prazo_unidade: string | null;
   data_limite_garantia: string | null;
+
 
   vistoria_id: string | null;
   responsavel_vistoria: string | null;
@@ -1033,6 +1219,7 @@ type DadosForm03 = {
   observacoes_vistoria: string | null;
   resultado_vistoria: string | null;
 
+
   execucao_id: string | null;
   numero_termo: number | null;
   responsavel_servico: string | null;
@@ -1042,28 +1229,87 @@ type DadosForm03 = {
   solucao_tecnica: string | null;
   observacoes_execucao: string | null;
 
+
   fotos_vistoria: any[];
   fotos_execucao: any[];
 };
+
+
+type ServicoProblemaResumo = {
+  problema_id: string;
+  numero: number;
+  comodo: string | null;
+  descricao: string;
+  garantia: string | null;
+  procedencia: 'procedente' | 'improcedente' | null;
+  servico_necessario: string | null;
+  agendamento_id: string | null;
+  data_execucao: string | null;
+  hora_inicio: string | null;
+  hora_fim: string | null;
+  responsavel_id: string | null;
+  responsavel_nome_manual: string | null;
+  agendamento_status: string | null;
+  execucao_id: string | null;
+  execucao_status: string | null;
+  responsavel_execucao_id: string | null;
+  responsavel_execucao_nome_manual: string | null;
+  solucao_tecnica: string | null;
+  observacoes: string | null;
+  conclusao: string | null;
+  iniciada_em: string | null;
+  concluida_em: string | null;
+};
+
+
+type RascunhoExecucaoProblema = {
+  data: string;
+  horarioId: string;
+  inicio: string;
+  fim: string;
+  responsavelId: string;
+  responsavelManual: string;
+  dataRealInicio: string;
+  horaRealInicio: string;
+  responsavelRealId: string;
+  responsavelRealManual: string;
+  solucao: string;
+  observacoes: string;
+  conclusao: string;
+};
+
+
+function novoRascunhoExecucaoProblema(): RascunhoExecucaoProblema {
+  return { data: '', horarioId: '', inicio: '', fim: '', responsavelId: '',
+    responsavelManual: '', dataRealInicio: '', horaRealInicio: '',
+    responsavelRealId: '', responsavelRealManual: '',
+    solucao: '', observacoes: '', conclusao: '' };
+}
+
 
 type ClassificacaoUrgencia =
   | 'urgente'
   | 'nao_urgente';
 
+
 // ============================================================
 // TELA
 // ============================================================
 
+
 export default function DetalhesSolicitacaoFuncionarioScreen() {
   const params = useLocalSearchParams();
+
 
   const solicitacaoId = String(
     params.solicitacaoId ?? ''
   );
 
+
   // ==========================================================
   // SOLICITAÇÃO
   // ==========================================================
+
 
   const [
     solicitacao,
@@ -1071,9 +1317,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   ] = useState<Solicitacao | null>(null);
 
 
+
+
   // ==========================================================
   // URGÊNCIA
   // ==========================================================
+
 
   const [
     classificacaoUrgencia,
@@ -1083,196 +1332,252 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       null
     );
 
+
   const [
     carregandoUrgencia,
     setCarregandoUrgencia,
   ] = useState(false);
+
 
   const [
     salvandoUrgencia,
     setSalvandoUrgencia,
   ] = useState(false);
 
+
   const [
     erroUrgencia,
     setErroUrgencia,
   ] = useState('');
 
+
   // ==========================================================
   // FOTOS
   // ==========================================================
+
 
   const [
     fotos,
     setFotos,
   ] = useState<FotoSolicitacao[]>([]);
 
+
   const [
     fotoSelecionada,
     setFotoSelecionada,
   ] = useState<FotoSolicitacao | null>(null);
 
+
   // ==========================================================
   // PROBLEMAS DO PROTOCOLO
   // ==========================================================
+
 
   const [
     problemasSolicitacao,
     setProblemasSolicitacao,
   ] = useState<ProblemaSolicitacaoFuncionario[]>([]);
 
+
   const [
     problemaSelecionadoId,
     setProblemaSelecionadoId,
   ] = useState('');
+
 
   const [
     carregandoProblemasSolicitacao,
     setCarregandoProblemasSolicitacao,
   ] = useState(false);
 
+
+  // ==========================================================
+  // AVALIAÇÕES TÉCNICAS INDIVIDUAIS DOS PROBLEMAS
+  // ==========================================================
+
+
+  const [avaliacoesIndividuais, setAvaliacoesIndividuais] =
+    useState<AvaliacaoProblemaVistoria[]>([]);
+  const [avaliacoesCarregadas, setAvaliacoesCarregadas] = useState(false);
+  const [problemaEmVistoriaId, setProblemaEmVistoriaId] = useState('');
+  const [rascunhosAvaliacao, setRascunhosAvaliacao] =
+    useState<Record<string, RascunhoAvaliacao>>({});
+  const [salvandoAvaliacaoIndividual, setSalvandoAvaliacaoIndividual] = useState(false);
+  const [erroAvaliacaoIndividual, setErroAvaliacaoIndividual] = useState('');
+  const [sucessoAvaliacaoIndividual, setSucessoAvaliacaoIndividual] = useState('');
+
+
   // ==========================================================
   // GARANTIA
   // ==========================================================
+
 
   const [
     itensGarantia,
     setItensGarantia,
   ] = useState<ItemGarantia[]>([]);
 
+
   const [
     categoriaSelecionada,
     setCategoriaSelecionada,
   ] = useState('');
+
 
   const [
     categoriaDropdownAberto,
     setCategoriaDropdownAberto,
   ] = useState(false);
 
+
   const [
     buscaCategoria,
     setBuscaCategoria,
   ] = useState('');
+
 
   const [
     elementoSelecionado,
     setElementoSelecionado,
   ] = useState('');
 
+
   const [
     itemSelecionadoId,
     setItemSelecionadoId,
   ] = useState('');
+
 
   const [
     resultadoGarantia,
     setResultadoGarantia,
   ] = useState<ResultadoGarantia | null>(null);
 
+
   // ==========================================================
   // VISTORIA
   // ==========================================================
+
 
   const [
     agendamento,
     setAgendamento,
   ] = useState<AgendamentoVistoria | null>(null);
 
+
   const [
     salvandoVistoria,
     setSalvandoVistoria,
   ] = useState(false);
+
 
   const [
     erroVistoria,
     setErroVistoria,
   ] = useState('');
 
+
   const [
     sucessoVistoria,
     setSucessoVistoria,
   ] = useState('');
+
 
   const [
     horariosVistoriaDisponiveis,
     setHorariosVistoriaDisponiveis,
   ] = useState<HorarioVistoriaDisponivel[]>([]);
 
+
   const [
     carregandoAgendaVistoria,
     setCarregandoAgendaVistoria,
   ] = useState(false);
+
 
   const [
     mostrarAgendaVistoria,
     setMostrarAgendaVistoria,
   ] = useState(false);
 
+
   const [
     mostrarCancelamentoVistoria,
     setMostrarCancelamentoVistoria,
   ] = useState(false);
+
 
   const [
     novaDataVistoria,
     setNovaDataVistoria,
   ] = useState('');
 
+
   const [
     novoHorarioVistoriaId,
     setNovoHorarioVistoriaId,
   ] = useState('');
+
 
   const [
     motivoCancelamentoVistoria,
     setMotivoCancelamentoVistoria,
   ] = useState('');
 
+
   const [
     iniciandoVistoria,
     setIniciandoVistoria,
   ] = useState(false);
+
 
   const [
     erroInicioVistoria,
     setErroInicioVistoria,
   ] = useState('');
 
+
   const [
     vistoriaTecnica,
     setVistoriaTecnica,
   ] = useState<VistoriaTecnica | null>(null);
+
 
   const [
     problemaConstatado,
     setProblemaConstatado,
   ] = useState<boolean | null>(null);
 
+
   const [
     parecerTecnico,
     setParecerTecnico,
   ] = useState('');
+
 
   const [
     observacoesTecnicas,
     setObservacoesTecnicas,
   ] = useState('');
 
+
   const [
     salvandoFormularioVistoria,
     setSalvandoFormularioVistoria,
   ] = useState(false);
+
 
   const [
     erroFormularioVistoria,
     setErroFormularioVistoria,
   ] = useState('');
 
+
   const [
     sucessoFormularioVistoria,
     setSucessoFormularioVistoria,
   ] = useState('');
+
 
   const [
     fotosVistoriaPendentes,
@@ -1281,6 +1586,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     ImagePicker.ImagePickerAsset[]
   >([]);
 
+
   const [
     fotosVistoriaSalvas,
     setFotosVistoriaSalvas,
@@ -1288,10 +1594,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     []
   );
 
+
   const [
     carregandoFotosVistoria,
     setCarregandoFotosVistoria,
   ] = useState(false);
+
 
   const [
     resultadoVistoria,
@@ -1302,49 +1610,59 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     null
   >(null);
 
+
   const [
     justificativaResultado,
     setJustificativaResultado,
   ] = useState('');
+
 
   const [
     ausenciaClienteAberta,
     setAusenciaClienteAberta,
   ] = useState(false);
 
+
   const [
     preparandoAusenciaCliente,
     setPreparandoAusenciaCliente,
   ] = useState(false);
+
 
   const [
     finalizandoVistoria,
     setFinalizandoVistoria,
   ] = useState(false);
 
+
   const [
     erroFinalizacaoVistoria,
     setErroFinalizacaoVistoria,
   ] = useState('');
+
 
   const [
     sucessoFinalizacaoVistoria,
     setSucessoFinalizacaoVistoria,
   ] = useState('');
 
+
   const [
     mostrarDetalhesVistoriaFinalizada,
     setMostrarDetalhesVistoriaFinalizada,
   ] = useState(false);
 
+
   // ==========================================================
   // RESPONSÁVEIS DA VISTORIA E EXECUÇÃO
   // ==========================================================
+
 
   const [
     responsaveisFuncionarios,
     setResponsaveisFuncionarios,
   ] = useState<ResponsavelFuncionario[]>([]);
+
 
   const [
     modoResponsavelVistoria,
@@ -1353,20 +1671,24 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     'funcionario'
   );
 
+
   const [
     responsavelVistoriaId,
     setResponsavelVistoriaId,
   ] = useState('');
+
 
   const [
     responsavelVistoriaNomeManual,
     setResponsavelVistoriaNomeManual,
   ] = useState('');
 
+
   const [
     dropdownResponsavelVistoriaAberto,
     setDropdownResponsavelVistoriaAberto,
   ] = useState(false);
+
 
   const [
     modoResponsavelExecucao,
@@ -1375,24 +1697,29 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     'funcionario'
   );
 
+
   const [
     responsavelExecucaoId,
     setResponsavelExecucaoId,
   ] = useState('');
+
 
   const [
     responsavelExecucaoNomeManual,
     setResponsavelExecucaoNomeManual,
   ] = useState('');
 
+
   const [
     dropdownResponsavelExecucaoAberto,
     setDropdownResponsavelExecucaoAberto,
   ] = useState(false);
 
+
   // ==========================================================
   // AGENDAMENTO DA EXECUÇÃO
   // ==========================================================
+
 
   const [
     propostaAgendamentoExecucao,
@@ -1401,109 +1728,131 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     null
   );
 
+
   const [
     carregandoAgendamentoExecucao,
     setCarregandoAgendamentoExecucao,
   ] = useState(false);
+
 
   const [
     enviandoPropostaExecucao,
     setEnviandoPropostaExecucao,
   ] = useState(false);
 
+
   const [
     erroAgendamentoExecucao,
     setErroAgendamentoExecucao,
   ] = useState('');
+
 
   const [
     sucessoAgendamentoExecucao,
     setSucessoAgendamentoExecucao,
   ] = useState('');
 
+
   const [
     dataExecucaoSelecionada,
     setDataExecucaoSelecionada,
   ] = useState('');
+
 
   const [
     horaExecucaoSelecionada,
     setHoraExecucaoSelecionada,
   ] = useState('');
 
+
   const [
     horarioExecucaoSelecionadoId,
     setHorarioExecucaoSelecionadoId,
   ] = useState('');
+
 
   const [
     horariosExecucaoDisponiveis,
     setHorariosExecucaoDisponiveis,
   ] = useState<HorarioVistoriaDisponivel[]>([]);
 
+
   const [
     carregandoHorariosExecucao,
     setCarregandoHorariosExecucao,
   ] = useState(false);
 
+
   // ==========================================================
   // EXECUÇÃO DO SERVIÇO
   // ==========================================================
+
 
   const [
     execucaoServico,
     setExecucaoServico,
   ] = useState<ExecucaoServico | null>(null);
 
+
   const [
     iniciandoExecucao,
     setIniciandoExecucao,
   ] = useState(false);
+
 
   const [
     dataRealInicioExecucao,
     setDataRealInicioExecucao,
   ] = useState('');
 
+
   const [
     horaRealInicioExecucao,
     setHoraRealInicioExecucao,
   ] = useState('');
+
 
   const [
     erroExecucao,
     setErroExecucao,
   ] = useState('');
 
+
   const [
     sucessoExecucao,
     setSucessoExecucao,
   ] = useState('');
+
 
   const [
     solucaoTecnicaExecucao,
     setSolucaoTecnicaExecucao,
   ] = useState('');
 
+
   const [
     observacoesExecucao,
     setObservacoesExecucao,
   ] = useState('');
+
 
   const [
     salvandoExecucao,
     setSalvandoExecucao,
   ] = useState(false);
 
+
   const [
     erroFormularioExecucao,
     setErroFormularioExecucao,
   ] = useState('');
 
+
   const [
     sucessoFormularioExecucao,
     setSucessoFormularioExecucao,
   ] = useState('');
+
 
   const [
     fotosExecucaoPendentes,
@@ -1512,6 +1861,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     ImagePicker.ImagePickerAsset[]
   >([]);
 
+
   const [
     fotosExecucaoSalvas,
     setFotosExecucaoSalvas,
@@ -1519,10 +1869,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     []
   );
 
+
   const [
     carregandoFotosExecucao,
     setCarregandoFotosExecucao,
   ] = useState(false);
+
 
   const [
     conclusaoExecucao,
@@ -1533,50 +1885,60 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     null
   >(null);
 
+
   const [
     finalizandoExecucao,
     setFinalizandoExecucao,
   ] = useState(false);
+
 
   const [
     erroFinalizacaoExecucao,
     setErroFinalizacaoExecucao,
   ] = useState('');
 
+
   const [
     sucessoFinalizacaoExecucao,
     setSucessoFinalizacaoExecucao,
   ] = useState('');
+
 
   const [
     dadosForm03,
     setDadosForm03,
   ] = useState<DadosForm03 | null>(null);
 
+
   const [
     carregandoForm03,
     setCarregandoForm03,
   ] = useState(false);
+
 
   const [
     erroForm03,
     setErroForm03,
   ] = useState('');
 
+
   const [
     gerandoPdfForm03,
     setGerandoPdfForm03,
   ] = useState(false);
+
 
   const [
     pdfForm03Gerado,
     setPdfForm03Gerado,
   ] = useState(false);
 
+
   const [
     pdfForm03Uri,
     setPdfForm03Uri,
   ] = useState<string | null>(null);
+
 
   const [
     modoAssinaturaForm03,
@@ -1586,15 +1948,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     null
   >(null);
 
+
   const [
     definindoModoAssinatura,
     setDefinindoModoAssinatura,
   ] = useState(false);
 
+
   const [
     mensagemAssinaturaForm03,
     setMensagemAssinaturaForm03,
   ] = useState('');
+
 
   const [
     estadoAssinaturasForm03,
@@ -1603,6 +1968,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     useState<EstadoAssinaturasForm03 | null>(
       null
     );
+
 
   const [
     salvandoAssinaturaManual,
@@ -1613,67 +1979,250 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     null
   >(null);
 
+
   // ==========================================================
   // ESTADOS GERAIS
   // ==========================================================
+
 
   const [
     carregando,
     setCarregando,
   ] = useState(true);
 
+
   const [
     autorizado,
     setAutorizado,
   ] = useState(false);
+
 
   const [
     carregandoFotos,
     setCarregandoFotos,
   ] = useState(false);
 
+
   const [
     carregandoItens,
     setCarregandoItens,
   ] = useState(false);
+
 
   const [
     calculando,
     setCalculando,
   ] = useState(false);
 
+
   const [
     confirmando,
     setConfirmando,
   ] = useState(false);
+
 
   const [
     erro,
     setErro,
   ] = useState('');
 
+
   const [
     erroFotos,
     setErroFotos,
   ] = useState('');
+
 
   const [
     erroAnalise,
     setErroAnalise,
   ] = useState('');
 
+
   const [
     sucessoAnalise,
     setSucessoAnalise,
   ] = useState('');
 
+
+  // ==========================================================
+  // AGENDAMENTOS E EXECUÇÕES POR PROBLEMA — NOVO FLUXO
+  // ==========================================================
+  const [servicosIndividuais, setServicosIndividuais] =
+    useState<ServicoProblemaResumo[]>([]);
+  const [rascunhosExecucao, setRascunhosExecucao] =
+    useState<Record<string, RascunhoExecucaoProblema>>({});
+  const [acaoServicoId, setAcaoServicoId] = useState('');
+  const [erroServicos, setErroServicos] = useState('');
+  const [sucessoServicos, setSucessoServicos] = useState('');
+
+
+  async function carregarServicosIndividuais() {
+    try {
+      const { data, error } = await supabase.rpc('listar_servicos_problema', {
+        p_solicitacao_id: solicitacaoId,
+      });
+      if (error) throw error;
+      const itens = (Array.isArray(data) ? data : []) as ServicoProblemaResumo[];
+      setServicosIndividuais(itens);
+      setRascunhosExecucao((atual) => {
+        const novo = { ...atual };
+        itens.forEach((item) => {
+          const antigo = novo[item.problema_id] ?? novoRascunhoExecucaoProblema();
+          novo[item.problema_id] = {
+            ...antigo,
+            solucao: antigo.solucao || item.solucao_tecnica || '',
+            observacoes: antigo.observacoes || item.observacoes || '',
+            dataRealInicio: antigo.dataRealInicio || partesInicioRealDoServico(item.iniciada_em).data,
+            horaRealInicio: antigo.horaRealInicio || partesInicioRealDoServico(item.iniciada_em).hora,
+            // O responsável indicado no agendamento é sugerido ao registrar
+            // a execução, mas pode ser trocado pelo responsável efetivo.
+            responsavelRealId: antigo.responsavelRealId || antigo.responsavelRealManual
+              ? antigo.responsavelRealId
+              : (item.execucao_id ? item.responsavel_execucao_id ?? '' : item.responsavel_id ?? ''),
+            responsavelRealManual: antigo.responsavelRealId || antigo.responsavelRealManual
+              ? antigo.responsavelRealManual
+              : (item.execucao_id ? item.responsavel_execucao_nome_manual ?? '' : item.responsavel_nome_manual ?? ''),
+          };
+        });
+        return novo;
+      });
+      return itens;
+    } catch (error: any) {
+      console.error('Erro ao buscar serviços individuais:', error);
+      setErroServicos(error?.message ?? 'Não foi possível consultar os serviços.');
+      return [];
+    }
+  }
+
+
+  function alterarRascunhoServico(id: string, campos: Partial<RascunhoExecucaoProblema>) {
+    setRascunhosExecucao((antigo) => ({
+      ...antigo,
+      [id]: { ...(antigo[id] ?? novoRascunhoExecucaoProblema()), ...campos },
+    }));
+    setErroServicos('');
+    setSucessoServicos('');
+  }
+
+
+  async function executarAcaoServico(id: string, tipo: 'propor' | 'cancelar' | 'iniciar' | 'atualizar_inicio' | 'salvar' | 'finalizar') {
+    const item = servicosIndividuais.find((s) => s.problema_id === id);
+    const r = rascunhosExecucao[id] ?? novoRascunhoExecucaoProblema();
+    if (!item) return;
+    try {
+      setAcaoServicoId(id);
+      setErroServicos('');
+      setSucessoServicos('');
+      let chamada: { data: any; error: any };
+      if (tipo === 'propor') {
+        // Não permite agendamento por data/hora digitadas ou períodos fora da agenda.
+        const horarioSelecionado = horariosExecucaoDisponiveis.find(
+          (h) => h.data_vistoria === r.data && h.horario_vistoria_id === r.horarioId
+        );
+        if (!horarioSelecionado ||
+          horarioSelecionado.hora_inicio.slice(0, 5) !== r.inicio ||
+          horarioSelecionado.hora_fim.slice(0, 5) !== r.fim ||
+          (!r.responsavelId && !r.responsavelManual.trim())) {
+          setErroServicos('Selecione uma data e um horário no calendário e informe o responsável deste problema.');
+          return;
+        }
+        chamada = await supabase.rpc('propor_execucao_problema_funcionario', {
+          p_problema_id: id, p_data: r.data, p_hora_inicio: r.inicio,
+          p_hora_fim: r.fim, p_responsavel_id: r.responsavelId || null,
+          p_responsavel_nome_manual: r.responsavelId ? null : r.responsavelManual.trim(),
+        });
+      } else if (tipo === 'cancelar') {
+        chamada = await supabase.rpc('cancelar_execucao_problema_funcionario', {
+          p_agendamento_id: item.agendamento_id,
+        });
+      } else if (tipo === 'iniciar' || tipo === 'atualizar_inicio') {
+        // Cada problema informa sua data, hora e responsável reais de início.
+        // A agenda aprovada pelo cliente é preservada separadamente.
+        if (tipo === 'iniciar' && (item.agendamento_status !== 'confirmada' || item.execucao_id)) {
+          setErroServicos(`Problema ${item.numero}: a execução já foi iniciada ou o agendamento não está confirmado.`);
+          return;
+        }
+        if (tipo === 'atualizar_inicio' && (!item.execucao_id || item.execucao_status !== 'em_execucao')) {
+          setErroServicos(`Problema ${item.numero}: só é possível corrigir os dados reais enquanto a execução estiver em andamento.`);
+          return;
+        }
+        const partesData = r.dataRealInicio.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (!partesData) {
+          setErroServicos(`Problema ${item.numero}: informe a data real do início (DD/MM/AAAA).`);
+          return;
+        }
+        const dia = Number(partesData[1]);
+        const mes = Number(partesData[2]);
+        const ano = Number(partesData[3]);
+        const dataTeste = new Date(Date.UTC(ano, mes - 1, dia));
+        if (dataTeste.getUTCDate() !== dia || dataTeste.getUTCMonth() !== mes - 1 ||
+            dataTeste.getUTCFullYear() !== ano) {
+          setErroServicos(`Problema ${item.numero}: a data real informada não existe.`);
+          return;
+        }
+        const horaReal = r.horaRealInicio.trim();
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(horaReal)) {
+          setErroServicos(`Problema ${item.numero}: informe a hora real do início (HH:MM).`);
+          return;
+        }
+        if ((!r.responsavelRealId && !r.responsavelRealManual.trim()) ||
+            (r.responsavelRealId && r.responsavelRealManual.trim())) {
+          setErroServicos(`Problema ${item.numero}: selecione um funcionário ou informe outro responsável pela execução.`);
+          return;
+        }
+        chamada = await supabase.rpc(
+          tipo === 'iniciar'
+            ? 'iniciar_execucao_problema_com_dados_funcionario'
+            : 'atualizar_dados_execucao_problema_funcionario',
+          {
+          p_problema_id: id,
+          p_data_inicio: `${partesData[3]}-${partesData[2]}-${partesData[1]}`,
+          p_hora_inicio: horaReal,
+          p_responsavel_id: r.responsavelRealId || null,
+          p_responsavel_nome_manual: r.responsavelRealId ? null : r.responsavelRealManual.trim(),
+        });
+      } else if (tipo === 'salvar') {
+        if (!r.solucao.trim()) {
+          setErroServicos('Informe a solução técnica deste serviço.');
+          return;
+        }
+        chamada = await supabase.rpc('salvar_execucao_problema_funcionario', {
+          p_problema_id: id, p_solucao_tecnica: r.solucao.trim(),
+          p_observacoes: item.observacoes ?? null,
+        });
+      } else {
+        if (!r.conclusao.trim()) {
+          setErroServicos('Preencha a conclusão individual do serviço.');
+          return;
+        }
+        // A solução técnica deve ser salva antes da conclusão.
+        chamada = await supabase.rpc('finalizar_execucao_problema_funcionario', {
+          p_problema_id: id, p_conclusao: r.conclusao.trim(),
+        });
+      }
+      if (chamada.error) throw chamada.error;
+      await carregarServicosIndividuais();
+      await carregarSolicitacao();
+      setSucessoServicos(`Problema ${item.numero}: operação realizada com sucesso.`);
+    } catch (error: any) {
+      console.error(`Erro de execução individual (${tipo}):`, error);
+      setErroServicos(error?.message ?? 'Não foi possível concluir a operação.');
+    } finally {
+      setAcaoServicoId('');
+    }
+  }
+
+
   // ==========================================================
   // INICIALIZAÇÃO
   // ==========================================================
 
+
   useEffect(() => {
     iniciarTela();
   }, [solicitacaoId]);
+
 
   async function iniciarTela() {
     if (!solicitacaoId) {
@@ -1681,56 +2230,78 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Não foi possível identificar a solicitação.'
       );
 
+
       setCarregando(false);
+
 
       return;
     }
+
 
     try {
       setCarregando(true);
       setErro('');
 
+
       const permitido =
         await verificarAcesso();
+
 
       if (!permitido) {
         return;
       }
 
+
       const dadosSolicitacao =
         await carregarSolicitacao();
+
 
       const problemasCarregados =
         await carregarProblemasSolicitacao();
 
+
       await carregarUrgencia();
+
 
       const itens =
         await carregarItensGarantia();
 
+
       await carregarFotos();
+
 
       await carregarAgendamentoVistoria();
 
+
       await carregarVistoriaTecnica();
+      await carregarAvaliacoesIndividuais();
+      await carregarServicosIndividuais();
+
 
       await carregarExecucaoServico();
 
+
       await carregarAgendamentoExecucao();
+
 
       await carregarHorariosExecucao();
 
+
       await carregarResponsaveisFuncionarios();
 
+
       await carregarResponsaveisAtendimento();
+
 
       if (dadosSolicitacao?.status === 'concluida') {
         await carregarDadosForm03();
       }
 
+
       // ======================================================
       // CARREGA A ANÁLISE DO PRIMEIRO PROBLEMA
       // ======================================================
+
 
       if (
         problemasCarregados.length > 0
@@ -1746,6 +2317,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       setErro(
         'Não foi possível carregar a solicitação.'
       );
@@ -1754,9 +2326,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   // ==========================================================
   // ACESSO
   // ==========================================================
+
 
   async function verificarAcesso() {
     try {
@@ -1764,6 +2338,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         data: usuarioData,
         error: usuarioError,
       } = await supabase.auth.getUser();
+
 
       if (
         usuarioError ||
@@ -1773,8 +2348,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           '/login-funcionario'
         );
 
+
         return false;
       }
+
 
       const {
         data: ehFuncionario,
@@ -1783,20 +2360,25 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'sou_funcionario'
       );
 
+
       if (
         error ||
         ehFuncionario !== true
       ) {
         await supabase.auth.signOut();
 
+
         router.replace(
           '/login-funcionario'
         );
 
+
         return false;
       }
 
+
       setAutorizado(true);
+
 
       return true;
     } catch (error) {
@@ -1805,19 +2387,24 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       await supabase.auth.signOut();
+
 
       router.replace(
         '/login-funcionario'
       );
 
+
       return false;
     }
   }
 
+
   // ==========================================================
   // CARREGAR SOLICITAÇÃO
   // ==========================================================
+
 
   async function carregarSolicitacao() {
     try {
@@ -1832,34 +2419,42 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         }
       );
 
+
       if (error) {
         console.error(
           'Erro ao buscar solicitação:',
           error
         );
 
+
         setErro(
           'Não foi possível carregar os dados do chamado.'
         );
 
+
         return null;
       }
+
 
       const resultado =
         data?.[0] as
           | Solicitacao
           | undefined;
 
+
       if (!resultado) {
         setErro(
           'Solicitação não encontrada.'
         );
 
+
         return null;
       }
 
+
       const dados = {
         ...resultado,
+
 
         quantidade_fotos:
           Number(
@@ -1867,7 +2462,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           ) || 0,
       };
 
+
       setSolicitacao(dados);
+
 
       return dados;
     } catch (error) {
@@ -1876,18 +2473,22 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       return null;
     }
   }
+
 
   // ==========================================================
   // URGÊNCIA DA SOLICITAÇÃO
   // ==========================================================
 
+
   async function carregarUrgencia() {
     try {
       setCarregandoUrgencia(true);
       setErroUrgencia('');
+
 
       const {
         data,
@@ -1900,18 +2501,22 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         }
       );
 
+
       if (error) {
         console.error(
           'Erro ao carregar urgência:',
           error
         );
 
+
         setErroUrgencia(
           'Não foi possível carregar a classificação de urgência.'
         );
 
+
         return;
       }
+
 
       const registro =
         data?.[0] as
@@ -1922,9 +2527,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             }
           | undefined;
 
+
       const valor =
         registro
           ?.classificacao_urgencia;
+
 
       if (
         valor === 'urgente' ||
@@ -1944,6 +2551,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       setErroUrgencia(
         'Ocorreu um erro ao carregar a classificação de urgência.'
       );
@@ -1953,6 +2561,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       );
     }
   }
+
 
   async function definirUrgencia(
     novaClassificacao:
@@ -1965,6 +2574,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return;
     }
 
+
     if (
       classificacaoUrgencia ===
       novaClassificacao
@@ -1972,9 +2582,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return;
     }
 
+
     try {
       setSalvandoUrgencia(true);
       setErroUrgencia('');
+
 
       const {
         data,
@@ -1985,10 +2597,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_solicitacao_id:
             solicitacaoId,
 
+
           p_classificacao_urgencia:
             novaClassificacao,
         }
       );
+
 
       if (error) {
         console.error(
@@ -1996,12 +2610,15 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           error
         );
 
+
         setErroUrgencia(
           'Não foi possível salvar a classificação de urgência.'
         );
 
+
         return;
       }
+
 
       const registro =
         data?.[0] as
@@ -2012,9 +2629,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             }
           | undefined;
 
+
       const valor =
         registro
           ?.classificacao_urgencia;
+
 
       if (
         valor !== 'urgente' &&
@@ -2024,8 +2643,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           'O Supabase não confirmou a classificação selecionada.'
         );
 
+
         return;
       }
+
 
       setClassificacaoUrgencia(
         valor
@@ -2035,6 +2656,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Erro inesperado ao salvar urgência:',
         error
       );
+
 
       setErroUrgencia(
         'Ocorreu um erro ao salvar a classificação de urgência.'
@@ -2046,13 +2668,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   // ==========================================================
   // PROBLEMAS DO PROTOCOLO
   // ==========================================================
 
+
   async function carregarProblemasSolicitacao() {
     try {
       setCarregandoProblemasSolicitacao(true);
+
 
       const { data, error } =
         await supabase
@@ -2085,6 +2710,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             { ascending: true }
           );
 
+
       if (error) {
         console.error(
           'Erro ao carregar problemas do protocolo:',
@@ -2096,12 +2722,15 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         return [];
       }
 
+
       const registros =
         (data ?? []) as ProblemaSolicitacaoFuncionario[];
+
 
       setProblemasSolicitacao(
         registros
       );
+
 
       setProblemaSelecionadoId(
         (atual) =>
@@ -2113,6 +2742,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             ? atual
             : registros[0]?.id ?? ''
       );
+
 
       return registros;
     } catch (error) {
@@ -2128,6 +2758,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       setCarregandoProblemasSolicitacao(false);
     }
   }
+
 
   function aplicarProblemaNaAnalise(
     problema: ProblemaSolicitacaoFuncionario,
@@ -2149,6 +2780,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     );
     setErroAnalise('');
     setSucessoAnalise('');
+
 
     if (problema.item_garantia_id) {
       setResultadoGarantia({
@@ -2186,6 +2818,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   function selecionarProblemaDoProtocolo(
     problema: ProblemaSolicitacaoFuncionario
   ) {
@@ -2194,14 +2827,17 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     );
   }
 
+
   // ==========================================================
   // ITENS DE GARANTIA
   // ==========================================================
+
 
   async function carregarItensGarantia() {
     try {
       setCarregandoItens(true);
       setErroAnalise('');
+
 
       const {
         data,
@@ -2214,23 +2850,29 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         }
       );
 
+
       if (error) {
         console.error(
           'Erro ao carregar itens:',
           error
         );
 
+
         setErroAnalise(
           'Não foi possível carregar os itens de garantia desta unidade.'
         );
 
+
         return [];
       }
+
 
       const itens =
         (data ?? []) as ItemGarantia[];
 
+
       setItensGarantia(itens);
+
 
       return itens;
     } catch (error) {
@@ -2239,20 +2881,24 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       return [];
     } finally {
       setCarregandoItens(false);
     }
   }
 
+
   // ==========================================================
   // FOTOS
   // ==========================================================
+
 
   async function carregarFotos() {
     try {
       setCarregandoFotos(true);
       setErroFotos('');
+
 
       const {
         data,
@@ -2278,19 +2924,24 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           }
         );
 
+
       if (error) {
         setErroFotos(
           'Não foi possível carregar as fotos do chamado.'
         );
 
+
         return;
       }
+
 
       const registros =
         data ?? [];
 
+
       const fotosComUrl:
         FotoSolicitacao[] = [];
+
 
       for (const foto of registros) {
         const {
@@ -2303,9 +2954,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             60 * 60
           );
 
+
         if (signedError) {
           continue;
         }
+
 
         fotosComUrl.push({
           ...foto,
@@ -2313,12 +2966,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         });
       }
 
+
       setFotos(fotosComUrl);
     } catch (error) {
       console.error(
         'Erro ao carregar fotos:',
         error
       );
+
 
       setErroFotos(
         'Ocorreu um erro ao carregar as fotos.'
@@ -2328,9 +2983,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   // ==========================================================
   // CARREGAR AGENDAMENTO
   // ==========================================================
+
 
   async function carregarAgendamentoVistoria() {
     try {
@@ -2345,18 +3002,22 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         }
       );
 
+
       if (error) {
         console.error(
           'Erro ao buscar agendamento:',
           error
         );
 
+
         return null;
       }
+
 
       const historico =
         (data ?? []) as
           AgendamentoVistoria[];
+
 
       const registro =
         historico.find(
@@ -2364,13 +3025,17 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             item.eh_agendamento_atual
         );
 
+
       if (!registro) {
         setAgendamento(null);
+
 
         return null;
       }
 
+
       setAgendamento(registro);
+
 
       return registro;
     } catch (error) {
@@ -2379,13 +3044,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       return null;
     }
   }
 
+
   // ==========================================================
   // CARREGAR FICHA TÉCNICA DA VISTORIA
   // ==========================================================
+
 
   async function carregarResponsaveisFuncionarios() {
     try {
@@ -2396,14 +3064,17 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'listar_responsaveis_funcionario'
       );
 
+
       if (error) {
         console.error(
           'Erro ao carregar responsáveis:',
           error
         );
 
+
         return;
       }
+
 
       setResponsaveisFuncionarios(
         ((data ?? []) as any[]).map(
@@ -2423,6 +3094,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   async function carregarResponsaveisAtendimento() {
     try {
       const {
@@ -2436,21 +3108,26 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         }
       );
 
+
       if (error) {
         console.error(
           'Erro ao carregar responsáveis do atendimento:',
           error
         );
 
+
         return;
       }
+
 
       const registro =
         data?.[0];
 
+
       if (!registro) {
         return;
       }
+
 
       if (
         registro.responsavel_vistoria_id
@@ -2459,9 +3136,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           'funcionario'
         );
 
+
         setResponsavelVistoriaId(
           registro.responsavel_vistoria_id
         );
+
 
         setResponsavelVistoriaNomeManual(
           ''
@@ -2473,12 +3152,15 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           'outro'
         );
 
+
         setResponsavelVistoriaId('');
+
 
         setResponsavelVistoriaNomeManual(
           registro.responsavel_vistoria_nome_manual
         );
       }
+
 
       if (
         registro.responsavel_execucao_id
@@ -2487,9 +3169,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           'funcionario'
         );
 
+
         setResponsavelExecucaoId(
           registro.responsavel_execucao_id
         );
+
 
         setResponsavelExecucaoNomeManual(
           ''
@@ -2501,7 +3185,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           'outro'
         );
 
+
         setResponsavelExecucaoId('');
+
 
         setResponsavelExecucaoNomeManual(
           registro.responsavel_execucao_nome_manual
@@ -2515,6 +3201,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   function validarResponsavelVistoria() {
     if (
       modoResponsavelVistoria ===
@@ -2524,6 +3211,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return 'Selecione o responsável pela vistoria.';
     }
 
+
     if (
       modoResponsavelVistoria ===
         'outro' &&
@@ -2532,8 +3220,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return 'Digite o nome do responsável pela vistoria.';
     }
 
+
     return '';
   }
+
 
   function validarResponsavelExecucao() {
     if (
@@ -2544,6 +3234,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return 'Selecione o responsável pela execução.';
     }
 
+
     if (
       modoResponsavelExecucao ===
         'outro' &&
@@ -2552,8 +3243,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return 'Digite o nome do responsável pela execução.';
     }
 
+
     return '';
   }
+
 
   async function salvarResponsavelVistoria() {
     const {
@@ -2564,11 +3257,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         p_solicitacao_id:
           solicitacaoId,
 
+
         p_responsavel_id:
           modoResponsavelVistoria ===
           'funcionario'
             ? responsavelVistoriaId
             : null,
+
 
         p_responsavel_nome_manual:
           modoResponsavelVistoria ===
@@ -2578,11 +3273,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       }
     );
 
+
     if (error) {
       console.error(
         'Erro ao salvar responsável da vistoria:',
         error
       );
+
 
       return (
         error.message ||
@@ -2590,8 +3287,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       );
     }
 
+
     return '';
   }
+
 
   async function salvarResponsavelExecucao() {
     const {
@@ -2602,11 +3301,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         p_solicitacao_id:
           solicitacaoId,
 
+
         p_responsavel_id:
           modoResponsavelExecucao ===
           'funcionario'
             ? responsavelExecucaoId
             : null,
+
 
         p_responsavel_nome_manual:
           modoResponsavelExecucao ===
@@ -2616,11 +3317,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       }
     );
 
+
     if (error) {
       console.error(
         'Erro ao salvar responsável da execução:',
         error
       );
+
 
       return (
         error.message ||
@@ -2628,8 +3331,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       );
     }
 
+
     return '';
   }
+
 
   async function carregarVistoriaTecnica() {
     try {
@@ -2644,49 +3349,60 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         }
       );
 
+
       if (error) {
         console.error(
           'Erro ao buscar ficha da vistoria:',
           error
         );
 
+
         return null;
       }
+
 
       const registro =
         data?.[0] as
           | VistoriaTecnica
           | undefined;
 
+
       if (!registro) {
         setVistoriaTecnica(null);
         setFotosVistoriaSalvas([]);
 
+
         return null;
       }
+
 
       setVistoriaTecnica(
         registro
       );
+
 
       setProblemaConstatado(
         registro.problema_constatado ??
           null
       );
 
+
       setParecerTecnico(
         registro.parecer_tecnico ??
           ''
       );
+
 
       setObservacoesTecnicas(
         registro.observacoes ??
           ''
       );
 
+
       await carregarFotosVistoria(
         registro.vistoria_id
       );
+
 
       return registro;
     } catch (error) {
@@ -2695,13 +3411,119 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       return null;
     }
   }
 
+
+  // ==========================================================
+  // AVALIAÇÃO TÉCNICA INDIVIDUAL
+  // ==========================================================
+
+
+  async function carregarAvaliacoesIndividuais() {
+    setAvaliacoesCarregadas(false);
+    try {
+      const { data, error } = await supabase.rpc(
+        'listar_avaliacoes_problemas_vistoria_funcionario',
+        { p_solicitacao_id: solicitacaoId }
+      );
+      if (error) throw error;
+      const registros = (data ?? []) as AvaliacaoProblemaVistoria[];
+      setAvaliacoesIndividuais(registros);
+      setRascunhosAvaliacao((anteriores) => {
+        const atualizados = { ...anteriores };
+        registros.forEach((item) => {
+          atualizados[item.problema_id] = {
+            resultado: item.resultado,
+            problemaConstatado: item.problema_constatado,
+            parecer: item.parecer_tecnico ?? '',
+            servico: item.servico_necessario ?? '',
+            justificativa: item.justificativa_improcedencia ?? '',
+          };
+        });
+        return atualizados;
+      });
+      setErroAvaliacaoIndividual('');
+      setAvaliacoesCarregadas(true);
+      return registros;
+    } catch (error: any) {
+      console.error('Erro ao carregar avaliações individuais:', error);
+      setErroAvaliacaoIndividual(
+        error?.message ?? 'Não foi possível consultar as avaliações individuais.'
+      );
+      return null;
+    }
+  }
+
+
+  function atualizarRascunhoAvaliacao(
+    id: string,
+    patch: Partial<RascunhoAvaliacao>
+  ) {
+    setRascunhosAvaliacao((atual) => ({
+      ...atual,
+      [id]: { ...(atual[id] ?? rascunhoVazio()), ...patch },
+    }));
+    setErroAvaliacaoIndividual('');
+    setSucessoAvaliacaoIndividual('');
+  }
+
+
+  async function salvarAvaliacaoIndividual(problemaId: string) {
+    const problema = problemasSolicitacao.find((p) => p.id === problemaId);
+    const dados = rascunhosAvaliacao[problemaId] ?? rascunhoVazio();
+    if (!problema || !['dentro_da_garantia', 'dentro_garantia'].includes(
+      problema.status_garantia ?? ''
+    )) {
+      setErroAvaliacaoIndividual('Somente problemas cobertos podem receber avaliação de garantia.');
+      return;
+    }
+    if (!dados.resultado || dados.problemaConstatado === null || !dados.parecer.trim()) {
+      setErroAvaliacaoIndividual('Informe procedência, constatação e parecer técnico.');
+      return;
+    }
+    if (dados.resultado === 'procedente' && !dados.problemaConstatado) {
+      setErroAvaliacaoIndividual('Para um problema procedente, confirme a constatação.');
+      return;
+    }
+    if (dados.resultado === 'improcedente' && !dados.justificativa.trim()) {
+      setErroAvaliacaoIndividual('Informe a justificativa da improcedência.');
+      return;
+    }
+    try {
+      setSalvandoAvaliacaoIndividual(true);
+      setErroAvaliacaoIndividual('');
+      setSucessoAvaliacaoIndividual('');
+      const { error } = await supabase.rpc(
+        'salvar_avaliacao_problema_vistoria_funcionario',
+        {
+          p_problema_id: problemaId,
+          p_resultado: dados.resultado,
+          p_problema_constatado: dados.problemaConstatado,
+          p_parecer_tecnico: dados.parecer.trim(),
+          p_servico_necessario: null,
+          p_justificativa_improcedencia: dados.resultado === 'improcedente'
+            ? dados.justificativa.trim() : null,
+        }
+      );
+      if (error) throw error;
+      await carregarAvaliacoesIndividuais();
+      setSucessoAvaliacaoIndividual(`Avaliação do problema ${problema.numero} salva com sucesso.`);
+    } catch (error: any) {
+      console.error('Erro ao salvar avaliação individual:', error);
+      setErroAvaliacaoIndividual(error?.message ?? 'Não foi possível salvar a avaliação.');
+    } finally {
+      setSalvandoAvaliacaoIndividual(false);
+    }
+  }
+
+
   // ==========================================================
   // CASCATA DA ANÁLISE
   // ==========================================================
+
 
   const categorias =
     useMemo(() => {
@@ -2717,6 +3539,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       );
     }, [itensGarantia]);
 
+
   const categoriasFiltradas =
     useMemo(() => {
       const termo =
@@ -2726,9 +3549,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             'pt-BR'
           );
 
+
       if (!termo) {
         return categorias;
       }
+
 
       return categorias.filter(
         (categoria) =>
@@ -2743,11 +3568,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       buscaCategoria,
     ]);
 
+
   const elementos =
     useMemo(() => {
       if (!categoriaSelecionada) {
         return [];
       }
+
 
       return Array.from(
         new Set(
@@ -2768,6 +3595,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       categoriaSelecionada,
     ]);
 
+
   const problemas =
     useMemo(() => {
       if (
@@ -2776,6 +3604,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       ) {
         return [];
       }
+
 
       return itensGarantia.filter(
         (item) =>
@@ -2790,9 +3619,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       elementoSelecionado,
     ]);
 
+
   // ==========================================================
   // ANÁLISE JÁ CONFIRMADA
   // ==========================================================
+
 
   const problemaSelecionado =
     useMemo(
@@ -2808,8 +3639,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       ]
     );
 
+
   const analiseConfirmada =
     !!problemaSelecionado?.item_garantia_id;
+
 
   const dentroDaGarantia =
     problemaSelecionado?.status_garantia ===
@@ -2817,9 +3650,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     problemaSelecionado?.status_garantia ===
       'dentro_da_garantia';
 
+
   const foraDaGarantia =
     analiseConfirmada &&
     !dentroDaGarantia;
+
 
   const todosProblemasAnalisados =
     problemasSolicitacao.length > 0 &&
@@ -2827,6 +3662,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       (item) =>
         !!item.item_garantia_id
     );
+
 
   const algumProblemaDentroGarantia =
     problemasSolicitacao.some(
@@ -2837,12 +3673,47 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           'dentro_da_garantia'
     );
 
+
+  const problemasCobertos = problemasSolicitacao.filter((item) =>
+    ['dentro_da_garantia', 'dentro_garantia'].includes(item.status_garantia ?? '')
+  );
+
+
+  const problemaEmVistoria = problemasCobertos.find(
+    (item) => item.id === problemaEmVistoriaId
+  ) ?? problemasCobertos[0] ?? null;
+
+
+  const avaliacaoAtual = problemaEmVistoria
+    ? avaliacoesIndividuais.find((a) => a.problema_id === problemaEmVistoria.id) ?? null
+    : null;
+
+
+  const rascunhoAtual = problemaEmVistoria
+    ? rascunhosAvaliacao[problemaEmVistoria.id] ?? rascunhoVazio()
+    : rascunhoVazio();
+
+
+  const todosProblemasCobertosAvaliados =
+    avaliacoesCarregadas && problemasCobertos.length > 0 &&
+    problemasCobertos.every((p) =>
+      avaliacoesIndividuais.some((a) => a.problema_id === p.id)
+    );
+
+
+  const existeProblemaProcedente = avaliacoesIndividuais.some((a) =>
+    problemasCobertos.some((p) => p.id === a.problema_id) &&
+    a.resultado === 'procedente'
+  );
+
+
   // REGRA DO PROTOCOLO:
   // - a garantia continua sendo calculada individualmente por problema;
   // - a vistoria e a execução continuam quando pelo menos um problema
   //   possui cobertura de garantia;
   // - o protocolo só fica totalmente fora da garantia quando todos os
   //   problemas foram analisados e nenhum possui cobertura.
+
 
   const nomeResponsavelVistoriaExibicao =
     useMemo(() => {
@@ -2855,6 +3726,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           '-'
         );
       }
+
 
       return (
         responsaveisFuncionarios.find(
@@ -2871,9 +3743,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       responsaveisFuncionarios,
     ]);
 
+
   // ==========================================================
   // SELEÇÕES
   // ==========================================================
+
 
   function selecionarCategoria(
     categoria: string
@@ -2882,15 +3756,19 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return;
     }
 
+
     setCategoriaSelecionada(
       categoria
     );
+
 
     setCategoriaDropdownAberto(
       false
     );
 
+
     setBuscaCategoria('');
+
 
     setElementoSelecionado('');
     setItemSelecionadoId('');
@@ -2899,6 +3777,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     setSucessoAnalise('');
   }
 
+
   function selecionarElemento(
     elemento: string
   ) {
@@ -2906,15 +3785,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return;
     }
 
+
     setElementoSelecionado(
       elemento
     );
+
 
     setItemSelecionadoId('');
     setResultadoGarantia(null);
     setErroAnalise('');
     setSucessoAnalise('');
   }
+
 
   function selecionarProblema(
     itemId: string
@@ -2923,23 +3805,28 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return;
     }
 
+
     setItemSelecionadoId(
       itemId
     );
+
 
     setResultadoGarantia(null);
     setErroAnalise('');
     setSucessoAnalise('');
   }
 
+
   // ==========================================================
   // CALCULAR GARANTIA
   // ==========================================================
+
 
   async function calcularGarantia() {
     if (analiseConfirmada) {
       return;
     }
+
 
     if (!problemaSelecionadoId) {
       setErroAnalise(
@@ -2948,18 +3835,22 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return;
     }
 
+
     if (!itemSelecionadoId) {
       setErroAnalise(
         'Selecione o problema técnico antes de calcular a garantia.'
       );
 
+
       return;
     }
+
 
     try {
       setCalculando(true);
       setErroAnalise('');
       setSucessoAnalise('');
+
 
       const {
         data,
@@ -2970,37 +3861,46 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_solicitacao_id:
             solicitacaoId,
 
+
           p_problema_id:
             problemaSelecionadoId,
+
 
           p_item_garantia_id:
             itemSelecionadoId,
         }
       );
 
+
       if (error) {
         setErroAnalise(
           error.message
         );
 
+
         return;
       }
+
 
       const resultado =
         data?.[0] as
           | ResultadoGarantia
           | undefined;
 
+
       if (!resultado) {
         setErroAnalise(
           'Não foi possível obter o resultado.'
         );
 
+
         return;
       }
 
+
       setResultadoGarantia({
         ...resultado,
+
 
         prazo_quantidade:
           resultado.prazo_quantidade !==
@@ -3009,6 +3909,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 resultado.prazo_quantidade
               )
             : null,
+
 
         dias_restantes:
           resultado.dias_restantes !==
@@ -3024,6 +3925,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       setErroAnalise(
         'Ocorreu um erro ao calcular a garantia.'
       );
@@ -3032,14 +3934,17 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   // ==========================================================
   // CONFIRMAR ANÁLISE
   // ==========================================================
+
 
   async function confirmarAnalise() {
     if (analiseConfirmada) {
       return;
     }
+
 
     if (!problemaSelecionadoId) {
       setErroAnalise(
@@ -3048,26 +3953,32 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return;
     }
 
+
     if (!itemSelecionadoId) {
       setErroAnalise(
         'Selecione o problema técnico.'
       );
 
+
       return;
     }
+
 
     if (!resultadoGarantia) {
       setErroAnalise(
         'Calcule a garantia antes de confirmar a análise.'
       );
 
+
       return;
     }
+
 
     try {
       setConfirmando(true);
       setErroAnalise('');
       setSucessoAnalise('');
+
 
       const {
         data,
@@ -3078,38 +3989,48 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_solicitacao_id:
             solicitacaoId,
 
+
           p_problema_id:
             problemaSelecionadoId,
+
 
           p_item_garantia_id:
             itemSelecionadoId,
         }
       );
 
+
       if (error) {
         setErroAnalise(
           error.message
         );
 
+
         return;
       }
+
 
       if (!data?.length) {
         setErroAnalise(
           'A análise não pôde ser confirmada.'
         );
 
+
         return;
       }
+
 
       setSucessoAnalise(
         'Análise deste problema confirmada com sucesso.'
       );
 
+
       await carregarSolicitacao();
+
 
       const problemasAtualizados =
         await carregarProblemasSolicitacao();
+
 
       const problemaAtualizado =
         problemasAtualizados.find(
@@ -3118,10 +4039,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             problemaSelecionadoId
         );
 
+
       if (problemaAtualizado) {
         aplicarProblemaNaAnalise(
           problemaAtualizado
         );
+
 
         setSucessoAnalise(
           'Análise deste problema confirmada com sucesso.'
@@ -3133,6 +4056,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       setErroAnalise(
         'Ocorreu um erro ao confirmar a análise.'
       );
@@ -3141,9 +4065,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   // ==========================================================
   // AGENDAR / REAGENDAR
   // ==========================================================
+
 
   async function carregarAgendaVistoria() {
     try {
@@ -3151,7 +4077,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         true
       );
 
+
       setErroVistoria('');
+
 
       const {
         data,
@@ -3162,10 +4090,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_data_inicio:
             null,
 
+
           p_quantidade_dias:
             60,
         }
       );
+
 
       if (error) {
         console.error(
@@ -3173,12 +4103,15 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           error
         );
 
+
         setErroVistoria(
           'Não foi possível carregar os horários disponíveis.'
         );
 
+
         return;
       }
+
 
       setHorariosVistoriaDisponiveis(
         (data ?? []) as
@@ -3190,6 +4123,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       setErroVistoria(
         'Ocorreu um erro ao carregar a agenda.'
       );
@@ -3200,43 +4134,54 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   async function abrirAgendaVistoria() {
     setErroVistoria('');
     setSucessoVistoria('');
+
 
     setMostrarCancelamentoVistoria(
       false
     );
 
+
     setMostrarAgendaVistoria(
       true
     );
 
+
     setNovaDataVistoria('');
     setNovoHorarioVistoriaId('');
+
 
     await carregarAgendaVistoria();
   }
 
+
   async function salvarAgendamentoVistoria() {
     setErroVistoria('');
     setSucessoVistoria('');
+
 
     if (!todosProblemasAnalisados) {
       setErroVistoria(
         'Confirme a análise técnica de todos os problemas antes de alterar a vistoria.'
       );
 
+
       return;
     }
+
 
     if (!algumProblemaDentroGarantia) {
       setErroVistoria(
         'Nenhum problema deste protocolo possui cobertura de garantia para seguir com a vistoria.'
       );
 
+
       return;
     }
+
 
     if (
       !novaDataVistoria ||
@@ -3246,11 +4191,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Escolha uma data e um horário disponíveis.'
       );
 
+
       return;
     }
 
+
     try {
       setSalvandoVistoria(true);
+
 
       const {
         data,
@@ -3264,8 +4212,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               p_solicitacao_id:
                 solicitacaoId,
 
+
               p_nova_data:
                 novaDataVistoria,
+
 
               p_novo_horario_vistoria_id:
                 novoHorarioVistoriaId,
@@ -3274,13 +4224,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               p_solicitacao_id:
                 solicitacaoId,
 
+
               p_data_vistoria:
                 novaDataVistoria,
+
 
               p_horario_vistoria_id:
                 novoHorarioVistoriaId,
             }
       );
+
 
       if (error) {
         console.error(
@@ -3288,19 +4241,24 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           error
         );
 
+
         setErroVistoria(
           error.message ||
             'Não foi possível salvar o agendamento.'
         );
 
+
         setNovoHorarioVistoriaId(
           ''
         );
 
+
         await carregarAgendaVistoria();
+
 
         return;
       }
+
 
       if (
         !data ||
@@ -3310,8 +4268,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           'Não foi possível salvar o agendamento.'
         );
 
+
         return;
       }
+
 
       setSucessoVistoria(
         agendamento
@@ -3319,14 +4279,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           : 'Vistoria agendada com sucesso.'
       );
 
+
       setMostrarAgendaVistoria(
         false
       );
 
+
       setNovaDataVistoria('');
       setNovoHorarioVistoriaId('');
 
+
       await carregarSolicitacao();
+
 
       await carregarAgendamentoVistoria();
     } catch (error) {
@@ -3334,6 +4298,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Erro ao salvar vistoria:',
         error
       );
+
 
       setErroVistoria(
         'Ocorreu um erro ao salvar o agendamento.'
@@ -3343,9 +4308,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   async function cancelarAgendamentoVistoria() {
     setErroVistoria('');
     setSucessoVistoria('');
+
 
     if (
       !motivoCancelamentoVistoria
@@ -3355,11 +4322,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Informe o motivo do cancelamento.'
       );
 
+
       return;
     }
 
+
     try {
       setSalvandoVistoria(true);
+
 
       const {
         data,
@@ -3370,11 +4340,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_solicitacao_id:
             solicitacaoId,
 
+
           p_motivo:
             motivoCancelamentoVistoria
               .trim(),
         }
       );
+
 
       if (error) {
         console.error(
@@ -3382,13 +4354,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           error
         );
 
+
         setErroVistoria(
           error.message ||
             'Não foi possível cancelar a vistoria.'
         );
 
+
         return;
       }
+
 
       if (
         !data ||
@@ -3398,22 +4373,28 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           'Não foi possível cancelar a vistoria.'
         );
 
+
         return;
       }
+
 
       setSucessoVistoria(
         'Vistoria cancelada com sucesso. O horário foi liberado.'
       );
 
+
       setMostrarCancelamentoVistoria(
         false
       );
+
 
       setMotivoCancelamentoVistoria(
         ''
       );
 
+
       await carregarSolicitacao();
+
 
       await carregarAgendamentoVistoria();
     } catch (error) {
@@ -3422,6 +4403,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       setErroVistoria(
         'Ocorreu um erro ao cancelar a vistoria.'
       );
@@ -3429,6 +4411,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       setSalvandoVistoria(false);
     }
   }
+
 
   function normalizarTelefoneWhatsApp(
     telefone:
@@ -3444,11 +4427,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         ''
       );
 
+
     if (
       !somenteNumeros
     ) {
       return '';
     }
+
 
     if (
       somenteNumeros.startsWith(
@@ -3464,6 +4449,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return somenteNumeros;
     }
 
+
     if (
       somenteNumeros.length ===
         10 ||
@@ -3473,11 +4459,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return `55${somenteNumeros}`;
     }
 
+
     return '';
   }
 
+
   async function avisarClienteWhatsAppVistoria() {
     setErroVistoria('');
+
 
     if (
       !solicitacao ||
@@ -3487,21 +4476,26 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Não há vistoria agendada para enviar ao cliente.'
       );
 
+
       return;
     }
+
 
     const telefone =
       normalizarTelefoneWhatsApp(
         solicitacao.telefone_contato
       );
 
+
     if (!telefone) {
       setErroVistoria(
         'O telefone do cliente está vazio ou inválido para abrir o WhatsApp.'
       );
 
+
       return;
     }
+
 
     const mensagem = [
       `Olá, ${solicitacao.cliente_nome}!`,
@@ -3519,10 +4513,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       'Esta mensagem foi preparada pelo sistema da EMAFE. Para concluir o aviso, basta enviar esta mensagem no WhatsApp.',
     ].join('\n');
 
+
     const url =
       `https://wa.me/${telefone}?text=${encodeURIComponent(
         mensagem
       )}`;
+
 
     try {
       await Linking.openURL(
@@ -3534,11 +4530,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       setErroVistoria(
         'Não foi possível abrir o WhatsApp neste dispositivo.'
       );
     }
   }
+
 
   const datasDisponiveisVistoria =
     useMemo(() => {
@@ -3547,6 +4545,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         HorarioVistoriaDisponivel[]
       >();
 
+
       horariosVistoriaDisponiveis.forEach(
         (item) => {
           const horarios =
@@ -3554,7 +4553,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               item.data_vistoria
             ) ?? [];
 
+
           horarios.push(item);
+
 
           mapa.set(
             item.data_vistoria,
@@ -3563,6 +4564,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         }
       );
 
+
       return Array.from(
         mapa.entries()
       );
@@ -3570,14 +4572,17 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       horariosVistoriaDisponiveis,
     ]);
 
+
   // ==========================================================
   // INICIAR VISTORIA
   // ==========================================================
+
 
   async function iniciarVistoria() {
     if (!solicitacao) {
       return;
     }
+
 
     try {
       setIniciandoVistoria(true);
@@ -3586,6 +4591,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       setSucessoVistoria('');
       setErroFormularioVistoria('');
       setSucessoFormularioVistoria('');
+
 
       const {
         data,
@@ -3598,19 +4604,23 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         }
       );
 
+
       if (error) {
         console.error(
           'Erro ao iniciar vistoria:',
           error
         );
 
+
         setErroInicioVistoria(
           error.message ||
             'Não foi possível iniciar a vistoria.'
         );
 
+
         return;
       }
+
 
       if (
         !data ||
@@ -3620,12 +4630,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           'Não foi possível iniciar a vistoria.'
         );
 
+
         return;
       }
 
+
       await carregarSolicitacao();
 
+
       await carregarVistoriaTecnica();
+
 
       await carregarResponsaveisAtendimento();
     } catch (error) {
@@ -3633,6 +4647,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Erro ao iniciar vistoria:',
         error
       );
+
 
       setErroInicioVistoria(
         'Ocorreu um erro ao iniciar a vistoria.'
@@ -3642,9 +4657,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   // ==========================================================
   // FOTOS DA VISTORIA
   // ==========================================================
+
 
   async function carregarFotosVistoria(
     vistoriaId?: string
@@ -3653,15 +4670,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       vistoriaId ??
       vistoriaTecnica?.vistoria_id;
 
+
     if (!id) {
       setFotosVistoriaSalvas([]);
       return;
     }
 
+
     try {
       setCarregandoFotosVistoria(
         true
       );
+
 
       const {
         data,
@@ -3682,14 +4702,17 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           }
         );
 
+
       if (error) {
         console.error(
           'Erro ao carregar fotos da vistoria:',
           error
         );
 
+
         return;
       }
+
 
       const fotosComUrl =
         await Promise.all(
@@ -3709,12 +4732,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     60 * 60
                   );
 
+
               if (signedError) {
                 console.error(
                   'Erro ao gerar URL da foto:',
                   signedError
                 );
               }
+
 
               return {
                 ...foto,
@@ -3726,6 +4751,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             }
           )
         );
+
 
       setFotosVistoriaSalvas(
         fotosComUrl
@@ -3742,21 +4768,26 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   async function selecionarFotosVistoria() {
     setErroFormularioVistoria('');
     setSucessoFormularioVistoria('');
 
+
     const quantidadeAtual =
       fotosVistoriaPendentes.length +
       fotosVistoriaSalvas.length;
+
 
     if (quantidadeAtual >= 10) {
       setErroFormularioVistoria(
         'A vistoria pode ter no máximo 10 fotos.'
       );
 
+
       return;
     }
+
 
     try {
       const resultado =
@@ -3767,16 +4798,20 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 .MediaTypeOptions
                 .Images,
 
+
             allowsMultipleSelection:
               true,
+
 
             selectionLimit:
               10 -
               quantidadeAtual,
 
+
             quality: 0.8,
           }
         );
+
 
       if (
         resultado.canceled
@@ -3784,9 +4819,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         return;
       }
 
+
       const disponiveis =
         10 -
         quantidadeAtual;
+
 
       setFotosVistoriaPendentes(
         (
@@ -3805,39 +4842,48 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       setErroFormularioVistoria(
         'Não foi possível selecionar as fotos.'
       );
     }
   }
 
+
   async function tirarFotoVistoria() {
     setErroFormularioVistoria('');
     setErroFinalizacaoVistoria('');
 
+
     const quantidadeAtual =
       fotosVistoriaPendentes.length +
       fotosVistoriaSalvas.length;
+
 
     if (quantidadeAtual >= 10) {
       setErroFinalizacaoVistoria(
         'A vistoria pode ter no máximo 10 fotos.'
       );
 
+
       return;
     }
+
 
     try {
       const permissao =
         await ImagePicker.requestCameraPermissionsAsync();
+
 
       if (!permissao.granted) {
         setErroFinalizacaoVistoria(
           'Permita o acesso à câmera para registrar a comprovação da visita.'
         );
 
+
         return;
       }
+
 
       const resultado =
         await ImagePicker.launchCameraAsync({
@@ -3846,9 +4892,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           quality: 0.8,
         });
 
+
       if (resultado.canceled) {
         return;
       }
+
 
       if (resultado.assets?.[0]) {
         setFotosVistoriaPendentes(
@@ -3864,11 +4912,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       setErroFinalizacaoVistoria(
         'Não foi possível abrir a câmera.'
       );
     }
   }
+
 
   function removerFotoVistoriaPendente(
     uri: string
@@ -3882,11 +4932,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     );
   }
 
+
   function extensaoFoto(
     foto: ImagePicker.ImagePickerAsset
   ) {
     const nome =
       foto.fileName ?? '';
+
 
     const extensaoNome =
       nome.includes('.')
@@ -3896,12 +4948,15 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             ?.toLowerCase()
         : null;
 
+
     if (extensaoNome) {
       return extensaoNome;
     }
 
+
     const mime =
       foto.mimeType ?? '';
+
 
     if (
       mime.includes('png')
@@ -3909,14 +4964,17 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return 'png';
     }
 
+
     if (
       mime.includes('webp')
     ) {
       return 'webp';
     }
 
+
     return 'jpg';
   }
+
 
   async function enviarFotosVistoria() {
     if (
@@ -3926,13 +4984,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return true;
     }
 
+
     if (!vistoriaTecnica) {
       setErroFormularioVistoria(
         'A ficha da vistoria ainda não foi carregada.'
       );
 
+
       return false;
     }
+
 
     const {
       data: usuarioData,
@@ -3940,6 +5001,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     } =
       await supabase.auth
         .getUser();
+
 
     if (
       usuarioError ||
@@ -3949,12 +5011,15 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Não foi possível identificar o funcionário.'
       );
 
+
       return false;
     }
+
 
     let pendentesRestantes = [
       ...fotosVistoriaPendentes,
     ];
+
 
     for (
       let indice = 0;
@@ -3967,26 +5032,32 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           indice
         ];
 
+
       try {
         const resposta =
           await fetch(
             foto.uri
           );
 
+
         const blob =
           await resposta.blob();
+
 
         const extensao =
           extensaoFoto(
             foto
           );
 
+
         const nomeArquivo =
           foto.fileName ??
           `vistoria-${Date.now()}-${indice}.${extensao}`;
 
+
         const caminho =
           `${vistoriaTecnica.vistoria_id}/${usuarioData.user.id}/${Date.now()}-${indice}.${extensao}`;
+
 
         const {
           error:
@@ -4004,13 +5075,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   foto.mimeType ??
                   `image/${extensao === 'jpg' ? 'jpeg' : extensao}`,
 
+
                 upsert: false,
               }
             );
 
+
         if (uploadError) {
           throw uploadError;
         }
+
 
         const {
           error:
@@ -4024,15 +5098,19 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               vistoria_id:
                 vistoriaTecnica.vistoria_id,
 
+
               caminho_storage:
                 caminho,
+
 
               nome_arquivo:
                 nomeArquivo,
 
+
               funcionario_id:
                 usuarioData.user.id,
             });
+
 
         if (insertError) {
           await supabase.storage
@@ -4043,8 +5121,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               caminho,
             ]);
 
+
           throw insertError;
         }
+
 
         pendentesRestantes =
           pendentesRestantes.filter(
@@ -4052,6 +5132,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               item.uri !==
               foto.uri
           );
+
 
         setFotosVistoriaPendentes(
           pendentesRestantes
@@ -4062,33 +5143,41 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           error
         );
 
+
         setErroFormularioVistoria(
           error?.message ??
             'Não foi possível enviar uma das fotos da vistoria.'
         );
 
+
         await carregarFotosVistoria(
           vistoriaTecnica.vistoria_id
         );
+
 
         return false;
       }
     }
 
+
     await carregarFotosVistoria(
       vistoriaTecnica.vistoria_id
     );
 
+
     return true;
   }
+
 
   // ==========================================================
   // SALVAR FORMULÁRIO DA VISTORIA
   // ==========================================================
 
+
   async function salvarFormularioVistoria() {
     setErroFormularioVistoria('');
     setSucessoFormularioVistoria('');
+
 
     if (
       problemaConstatado ===
@@ -4098,45 +5187,48 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Informe se o problema relatado foi constatado.'
       );
 
-      return;
-    }
-
-    if (
-      !parecerTecnico.trim()
-    ) {
-      setErroFormularioVistoria(
-        'Informe o parecer técnico da vistoria.'
-      );
 
       return;
     }
+
+
+
+
+
 
     const erroResponsavel =
       validarResponsavelVistoria();
+
 
     if (erroResponsavel) {
       setErroFormularioVistoria(
         erroResponsavel
       );
 
+
       return;
     }
+
 
     try {
       setSalvandoFormularioVistoria(
         true
       );
 
+
       const erroAoSalvarResponsavel =
         await salvarResponsavelVistoria();
+
 
       if (erroAoSalvarResponsavel) {
         setErroFormularioVistoria(
           erroAoSalvarResponsavel
         );
 
+
         return;
       }
+
 
       const {
         data,
@@ -4147,16 +5239,25 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_solicitacao_id:
             solicitacaoId,
 
+
           p_problema_constatado:
             problemaConstatado,
 
+
           p_parecer_tecnico:
-            parecerTecnico.trim(),
+            avaliacoesIndividuais.length > 0
+              ? avaliacoesIndividuais.map((a) => {
+                  const p = problemasSolicitacao.find((x) => x.id === a.problema_id);
+                  return `Problema ${p?.numero ?? '-'}: ${a.parecer_tecnico}`;
+                }).join('\n\n')
+              : 'Aguardando os pareceres técnicos individuais dos problemas.',
+
 
           // Campo removido da tela, mas mantido internamente para compatibilidade
           // com as funções antigas do Supabase que ainda exigem um valor.
           p_servico_necessario:
             'Não se aplica',
+
 
           p_observacoes:
             observacoesTecnicas.trim() ||
@@ -4164,19 +5265,23 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         }
       );
 
+
       if (error) {
         console.error(
           'Erro ao salvar vistoria:',
           error
         );
 
+
         setErroFormularioVistoria(
           error.message ||
             'Não foi possível salvar a vistoria.'
         );
 
+
         return;
       }
+
 
       if (
         !data ||
@@ -4186,15 +5291,19 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           'Não foi possível salvar os dados da vistoria.'
         );
 
+
         return;
       }
+
 
       const fotosEnviadas =
         await enviarFotosVistoria();
 
+
       if (!fotosEnviadas) {
         return;
       }
+
 
       setSucessoFormularioVistoria(
         fotosVistoriaPendentes.length >
@@ -4203,12 +5312,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           : 'Dados da vistoria salvos com sucesso.'
       );
 
+
       await carregarVistoriaTecnica();
     } catch (error) {
       console.error(
         'Erro inesperado ao salvar vistoria:',
         error
       );
+
 
       setErroFormularioVistoria(
         'Ocorreu um erro ao salvar os dados da vistoria.'
@@ -4220,15 +5331,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   // ==========================================================
   // EXECUÇÃO DO SERVIÇO
   // ==========================================================
+
 
   function converterDataExecucaoParaISO(
     valor: string
   ) {
     const texto =
       valor.trim();
+
 
     if (
       /^\d{4}-\d{2}-\d{2}$/.test(
@@ -4240,6 +5354,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           `${texto}T12:00:00`
         );
 
+
       if (
         Number.isNaN(
           data.getTime()
@@ -4248,17 +5363,21 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         return null;
       }
 
+
       return texto;
     }
+
 
     const match =
       texto.match(
         /^(\d{2})\/(\d{2})\/(\d{4})$/
       );
 
+
     if (!match) {
       return null;
     }
+
 
     const [
       ,
@@ -4267,13 +5386,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       ano,
     ] = match;
 
+
     const iso =
       `${ano}-${mes}-${dia}`;
+
 
     const data =
       new Date(
         `${iso}T12:00:00`
       );
+
 
     if (
       Number.isNaN(
@@ -4289,8 +5411,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return null;
     }
 
+
     return iso;
   }
+
 
   function normalizarHoraExecucao(
     valor: string
@@ -4298,20 +5422,25 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     const texto =
       valor.trim();
 
+
     const match =
       texto.match(
         /^(\d{1,2}):(\d{2})$/
       );
 
+
     if (!match) {
       return null;
     }
 
+
     const hora =
       Number(match[1]);
 
+
     const minuto =
       Number(match[2]);
+
 
     if (
       hora < 0 ||
@@ -4321,6 +5450,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     ) {
       return null;
     }
+
 
     return `${String(
       hora
@@ -4335,11 +5465,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     )}:00`;
   }
 
+
   async function carregarHorariosExecucao() {
     try {
       setCarregandoHorariosExecucao(
         true
       );
+
 
       const {
         data,
@@ -4350,10 +5482,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_data_inicio:
             null,
 
+
           p_quantidade_dias:
             60,
         }
       );
+
 
       if (error) {
         console.error(
@@ -4361,8 +5495,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           error
         );
 
+
         return;
       }
+
 
       setHorariosExecucaoDisponiveis(
         (data ?? []).map(
@@ -4394,32 +5530,39 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   function selecionarDataExecucao(
     data: string
   ) {
     setErroAgendamentoExecucao('');
 
+
     setDataExecucaoSelecionada(
       data
     );
 
+
     setHoraExecucaoSelecionada(
       ''
     );
+
 
     setHorarioExecucaoSelecionadoId(
       ''
     );
   }
 
+
   function selecionarHorarioExecucao(
     horario: HorarioVistoriaDisponivel
   ) {
     setErroAgendamentoExecucao('');
 
+
     setDataExecucaoSelecionada(
       horario.data_vistoria
     );
+
 
     setHoraExecucaoSelecionada(
       horario.hora_inicio.substring(
@@ -4428,17 +5571,21 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       )
     );
 
+
     setHorarioExecucaoSelecionadoId(
       horario.horario_vistoria_id
     );
   }
 
+
   async function carregarAgendamentoExecucao() {
+
 
     try {
       setCarregandoAgendamentoExecucao(
         true
       );
+
 
       const {
         data,
@@ -4451,23 +5598,28 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         }
       );
 
+
       if (error) {
         console.error(
           'Erro ao carregar agendamento da execução:',
           error
         );
 
+
         return null;
       }
+
 
       const registro =
         data?.[0] as
           | PropostaAgendamentoExecucao
           | undefined;
 
+
       setPropostaAgendamentoExecucao(
         registro ?? null
       );
+
 
       return registro ?? null;
     } catch (error) {
@@ -4475,6 +5627,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Erro inesperado ao carregar agendamento da execução:',
         error
       );
+
 
       return null;
     } finally {
@@ -4484,8 +5637,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   async function avisarClienteWhatsAppExecucao() {
     setErroAgendamentoExecucao('');
+
 
     if (
       !solicitacao ||
@@ -4495,21 +5650,26 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Não há agendamento da execução para enviar ao cliente.'
       );
 
+
       return;
     }
+
 
     const telefone =
       normalizarTelefoneWhatsApp(
         solicitacao.telefone_contato
       );
 
+
     if (!telefone) {
       setErroAgendamentoExecucao(
         'O telefone do cliente está vazio ou inválido para abrir o WhatsApp.'
       );
 
+
       return;
     }
+
 
     const agendamentoConfirmado =
       propostaAgendamentoExecucao.status ===
@@ -4517,15 +5677,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       propostaAgendamentoExecucao.data_confirmada &&
       propostaAgendamentoExecucao.hora_confirmada;
 
+
     const dataExecucao =
       agendamentoConfirmado
         ? propostaAgendamentoExecucao.data_confirmada
         : propostaAgendamentoExecucao.opcao_1_data;
 
+
     const horaExecucao =
       agendamentoConfirmado
         ? propostaAgendamentoExecucao.hora_confirmada
         : propostaAgendamentoExecucao.opcao_1_hora;
+
 
     if (
       !dataExecucao ||
@@ -4535,8 +5698,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'O agendamento ainda não possui data e horário válidos para envio.'
       );
 
+
       return;
     }
+
 
     const mensagem = agendamentoConfirmado
       ? [
@@ -4568,10 +5733,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           'Esta mensagem foi preparada pelo sistema da EMAFE. Para concluir o aviso, basta enviar esta mensagem no WhatsApp.',
         ].join('\n');
 
+
     const url =
       `https://wa.me/${telefone}?text=${encodeURIComponent(
         mensagem
       )}`;
+
 
     try {
       await Linking.openURL(
@@ -4583,23 +5750,28 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       setErroAgendamentoExecucao(
         'Não foi possível abrir o WhatsApp neste dispositivo.'
       );
     }
   }
 
+
   async function enviarPropostaAgendamentoExecucao() {
     setErroAgendamentoExecucao('');
     setSucessoAgendamentoExecucao('');
+
 
     if (!dataExecucaoSelecionada) {
       setErroAgendamentoExecucao(
         'Selecione uma data disponível para a execução.'
       );
 
+
       return;
     }
+
 
     if (
       !horarioExecucaoSelecionadoId ||
@@ -4609,13 +5781,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Selecione um horário disponível para a execução.'
       );
 
+
       return;
     }
+
 
     try {
       setEnviandoPropostaExecucao(
         true
       );
+
 
       const {
         error,
@@ -4625,13 +5800,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_solicitacao_id:
             solicitacaoId,
 
+
           p_data:
             dataExecucaoSelecionada,
+
 
           p_horario_execucao_id:
             horarioExecucaoSelecionadoId,
         }
       );
+
 
       if (error) {
         console.error(
@@ -4639,21 +5817,26 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           error
         );
 
+
         setErroAgendamentoExecucao(
           error.message ||
             'Não foi possível enviar o agendamento da execução.'
         );
 
+
         return;
       }
+
 
       setSucessoAgendamentoExecucao(
         'Agendamento enviado ao cliente. Aguardando confirmação.'
       );
 
+
       setDataExecucaoSelecionada('');
       setHoraExecucaoSelecionada('');
       setHorarioExecucaoSelecionadoId('');
+
 
       await carregarAgendamentoExecucao();
       await carregarHorariosExecucao();
@@ -4662,6 +5845,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Erro inesperado ao enviar agendamento da execução:',
         error
       );
+
 
       setErroAgendamentoExecucao(
         'Ocorreu um erro ao enviar o agendamento da execução.'
@@ -4672,6 +5856,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       );
     }
   }
+
 
   async function carregarExecucaoServico() {
     try {
@@ -4689,14 +5874,17 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         )
         .maybeSingle();
 
+
       if (error) {
         console.error(
           'Erro ao carregar execução do serviço:',
           error
         );
 
+
         return null;
       }
+
 
       if (!data) {
         setExecucaoServico(null);
@@ -4706,7 +5894,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         return null;
       }
 
+
       let responsavelNome: string | null = null;
+
 
       if (data.responsavel_servico_id) {
         const {
@@ -4720,10 +5910,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           )
           .maybeSingle();
 
+
         responsavelNome =
           perfil?.nome_completo ??
           null;
       }
+
 
       const registro: ExecucaoServico = {
         execucao_id: data.id,
@@ -4747,17 +5939,21 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           data.concluida_em,
       };
 
+
       setExecucaoServico(registro);
+
 
       setSolucaoTecnicaExecucao(
         registro.solucao_tecnica ??
           ''
       );
 
+
       setObservacoesExecucao(
         registro.observacoes ??
           ''
       );
+
 
       if (
         registro.conclusao ===
@@ -4774,9 +5970,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         );
       }
 
+
       await carregarFotosExecucao(
         registro.execucao_id
       );
+
 
       return registro;
     } catch (error) {
@@ -4785,15 +5983,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       return null;
     }
   }
+
 
   async function iniciarExecucaoServico() {
     setErroExecucao('');
     setSucessoExecucao('');
     setErroFormularioExecucao('');
     setSucessoFormularioExecucao('');
+
 
     if (
       propostaAgendamentoExecucao?.status !==
@@ -4805,27 +6006,34 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'A execução só pode ser iniciada depois que o cliente confirmar o agendamento.'
       );
 
+
       return;
     }
+
 
     const dataInformada =
       dataRealInicioExecucao.trim();
 
+
     const horaInformada =
       horaRealInicioExecucao.trim();
+
 
     const dataMatch =
       dataInformada.match(
         /^(\d{2})\/(\d{2})\/(\d{4})$/
       );
 
+
     if (!dataMatch) {
       setErroExecucao(
         'Informe a data real do início no formato DD/MM/AAAA.'
       );
 
+
       return;
     }
+
 
     if (
       !/^([01]\d|2[0-3]):[0-5]\d$/.test(
@@ -4836,14 +6044,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Informe a hora real do início no formato HH:MM.'
       );
 
+
       return;
     }
+
 
     const [, dia, mes, ano] =
       dataMatch;
 
+
     const dataIso =
       `${ano}-${mes}-${dia}`;
+
 
     const dataValidacao =
       new Date(
@@ -4851,6 +6063,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         Number(mes) - 1,
         Number(dia)
       );
+
 
     if (
       dataValidacao.getFullYear() !==
@@ -4864,11 +6077,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Informe uma data real válida para o início da execução.'
       );
 
+
       return;
     }
 
+
     try {
       setIniciandoExecucao(true);
+
 
       const {
         data,
@@ -4879,13 +6095,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_solicitacao_id:
             solicitacaoId,
 
+
           p_data_inicio:
             dataIso,
+
 
           p_hora_inicio:
             horaInformada,
         }
       );
+
 
       if (error) {
         console.error(
@@ -4893,24 +6112,30 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           error
         );
 
+
         setErroExecucao(
           error.message ||
             'Não foi possível iniciar a execução do serviço.'
         );
 
+
         return;
       }
 
+
       const registro =
         data?.[0];
+
 
       if (!registro) {
         setErroExecucao(
           'A execução não retornou confirmação de início.'
         );
 
+
         return;
       }
+
 
       setExecucaoServico({
         execucao_id:
@@ -4932,9 +6157,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           registro.iniciada_em,
       });
 
+
       setSucessoExecucao(
         'Execução do serviço iniciada com sucesso.'
       );
+
 
       await carregarSolicitacao();
       await carregarExecucaoServico();
@@ -4945,6 +6172,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       setErroExecucao(
         'Ocorreu um erro ao iniciar a execução do serviço.'
       );
@@ -4953,9 +6181,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   // ==========================================================
   // FOTOS DA EXECUÇÃO DO SERVIÇO
   // ==========================================================
+
 
   async function carregarFotosExecucao(
     execucaoId?: string
@@ -4964,15 +6194,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       execucaoId ??
       execucaoServico?.execucao_id;
 
+
     if (!id) {
       setFotosExecucaoSalvas([]);
       return;
     }
 
+
     try {
       setCarregandoFotosExecucao(
         true
       );
+
 
       const {
         data,
@@ -4993,14 +6226,17 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           }
         );
 
+
       if (error) {
         console.error(
           'Erro ao carregar fotos da execução:',
           error
         );
 
+
         return;
       }
+
 
       const fotosComUrl =
         await Promise.all(
@@ -5020,12 +6256,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     60 * 60
                   );
 
+
               if (signedError) {
                 console.error(
                   'Erro ao gerar URL da foto da execução:',
                   signedError
                 );
               }
+
 
               return {
                 ...foto,
@@ -5037,6 +6275,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             }
           )
         );
+
 
       setFotosExecucaoSalvas(
         fotosComUrl
@@ -5053,21 +6292,26 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   async function selecionarFotosExecucao() {
     setErroFormularioExecucao('');
     setSucessoFormularioExecucao('');
 
+
     const quantidadeAtual =
       fotosExecucaoPendentes.length +
       fotosExecucaoSalvas.length;
+
 
     if (quantidadeAtual >= 10) {
       setErroFormularioExecucao(
         'A execução pode ter no máximo 10 fotos.'
       );
 
+
       return;
     }
+
 
     try {
       const resultado =
@@ -5078,16 +6322,20 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 .MediaTypeOptions
                 .Images,
 
+
             allowsMultipleSelection:
               true,
+
 
             selectionLimit:
               10 -
               quantidadeAtual,
 
+
             quality: 0.8,
           }
         );
+
 
       if (
         resultado.canceled
@@ -5095,9 +6343,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         return;
       }
 
+
       const disponiveis =
         10 -
         quantidadeAtual;
+
 
       setFotosExecucaoPendentes(
         (
@@ -5116,11 +6366,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       setErroFormularioExecucao(
         'Não foi possível selecionar as fotos da execução.'
       );
     }
   }
+
 
   function removerFotoExecucaoPendente(
     uri: string
@@ -5134,6 +6386,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     );
   }
 
+
   async function enviarFotosExecucao() {
     if (
       fotosExecucaoPendentes.length ===
@@ -5142,13 +6395,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return true;
     }
 
+
     if (!execucaoServico) {
       setErroFormularioExecucao(
         'A ficha da execução ainda não foi carregada.'
       );
 
+
       return false;
     }
+
 
     const {
       data: usuarioData,
@@ -5156,6 +6412,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     } =
       await supabase.auth
         .getUser();
+
 
     if (
       usuarioError ||
@@ -5165,12 +6422,15 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Não foi possível identificar o funcionário.'
       );
 
+
       return false;
     }
+
 
     let pendentesRestantes = [
       ...fotosExecucaoPendentes,
     ];
+
 
     for (
       let indice = 0;
@@ -5183,26 +6443,32 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           indice
         ];
 
+
       try {
         const resposta =
           await fetch(
             foto.uri
           );
 
+
         const blob =
           await resposta.blob();
+
 
         const extensao =
           extensaoFoto(
             foto
           );
 
+
         const nomeArquivo =
           foto.fileName ??
           `execucao-${Date.now()}-${indice}.${extensao}`;
 
+
         const caminho =
           `${execucaoServico.execucao_id}/${usuarioData.user.id}/${Date.now()}-${indice}.${extensao}`;
+
 
         const {
           error:
@@ -5220,13 +6486,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   foto.mimeType ??
                   `image/${extensao === 'jpg' ? 'jpeg' : extensao}`,
 
+
                 upsert: false,
               }
             );
 
+
         if (uploadError) {
           throw uploadError;
         }
+
 
         const {
           error:
@@ -5240,15 +6509,19 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               execucao_id:
                 execucaoServico.execucao_id,
 
+
               caminho_storage:
                 caminho,
+
 
               nome_arquivo:
                 nomeArquivo,
 
+
               funcionario_id:
                 usuarioData.user.id,
             });
+
 
         if (insertError) {
           await supabase.storage
@@ -5259,8 +6532,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               caminho,
             ]);
 
+
           throw insertError;
         }
+
 
         pendentesRestantes =
           pendentesRestantes.filter(
@@ -5268,6 +6543,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               item.uri !==
               foto.uri
           );
+
 
         setFotosExecucaoPendentes(
           pendentesRestantes
@@ -5278,33 +6554,41 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           error
         );
 
+
         setErroFormularioExecucao(
           error?.message ??
             'Não foi possível enviar uma das fotos da execução.'
         );
 
+
         await carregarFotosExecucao(
           execucaoServico.execucao_id
         );
+
 
         return false;
       }
     }
 
+
     await carregarFotosExecucao(
       execucaoServico.execucao_id
     );
 
+
     return true;
   }
+
 
   // ==========================================================
   // SALVAR EXECUÇÃO DO SERVIÇO
   // ==========================================================
 
+
   async function salvarExecucaoServico() {
     setErroFormularioExecucao('');
     setSucessoFormularioExecucao('');
+
 
     if (
       !solucaoTecnicaExecucao.trim()
@@ -5313,33 +6597,42 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Informe a solução técnica executada.'
       );
 
+
       return;
     }
 
+
     const erroResponsavel =
       validarResponsavelExecucao();
+
 
     if (erroResponsavel) {
       setErroFormularioExecucao(
         erroResponsavel
       );
 
+
       return;
     }
+
 
     try {
       setSalvandoExecucao(true);
 
+
       const erroAoSalvarResponsavel =
         await salvarResponsavelExecucao();
+
 
       if (erroAoSalvarResponsavel) {
         setErroFormularioExecucao(
           erroAoSalvarResponsavel
         );
 
+
         return;
       }
+
 
       const {
         data,
@@ -5350,8 +6643,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_solicitacao_id:
             solicitacaoId,
 
+
           p_solucao_tecnica:
             solucaoTecnicaExecucao.trim(),
+
 
           p_observacoes:
             observacoesExecucao.trim() ||
@@ -5359,19 +6654,23 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         }
       );
 
+
       if (error) {
         console.error(
           'Erro ao salvar execução:',
           error
         );
 
+
         setErroFormularioExecucao(
           error.message ||
             'Não foi possível salvar a execução do serviço.'
         );
 
+
         return;
       }
+
 
       if (
         !data ||
@@ -5381,19 +6680,24 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           'A execução não retornou confirmação de salvamento.'
         );
 
+
         return;
       }
+
 
       const tinhaFotosPendentes =
         fotosExecucaoPendentes.length >
         0;
 
+
       const fotosEnviadas =
         await enviarFotosExecucao();
+
 
       if (!fotosEnviadas) {
         return;
       }
+
 
       setSucessoFormularioExecucao(
         tinhaFotosPendentes
@@ -5401,12 +6705,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           : 'Dados da execução salvos com sucesso.'
       );
 
+
       await carregarExecucaoServico();
     } catch (error) {
       console.error(
         'Erro inesperado ao salvar execução:',
         error
       );
+
 
       setErroFormularioExecucao(
         'Ocorreu um erro ao salvar a execução do serviço.'
@@ -5416,21 +6722,26 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   // ==========================================================
   // FINALIZAR EXECUÇÃO DO SERVIÇO
   // ==========================================================
 
+
   async function finalizarExecucaoServico() {
     setErroFinalizacaoExecucao('');
     setSucessoFinalizacaoExecucao('');
+
 
     if (!conclusaoExecucao) {
       setErroFinalizacaoExecucao(
         'Selecione a conclusão do serviço.'
       );
 
+
       return;
     }
+
 
     if (
       !solucaoTecnicaExecucao.trim()
@@ -5439,35 +6750,44 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Preencha a solução técnica antes de finalizar o serviço.'
       );
 
+
       return;
     }
 
+
     const erroResponsavel =
       validarResponsavelExecucao();
+
 
     if (erroResponsavel) {
       setErroFinalizacaoExecucao(
         erroResponsavel
       );
 
+
       return;
     }
+
 
     try {
       setFinalizandoExecucao(
         true
       );
 
+
       const erroAoSalvarResponsavel =
         await salvarResponsavelExecucao();
+
 
       if (erroAoSalvarResponsavel) {
         setErroFinalizacaoExecucao(
           erroAoSalvarResponsavel
         );
 
+
         return;
       }
+
 
       // Salva os dados atuais antes de concluir.
       const {
@@ -5478,8 +6798,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_solicitacao_id:
             solicitacaoId,
 
+
           p_solucao_tecnica:
             solucaoTecnicaExecucao.trim(),
+
 
           p_observacoes:
             observacoesExecucao.trim() ||
@@ -5487,31 +6809,38 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         }
       );
 
+
       if (salvarError) {
         console.error(
           'Erro ao salvar execução antes de finalizar:',
           salvarError
         );
 
+
         setErroFinalizacaoExecucao(
           salvarError.message ||
             'Não foi possível salvar os dados da execução.'
         );
 
+
         return;
       }
+
 
       // Envia fotos que ainda estejam aguardando salvamento.
       const fotosEnviadas =
         await enviarFotosExecucao();
+
 
       if (!fotosEnviadas) {
         setErroFinalizacaoExecucao(
           'Não foi possível finalizar porque existem fotos que não foram enviadas.'
         );
 
+
         return;
       }
+
 
       const {
         data,
@@ -5522,10 +6851,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_solicitacao_id:
             solicitacaoId,
 
+
           p_conclusao:
             conclusaoExecucao,
         }
       );
+
 
       if (error) {
         console.error(
@@ -5533,13 +6864,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           error
         );
 
+
         setErroFinalizacaoExecucao(
           error.message ||
             'Não foi possível finalizar o serviço.'
         );
 
+
         return;
       }
+
 
       if (
         !data ||
@@ -5549,12 +6883,15 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           'O sistema não retornou a confirmação da conclusão do serviço.'
         );
 
+
         return;
       }
+
 
       setSucessoFinalizacaoExecucao(
         'Serviço finalizado com sucesso.'
       );
+
 
       await carregarSolicitacao();
       await carregarExecucaoServico();
@@ -5563,6 +6900,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Erro inesperado ao finalizar execução:',
         error
       );
+
 
       setErroFinalizacaoExecucao(
         'Ocorreu um erro ao finalizar o serviço.'
@@ -5574,15 +6912,19 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   // ==========================================================
   // CARREGAR DADOS DO FORM 03
   // ==========================================================
 
+
   async function carregarDadosForm03() {
     setErroForm03('');
 
+
     try {
       setCarregandoForm03(true);
+
 
       const {
         data,
@@ -5595,36 +6937,44 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         }
       );
 
+
       if (error) {
         console.error(
           'Erro ao buscar dados do FORM 03:',
           error
         );
 
+
         setErroForm03(
           error.message ||
             'Não foi possível carregar os dados do FORM 03.'
         );
 
+
         return;
       }
+
 
       const registro =
         data?.[0] as
           | DadosForm03
           | undefined;
 
+
       if (!registro) {
         setErroForm03(
           'Nenhum dado foi retornado para o FORM 03.'
         );
 
+
         return;
       }
 
-      setDadosForm03(
-        registro
-      );
+
+      // A função do Supabase consolida os serviços individuais diretamente do
+      // banco, evitando dados vazios por atualização assíncrona do React.
+      setDadosForm03(registro);
+
 
       await carregarEstadoAssinaturasForm03();
     } catch (error) {
@@ -5632,6 +6982,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Erro inesperado ao carregar FORM 03:',
         error
       );
+
 
       setErroForm03(
         'Ocorreu um erro ao carregar os dados do FORM 03.'
@@ -5641,9 +6992,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   // ==========================================================
   // ASSINATURAS MANUAIS DO FORM 03
   // ==========================================================
+
 
   async function carregarEstadoAssinaturasForm03() {
     try {
@@ -5672,30 +7025,37 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         )
         .maybeSingle();
 
+
       if (error) {
         console.error(
           'Erro ao carregar assinaturas do FORM 03:',
           error
         );
 
+
         return;
       }
+
 
       if (!data) {
         setEstadoAssinaturasForm03(
           null
         );
 
+
         return;
       }
+
 
       const estado =
         data as unknown as
           EstadoAssinaturasForm03;
 
+
       setEstadoAssinaturasForm03(
         estado
       );
+
 
       if (
         estado.modo_assinatura
@@ -5705,6 +7065,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         );
       }
 
+
     } catch (error) {
       console.error(
         'Erro inesperado ao carregar assinaturas:',
@@ -5713,16 +7074,19 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   async function salvarAssinaturaFuncionarioForm03(
     assinaturaSvg: string
   ) {
     setErroForm03('');
     setMensagemAssinaturaForm03('');
 
+
     try {
       setSalvandoAssinaturaManual(
         'funcionario'
       );
+
 
       const {
         data,
@@ -5733,10 +7097,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_solicitacao_id:
             solicitacaoId,
 
+
           p_assinatura_svg:
             assinaturaSvg,
         }
       );
+
 
       if (error) {
         console.error(
@@ -5744,13 +7110,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           error
         );
 
+
         setErroForm03(
           error.message ||
             'Não foi possível salvar a assinatura do responsável.'
         );
 
+
         return;
       }
+
 
       if (
         !data ||
@@ -5760,12 +7129,15 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           'O sistema não confirmou o salvamento da assinatura.'
         );
 
+
         return;
       }
+
 
       setMensagemAssinaturaForm03(
         'Assinatura do responsável salva com sucesso.'
       );
+
 
       await carregarEstadoAssinaturasForm03();
     } catch (error) {
@@ -5773,6 +7145,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Erro inesperado ao salvar assinatura do responsável:',
         error
       );
+
 
       setErroForm03(
         'Ocorreu um erro ao salvar a assinatura do responsável.'
@@ -5784,9 +7157,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   // ==========================================================
   // PDF DO FORM 03
   // ==========================================================
+
 
   function escaparHtml(
     valor: unknown
@@ -5816,10 +7191,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       );
   }
 
+
   async function gerarUrlsFotosForm03() {
     if (!dadosForm03) {
       return [] as string[];
     }
+
 
     const fotos = [
       ...(dadosForm03.fotos_vistoria ??
@@ -5832,6 +7209,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         })
       ),
 
+
       ...(dadosForm03.fotos_execucao ??
         []).map(
         (foto: any) => ({
@@ -5843,12 +7221,15 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       ),
     ].slice(0, 3);
 
+
     const urls: string[] = [];
+
 
     for (const foto of fotos) {
       if (!foto.caminho) {
         continue;
       }
+
 
       const {
         data,
@@ -5860,14 +7241,17 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           60 * 60
         );
 
+
       if (error) {
         console.error(
           'Erro ao gerar URL de foto para o FORM 03:',
           error
         );
 
+
         continue;
       }
+
 
       if (data?.signedUrl) {
         urls.push(
@@ -5876,8 +7260,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       }
     }
 
+
     return urls;
   }
+
 
   async function montarHtmlForm03() {
     if (!dadosForm03) {
@@ -5886,6 +7272,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       );
     }
 
+
     const logoAsset =
       Asset.fromModule(
         require(
@@ -5893,16 +7280,20 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         )
       );
 
+
     if (!logoAsset.localUri) {
       await logoAsset.downloadAsync();
     }
+
 
     const logoForm03Uri =
       logoAsset.localUri ??
       logoAsset.uri;
 
+
     const urlsFotos =
       await gerarUrlsFotosForm03();
+
 
     const fotosHtml =
       urlsFotos.length > 0
@@ -5916,6 +7307,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   <div class="foto-titulo">
                     REGISTRO FOTOGRÁFICO ${indice + 1}
                   </div>
+
 
                   <img
                     src="${escaparHtml(url)}"
@@ -5931,6 +7323,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             </div>
           `;
 
+
     const procedencia =
       dadosForm03.problema_constatado ===
       true
@@ -5939,6 +7332,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             false
           ? 'I - Improcedente'
           : '-';
+
 
     const conclusao =
       dadosForm03.conclusao ===
@@ -5949,11 +7343,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           ? 'IMPROCEDENTE'
           : '-';
 
+
     return `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
+  <title>FORM 03 - ${escaparHtml(dadosForm03.protocolo)}</title>
+
 
   <style>
     @page {
@@ -5961,9 +7358,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       margin: 12mm;
     }
 
+
     * {
       box-sizing: border-box;
     }
+
 
     body {
       margin: 0;
@@ -5972,6 +7371,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       font-size: 10px;
       line-height: 1.35;
     }
+
 
     .header {
       width: calc(100% - 2px);
@@ -5984,6 +7384,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       page-break-inside: avoid;
     }
 
+
     .logo-form03 {
       display: block;
       width: 180px;
@@ -5992,17 +7393,20 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       margin: 0 auto 5px auto;
     }
 
+
     .titulo {
       margin-top: 5px;
       font-size: 15px;
       font-weight: 800;
     }
 
+
     .revisao {
       margin-top: 3px;
       color: #5d6b7b;
       font-size: 9px;
     }
+
 
     .section-title {
       margin-top: 10px;
@@ -6013,12 +7417,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       font-weight: 800;
     }
 
+
     .grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       border-left: 1px solid #9eabb8;
       border-top: 1px solid #9eabb8;
     }
+
 
     .cell {
       min-height: 45px;
@@ -6027,9 +7433,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       border-bottom: 1px solid #9eabb8;
     }
 
+
     .cell-full {
       grid-column: 1 / -1;
     }
+
 
     .label {
       margin-bottom: 4px;
@@ -6039,17 +7447,20 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       text-transform: uppercase;
     }
 
+
     .value {
       font-size: 10px;
       font-weight: 600;
       white-space: pre-wrap;
     }
 
+
     table {
       width: 100%;
       border-collapse: collapse;
       table-layout: fixed;
     }
+
 
     th,
     td {
@@ -6059,11 +7470,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       word-break: break-word;
     }
 
+
     th {
       color: #0B2447;
       background: #eef3f8;
       font-size: 8px;
     }
+
 
     .fotos {
       display: grid;
@@ -6072,11 +7485,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       margin-top: 7px;
     }
 
+
     .foto-box {
       border: 1px solid #9eabb8;
       padding: 5px;
       page-break-inside: avoid;
     }
+
 
     .foto-titulo {
       margin-bottom: 4px;
@@ -6085,6 +7500,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       font-weight: 800;
     }
 
+
     .foto {
       display: block;
       width: 100%;
@@ -6092,12 +7508,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       object-fit: cover;
     }
 
+
     .sem-fotos {
       padding: 12px;
       border: 1px solid #9eabb8;
       margin-top: 7px;
       color: #647486;
     }
+
 
     .termo {
       margin-top: 10px;
@@ -6107,6 +7525,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       text-align: justify;
     }
 
+
     .assinaturas {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -6115,9 +7534,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       page-break-inside: avoid;
     }
 
+
     .assinatura {
       text-align: center;
     }
+
 
     .assinatura-svg {
       width: 100%;
@@ -6129,21 +7550,25 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       margin-bottom: 4px;
     }
 
+
     .assinatura-svg svg {
       width: 100%;
       height: 70px;
     }
+
 
     .linha {
       border-top: 1px solid #1d2c3f;
       padding-top: 5px;
     }
 
+
     .data {
       margin-top: 10px;
       color: #647486;
       font-size: 8px;
     }
+
 
     .rodape {
       margin-top: 12px;
@@ -6153,6 +7578,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   </style>
 </head>
+
 
 <body>
   <div class="header">
@@ -6164,9 +7590,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       alt="EMAFE Engenharia"
     />
 
+
     <div class="titulo">
       FORM 03 — TERMO DE VISTORIA E EXECUÇÃO
     </div>
+
 
     <div class="revisao">
       Revisão 06 • Protocolo ${escaparHtml(
@@ -6175,15 +7603,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     </div>
   </div>
 
+
   <div class="section-title">
     SOLICITAÇÃO
   </div>
+
 
   <div class="grid">
     <div class="cell">
       <div class="label">
         Solicitante
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6192,10 +7623,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </div>
     </div>
 
+
     <div class="cell">
       <div class="label">
         Data da reclamação
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6206,10 +7639,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </div>
     </div>
 
+
     <div class="cell">
       <div class="label">
         Contato
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6224,10 +7659,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </div>
     </div>
 
+
     <div class="cell">
       <div class="label">
         Horário / disponibilidade
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6237,10 +7674,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </div>
     </div>
 
+
     <div class="cell">
       <div class="label">
         Empreendimento
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6249,10 +7688,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </div>
     </div>
 
+
     <div class="cell">
       <div class="label">
         Unidade / Local
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6268,10 +7709,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </div>
     </div>
 
+
     <div class="cell cell-full">
       <div class="label">
         Problema relatado
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6281,15 +7724,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     </div>
   </div>
 
+
   <div class="section-title">
     VISTORIA
   </div>
+
 
   <div class="grid">
     <div class="cell">
       <div class="label">
         Responsável pela vistoria
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6299,10 +7745,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </div>
     </div>
 
+
     <div class="cell">
       <div class="label">
         Data da vistoria
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6313,10 +7761,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </div>
     </div>
 
+
     <div class="cell">
       <div class="label">
         Constatação do problema
       </div>
+
 
       <div class="value">
         ${
@@ -6331,10 +7781,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </div>
     </div>
 
+
     <div class="cell">
       <div class="label">
         Resultado
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6349,10 +7801,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </div>
     </div>
 
+
     <div class="cell cell-full">
       <div class="label">
         Parecer técnico
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6362,10 +7816,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </div>
     </div>
 
+
     <div class="cell cell-full">
       <div class="label">
         Serviço necessário
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6375,10 +7831,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </div>
     </div>
 
+
     <div class="cell cell-full">
       <div class="label">
         Observações da vistoria
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6389,9 +7847,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     </div>
   </div>
 
+
   <div class="section-title">
     GARANTIA
   </div>
+
 
   <table>
     <thead>
@@ -6405,6 +7865,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </tr>
     </thead>
 
+
     <tbody>
       <tr>
         <td>
@@ -6414,6 +7875,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               '-'
           )}
         </td>
+
 
         <td>
           ${escaparHtml(
@@ -6427,6 +7889,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           )}
         </td>
 
+
         <td>
           ${escaparHtml(
             dadosForm03.prazo_quantidade ??
@@ -6438,6 +7901,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           )}
         </td>
 
+
         <td>
           ${escaparHtml(
             formatarData(
@@ -6446,11 +7910,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           )}
         </td>
 
+
         <td>
           ${escaparHtml(
             procedencia
           )}
         </td>
+
 
         <td>
           ${escaparHtml(
@@ -6462,28 +7928,33 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     </tbody>
   </table>
 
+
   <div class="section-title">
     SERVIÇO
   </div>
 
+
   <div class="grid">
     <div class="cell">
       <div class="label">
-        Nº Termo de Serviço
+        ${dadosForm03.numero_termo != null ? 'Nº Termo de Serviço' : 'Referência do protocolo'}
       </div>
+
 
       <div class="value">
         ${escaparHtml(
           dadosForm03.numero_termo ??
-            '-'
+            dadosForm03.protocolo ?? '-'
         )}
       </div>
     </div>
+
 
     <div class="cell">
       <div class="label">
         Responsável pelo serviço
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6493,10 +7964,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </div>
     </div>
 
+
     <div class="cell">
       <div class="label">
         Data de conclusão
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6507,10 +7980,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </div>
     </div>
 
+
     <div class="cell">
       <div class="label">
         Conclusão
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6519,10 +7994,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </div>
     </div>
 
+
     <div class="cell cell-full">
       <div class="label">
         Solução técnica
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6532,10 +8009,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </div>
     </div>
 
+
     <div class="cell cell-full">
       <div class="label">
         Observações
       </div>
+
 
       <div class="value">
         ${escaparHtml(
@@ -6546,22 +8025,27 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     </div>
   </div>
 
+
   <div class="section-title">
     REGISTROS FOTOGRÁFICOS
   </div>
+
 
   <div class="fotos">
     ${fotosHtml}
   </div>
 
+
   <div class="section-title">
     TERMO DE RECEBIMENTO DOS SERVIÇOS
   </div>
+
 
   <div class="termo">
     Pelo presente termo, aceito os serviços prestados para a correção
     das falhas apontadas, nada mais tendo a reclamar sobre os mesmos.
   </div>
+
 
   <div class="assinaturas">
     <div class="assinatura">
@@ -6579,6 +8063,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           : ''
       }
 
+
       <div class="linha">
         ${escaparHtml(
           estadoAssinaturasForm03
@@ -6587,9 +8072,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         )}
       </div>
 
+
       <div>
         Nome / Assinatura do Cliente ou seu representante
       </div>
+
 
       <div class="data">
         ${
@@ -6606,6 +8093,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       </div>
     </div>
 
+
     <div class="assinatura">
       ${
         estadoAssinaturasForm03
@@ -6621,6 +8109,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           : ''
       }
 
+
       <div class="linha">
         ${escaparHtml(
           estadoAssinaturasForm03
@@ -6630,9 +8119,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         )}
       </div>
 
+
       <div>
         Assinatura do responsável pela execução dos serviços
       </div>
+
 
       <div class="data">
         ${
@@ -6650,6 +8141,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     </div>
   </div>
 
+
   <div class="rodape">
     EMAFE Engenharia • FORM 03 • Revisão 06
   </div>
@@ -6658,17 +8150,21 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     `;
   }
 
+
   async function gerarPdfForm03() {
     setErroForm03('');
     setMensagemAssinaturaForm03('');
+
 
     if (!dadosForm03) {
       setErroForm03(
         'Carregue os dados do FORM 03 antes de gerar o PDF final.'
       );
 
+
       return;
     }
+
 
     if (
       !estadoAssinaturasForm03?.assinatura_cliente_svg ||
@@ -6679,14 +8175,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'O PDF final só pode ser gerado depois que cliente e responsável da EMAFE assinarem o FORM 03.'
       );
 
+
       return;
     }
+
 
     try {
       setGerandoPdfForm03(true);
 
+
       const html =
         await montarHtmlForm03();
+
 
       if (
         Platform.OS === 'web'
@@ -6697,13 +8197,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             '_blank'
           );
 
+
         if (!janela) {
           setErroForm03(
             'O navegador bloqueou a janela do PDF. Permita pop-ups para localhost e tente novamente.'
           );
 
+
           return;
         }
+
 
         janela.document.open();
         janela.document.write(
@@ -6711,33 +8214,51 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         );
         janela.document.close();
 
+
         setPdfForm03Gerado(
           true
         );
+
 
         setMensagemAssinaturaForm03(
           'FORM 03 final preparado com as duas assinaturas. Na janela aberta, use Imprimir e escolha “Salvar como PDF”.'
         );
 
-        setTimeout(
-          () => {
+
+        // Aguarde as imagens (logo e registros fotográficos) carregarem
+        // antes de abrir a impressão. O atraso fixo de 500 ms gerava
+        // espaços em branco quando as fotos demoravam mais para abrir.
+        const imagens = Array.from(janela.document.images);
+        const imagemPronta = (img: HTMLImageElement) =>
+          img.complete
+            ? Promise.resolve()
+            : new Promise<void>((resolver) => {
+                img.addEventListener('load', () => resolver(), { once: true });
+                img.addEventListener('error', () => resolver(), { once: true });
+              });
+
+        const tempoMaximo = new Promise<void>((resolver) =>
+          setTimeout(resolver, 8000)
+        );
+
+        Promise.race([
+          Promise.all(imagens.map(imagemPronta)).then(() => undefined),
+          tempoMaximo,
+        ]).then(() => {
+          setTimeout(() => {
             try {
               janela.focus();
               janela.print();
-            } catch (
-              error
-            ) {
-              console.error(
-                'Erro ao abrir impressão:',
-                error
-              );
+            } catch (error) {
+              console.error('Erro ao abrir impressão:', error);
             }
-          },
-          500
-        );
+          }, 250);
+        });
+
 
         return;
       }
+
 
       const resultado =
         await Print.printToFileAsync(
@@ -6746,13 +8267,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           }
         );
 
+
       setPdfForm03Uri(
         resultado.uri
       );
 
+
       setPdfForm03Gerado(
         true
       );
+
 
       setMensagemAssinaturaForm03(
         'PDF final do FORM 03 gerado com sucesso.'
@@ -6762,6 +8286,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Erro ao gerar PDF final do FORM 03:',
         error
       );
+
 
       setErroForm03(
         error?.message ??
@@ -6774,29 +8299,35 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   async function compartilharPdfForm03() {
     if (!pdfForm03Uri) {
       return;
     }
+
 
     try {
       const disponivel =
         await Sharing
           .isAvailableAsync();
 
+
       if (!disponivel) {
         setErroForm03(
           'O compartilhamento de arquivos não está disponível neste dispositivo.'
         );
 
+
         return;
       }
+
 
       await Sharing.shareAsync(
         pdfForm03Uri,
         {
           mimeType:
             'application/pdf',
+
 
           dialogTitle:
             'FORM 03 - EMAFE',
@@ -6808,11 +8339,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       setErroForm03(
         'Não foi possível compartilhar o PDF.'
       );
     }
   }
+
 
   async function definirModoAssinaturaForm03(
     modo: 'manual_app'
@@ -6820,10 +8353,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     setErroForm03('');
     setMensagemAssinaturaForm03('');
 
+
     try {
       setDefinindoModoAssinatura(
         true
       );
+
 
       const {
         data,
@@ -6834,10 +8369,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_solicitacao_id:
             solicitacaoId,
 
+
           p_modo_assinatura:
             modo,
         }
       );
+
 
       if (error) {
         console.error(
@@ -6845,13 +8382,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           error
         );
 
+
         setErroForm03(
           error.message ||
             'Não foi possível definir o modo de assinatura.'
         );
 
+
         return;
       }
+
 
       if (
         !data ||
@@ -6861,14 +8401,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           'O sistema não confirmou o modo de assinatura.'
         );
 
+
         return;
       }
+
 
       setModoAssinaturaForm03(
         modo
       );
 
+
       await carregarEstadoAssinaturasForm03();
+
 
       setMensagemAssinaturaForm03(
         'Assinatura no aplicativo ativada. O cliente assina na Área do Cliente e o responsável pela execução assina nesta tela.'
@@ -6878,6 +8422,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Erro inesperado ao definir assinatura:',
         error
       );
+
 
       setErroForm03(
         'Ocorreu um erro ao definir o modo de assinatura.'
@@ -6889,17 +8434,21 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   // ==========================================================
   // PREPARAR AUSÊNCIA ANTES DE INICIAR A VISTORIA
   // ==========================================================
+
 
   async function abrirAusenciaCliente() {
     setErroInicioVistoria('');
     setErroFinalizacaoVistoria('');
     setSucessoFinalizacaoVistoria('');
 
+
     try {
       setPreparandoAusenciaCliente(true);
+
 
       const {
         data,
@@ -6912,42 +8461,52 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         }
       );
 
+
       if (error) {
         console.error(
           'Erro ao preparar registro de ausência:',
           error
         );
 
+
         setErroInicioVistoria(
           error.message ||
             'Não foi possível preparar o registro de ausência.'
         );
 
+
         return;
       }
+
 
       if (!data) {
         setErroInicioVistoria(
           'O sistema não retornou o registro da visita.'
         );
 
+
         return;
       }
+
 
       setJustificativaResultado(
         'Cliente não estava presente no imóvel no horário agendado.'
       );
 
+
       const registro =
         await carregarVistoriaTecnica();
+
 
       if (!registro) {
         setErroInicioVistoria(
           'O registro da visita foi criado, mas não foi possível carregá-lo.'
         );
 
+
         return;
       }
+
 
       setAusenciaClienteAberta(true);
     } catch (error) {
@@ -6955,6 +8514,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         'Erro inesperado ao preparar ausência:',
         error
       );
+
 
       setErroInicioVistoria(
         'Ocorreu um erro ao preparar o registro de ausência.'
@@ -6965,47 +8525,60 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   }
 
 
+
+
   // ==========================================================
   // ENCERRAR POR AUSÊNCIA DO CLIENTE
   // ==========================================================
+
 
   async function encerrarPorAusenciaCliente() {
     setErroFinalizacaoVistoria('');
     setSucessoFinalizacaoVistoria('');
 
+
     const quantidadeFotos =
       fotosVistoriaPendentes.length +
       fotosVistoriaSalvas.length;
+
 
     if (quantidadeFotos < 1) {
       setErroFinalizacaoVistoria(
         'Tire ou anexe pelo menos uma foto para comprovar que a equipe esteve no local.'
       );
 
+
       return;
     }
+
 
     if (!justificativaResultado.trim()) {
       setErroFinalizacaoVistoria(
         'Informe uma observação sobre a ausência do cliente.'
       );
 
+
       return;
     }
+
 
     try {
       setFinalizandoVistoria(true);
 
+
       const fotosEnviadas =
         await enviarFotosVistoria();
+
 
       if (!fotosEnviadas) {
         setErroFinalizacaoVistoria(
           'Não foi possível enviar a foto de comprovação. O chamado não foi encerrado.'
         );
 
+
         return;
       }
+
 
       const {
         data,
@@ -7016,10 +8589,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_solicitacao_id:
             solicitacaoId,
 
+
           p_observacao:
             justificativaResultado.trim(),
         }
       );
+
 
       if (error) {
         console.error(
@@ -7027,25 +8602,31 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           error
         );
 
+
         setErroFinalizacaoVistoria(
           error.message ||
             'Não foi possível encerrar o chamado por ausência do cliente.'
         );
 
+
         return;
       }
+
 
       if (!data?.length) {
         setErroFinalizacaoVistoria(
           'O sistema não confirmou o encerramento do chamado.'
         );
 
+
         return;
       }
+
 
       setSucessoFinalizacaoVistoria(
         'Chamado encerrado por ausência do cliente.'
       );
+
 
       await carregarSolicitacao();
       await carregarVistoriaTecnica();
@@ -7058,6 +8639,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       setErroFinalizacaoVistoria(
         'Ocorreu um erro ao encerrar o chamado por ausência.'
       );
@@ -7067,81 +8649,86 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   }
 
 
+
+
   // ==========================================================
   // FINALIZAR VISTORIA
   // ==========================================================
+
 
   async function finalizarVistoria() {
     setErroFinalizacaoVistoria('');
     setSucessoFinalizacaoVistoria('');
 
-    if (!resultadoVistoria) {
-      setErroFinalizacaoVistoria(
-        'Selecione o resultado da vistoria.'
-      );
 
+    if (!avaliacoesCarregadas) {
+      setErroFinalizacaoVistoria('As avaliações individuais ainda não foram carregadas.');
+      return;
+    }
+    if (!todosProblemasCobertosAvaliados) {
+      setErroFinalizacaoVistoria('Salve a avaliação de cada problema coberto antes de finalizar a vistoria.');
       return;
     }
 
-    if (
-      problemaConstatado ===
-      null
-    ) {
-      setErroFinalizacaoVistoria(
-        'Informe se o problema relatado foi constatado.'
-      );
 
-      return;
-    }
+    // O resultado do protocolo depende do conjunto dos problemas cobertos.
+    // Um problema improcedente não bloqueia outro procedente.
+    const resultadoFinalCalculado = existeProblemaProcedente
+      ? 'aprovada' as const : 'nao_aprovada' as const;
+    const avaliacoesCobertas = avaliacoesIndividuais.filter((a) =>
+      problemasCobertos.some((p) => p.id === a.problema_id)
+    );
+    const parecerFinalCalculado = avaliacoesCobertas.map((a) => {
+      const item = problemasCobertos.find((p) => p.id === a.problema_id);
+      return `Problema ${item?.numero ?? '-'}: ${a.parecer_tecnico}`;
+    }).join('\n\n');
+    const justificativaFinalCalculada = avaliacoesCobertas
+      .filter((a) => a.resultado === 'improcedente')
+      .map((a) => {
+        const item = problemasCobertos.find((p) => p.id === a.problema_id);
+        return `Problema ${item?.numero ?? '-'}: ${a.justificativa_improcedencia ?? ''}`;
+      }).join('\n');
+    const servicoGeralCalculado = avaliacoesCobertas
+      .filter((a) => a.resultado === 'procedente')
+      .map((a) => {
+        const item = problemasCobertos.find((p) => p.id === a.problema_id);
+        return `Problema ${item?.numero ?? '-'}: ${a.servico_necessario ?? ''}`;
+      }).join('\n');
 
-    if (
-      !parecerTecnico.trim()
-    ) {
-      setErroFinalizacaoVistoria(
-        'Preencha o parecer técnico antes de finalizar.'
-      );
-
-      return;
-    }
-
-    if (
-      resultadoVistoria ===
-        'nao_aprovada' &&
-      !justificativaResultado.trim()
-    ) {
-      setErroFinalizacaoVistoria(
-        'Informe a justificativa da não aprovação.'
-      );
-
-      return;
-    }
 
     const erroResponsavel =
       validarResponsavelVistoria();
+
 
     if (erroResponsavel) {
       setErroFinalizacaoVistoria(
         erroResponsavel
       );
 
+
       return;
     }
+
 
     try {
       setFinalizandoVistoria(
         true
       );
 
+
       const erroAoSalvarResponsavel =
         await salvarResponsavelVistoria();
+
 
       if (erroAoSalvarResponsavel) {
         setErroFinalizacaoVistoria(
           erroAoSalvarResponsavel
         );
 
+
         return;
       }
+
 
       // Salva os dados atuais antes de finalizar.
       const {
@@ -7152,16 +8739,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_solicitacao_id:
             solicitacaoId,
 
+
           p_problema_constatado:
-            problemaConstatado,
+            avaliacoesCobertas.some((a) => a.problema_constatado),
+
 
           p_parecer_tecnico:
-            parecerTecnico.trim(),
+            parecerFinalCalculado,
 
-          // Campo removido da tela, mas mantido internamente para compatibilidade
-          // com as funções antigas do Supabase que ainda exigem um valor.
+
           p_servico_necessario:
-            'Não se aplica',
+            servicoGeralCalculado || 'Não se aplica',
+
 
           p_observacoes:
             observacoesTecnicas.trim() ||
@@ -7169,31 +8758,38 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         }
       );
 
+
       if (salvarError) {
         console.error(
           'Erro ao salvar antes de finalizar:',
           salvarError
         );
 
+
         setErroFinalizacaoVistoria(
           salvarError.message ||
             'Não foi possível salvar os dados da vistoria.'
         );
 
+
         return;
       }
+
 
       // Envia eventuais fotos que ainda estejam pendentes.
       const fotosEnviadas =
         await enviarFotosVistoria();
+
 
       if (!fotosEnviadas) {
         setErroFinalizacaoVistoria(
           'Não foi possível concluir porque existem fotos que não foram enviadas.'
         );
 
+
         return;
       }
+
 
       const {
         data,
@@ -7204,16 +8800,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_solicitacao_id:
             solicitacaoId,
 
+
           p_resultado:
-            resultadoVistoria,
+            resultadoFinalCalculado,
+
 
           p_justificativa_resultado:
-            resultadoVistoria ===
-              'nao_aprovada'
-              ? justificativaResultado.trim()
+            resultadoFinalCalculado === 'nao_aprovada'
+              ? justificativaFinalCalculada || 'Nenhum problema coberto foi considerado procedente.'
               : null,
         }
       );
+
 
       if (error) {
         console.error(
@@ -7221,13 +8819,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           error
         );
 
+
         setErroFinalizacaoVistoria(
           error.message ||
             'Não foi possível finalizar a vistoria.'
         );
 
+
         return;
       }
+
 
       if (
         !data ||
@@ -7237,15 +8838,17 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           'A vistoria não retornou confirmação de finalização.'
         );
 
+
         return;
       }
 
+
       setSucessoFinalizacaoVistoria(
-        resultadoVistoria ===
-          'aprovada'
-          ? 'Vistoria finalizada e aprovada para execução.'
-          : 'Vistoria finalizada como não aprovada.'
+        resultadoFinalCalculado === 'aprovada'
+          ? 'Vistoria concluída. Os problemas procedentes podem seguir para execução.'
+          : 'Vistoria concluída sem problemas procedentes.'
       );
+
 
       await carregarSolicitacao();
       await carregarVistoriaTecnica();
@@ -7257,6 +8860,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error
       );
 
+
       setErroFinalizacaoVistoria(
         'Ocorreu um erro ao finalizar a vistoria.'
       );
@@ -7267,9 +8871,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
   }
 
+
   // ==========================================================
   // FORMATADORES
   // ==========================================================
+
 
   function formatarDataHora(
     dataIso:
@@ -7281,8 +8887,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return '-';
     }
 
+
     const data =
       new Date(dataIso);
+
 
     return data.toLocaleString(
       'pt-BR',
@@ -7296,6 +8904,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     );
   }
 
+
   function formatarData(
     data:
       | string
@@ -7306,8 +8915,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return '-';
     }
 
+
     const partes =
       data.split('-');
+
 
     if (
       partes.length === 3
@@ -7315,8 +8926,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return `${partes[2]}/${partes[1]}/${partes[0]}`;
     }
 
+
     return data;
   }
+
 
   function formatarHora(
     hora:
@@ -7328,11 +8941,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       return '-';
     }
 
+
     return hora.substring(
       0,
       5
     );
   }
+
 
   function textoStatus(
     status: string
@@ -7341,31 +8956,40 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       case 'aberta':
         return 'Nova';
 
+
       case 'em_analise':
         return 'Em análise';
+
 
       case 'vistoria_agendada':
         return 'Vistoria agendada';
 
+
       case 'em_vistoria':
         return 'Em vistoria';
+
 
       case 'em_execucao':
         return 'Em execução';
 
+
       case 'concluida':
         return 'Concluída';
+
 
       case 'cancelada':
         return 'Cancelada';
 
+
       case 'encerrada_ausencia':
         return 'Encerrada por ausência';
+
 
       default:
         return status;
     }
   }
+
 
   function textoGarantia(
     status:
@@ -7377,17 +9001,21 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       case 'dentro_da_garantia':
         return 'Dentro da garantia';
 
+
       case 'fora_garantia':
       case 'fora_da_garantia':
         return 'Fora da garantia';
 
+
       case 'nao_se_aplica':
         return 'Não se aplica';
+
 
       default:
         return 'Aguardando análise';
     }
   }
+
 
   function estiloResultadoGarantia(
     status:
@@ -7399,18 +9027,22 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       case 'dentro_da_garantia':
         return styles.resultadoDentro;
 
+
       case 'fora_garantia':
       case 'fora_da_garantia':
         return styles.resultadoFora;
+
 
       default:
         return styles.resultadoNeutro;
     }
   }
 
+
   // ==========================================================
   // LOADING
   // ==========================================================
+
 
   if (carregando) {
     return (
@@ -7423,6 +9055,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           style="dark"
         />
 
+
         <View
           style={
             styles.loadingContainer
@@ -7432,6 +9065,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             size="large"
             color="#0B2447"
           />
+
 
           <Text
             style={
@@ -7445,9 +9079,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     );
   }
 
+
   if (!autorizado) {
     return null;
   }
+
 
   return (
     <SafeAreaView
@@ -7455,9 +9091,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     >
       <StatusBar style="dark" />
 
+
       {/* ======================================================
           FOTO AMPLIADA
       ====================================================== */}
+
 
       <Modal
         visible={
@@ -7493,6 +9131,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             />
           </TouchableOpacity>
 
+
           {fotoSelecionada ? (
             <Image
               source={{
@@ -7508,6 +9147,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         </View>
       </Modal>
 
+
       <ScrollView
         contentContainerStyle={
           styles.scrollContent
@@ -7522,6 +9162,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           {/* ==================================================
               TOPO
           ================================================== */}
+
 
           <View
             style={styles.topBar}
@@ -7542,6 +9183,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 color="#0B2447"
               />
 
+
               <Text
                 style={
                   styles.backText
@@ -7551,6 +9193,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               </Text>
             </TouchableOpacity>
 
+
             <Image
               source={require('../../assets/emafe/logo-horizontal-transparente.png')}
               style={styles.logo}
@@ -7558,9 +9201,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             />
           </View>
 
+
           {/* ==================================================
               ERRO GERAL
           ================================================== */}
+
 
           {erro ? (
             <View
@@ -7574,6 +9219,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 color="#9A3232"
               />
 
+
               <Text
                 style={
                   styles.messageErrorText
@@ -7584,11 +9230,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
             </View>
           ) : null}
 
+
           {solicitacao ? (
             <>
               {/* ==============================================
                   PROTOCOLO
               ============================================== */}
+
 
               <View
                 style={
@@ -7608,6 +9256,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     PROTOCOLO
                   </Text>
 
+
                   <Text
                     style={
                       styles.protocolNumber
@@ -7617,6 +9266,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       solicitacao.protocolo
                     }
                   </Text>
+
 
                   <Text
                     style={
@@ -7629,6 +9279,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     )}
                   </Text>
                 </View>
+
 
                 <View
                   style={
@@ -7647,9 +9298,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 </View>
               </View>
 
+
               {/* ==============================================
                   CLIENTE + IMÓVEL
               ============================================== */}
+
 
               <View
                 style={
@@ -7672,6 +9325,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       color="#0B2447"
                     />
 
+
                     <Text
                       style={
                         styles.cardHeaderTitle
@@ -7681,12 +9335,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     </Text>
                   </View>
 
+
                   <InfoItem
                     label="Nome"
                     value={
                       solicitacao.cliente_nome
                     }
                   />
+
 
                   <InfoItem
                     label="CPF/CNPJ"
@@ -7696,6 +9352,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     }
                   />
 
+
                   <InfoItem
                     label="Telefone"
                     value={
@@ -7703,6 +9360,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       '-'
                     }
                   />
+
 
                   <InfoItem
                     label="E-mail"
@@ -7712,6 +9370,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     }
                   />
                 </View>
+
 
                 <View
                   style={
@@ -7729,6 +9388,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       color="#0B2447"
                     />
 
+
                     <Text
                       style={
                         styles.cardHeaderTitle
@@ -7738,6 +9398,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     </Text>
                   </View>
 
+
                   <InfoItem
                     label="Cidade"
                     value={
@@ -7746,6 +9407,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     }
                   />
 
+
                   <InfoItem
                     label="Empreendimento"
                     value={
@@ -7753,12 +9415,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     }
                   />
 
+
                   <InfoItem
                     label="Unidade"
                     value={
                       solicitacao.unidade
                     }
                   />
+
 
                   <InfoItem
                     label="Local do problema"
@@ -7770,9 +9434,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 </View>
               </View>
 
+
               {/* ==============================================
                   PROBLEMA
               ============================================== */}
+
 
               <Text
                 style={
@@ -7781,6 +9447,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               >
                 Problema relatado
               </Text>
+
 
               <View
                 style={styles.card}
@@ -7797,9 +9464,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 </Text>
               </View>
 
+
               {/* ==============================================
                   FOTOS
               ============================================== */}
+
 
               <View
                 style={
@@ -7814,6 +9483,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   Fotos enviadas
                 </Text>
 
+
                 <Text
                   style={
                     styles.photoCount
@@ -7826,6 +9496,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 </Text>
               </View>
 
+
               {carregandoFotos ? (
                 <View
                   style={
@@ -7836,6 +9507,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     color="#0B2447"
                   />
 
+
                   <Text
                     style={
                       styles.loadingInlineText
@@ -7845,6 +9517,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   </Text>
                 </View>
               ) : null}
+
 
               {erroFotos ? (
                 <View
@@ -7861,6 +9534,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   </Text>
                 </View>
               ) : null}
+
 
               <View
                 style={
@@ -7893,6 +9567,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         }
                       />
 
+
                       <View
                         style={
                           styles.photoOverlay
@@ -7907,6 +9582,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           {indice + 1}
                         </Text>
 
+
                         <Ionicons
                           name="expand-outline"
                           size={17}
@@ -7918,9 +9594,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 )}
               </View>
 
+
               {/* ==============================================
                   ANÁLISE TÉCNICA
               ============================================== */}
+
 
               <Text
                 style={
@@ -7929,6 +9607,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               >
                 Análise técnica
               </Text>
+
 
               <View
                 style={
@@ -7946,6 +9625,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     color="#0B2447"
                   />
 
+
                   <View
                     style={{
                       flex: 1,
@@ -7958,6 +9638,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     >
                       Classificação técnica
                     </Text>
+
 
                     <Text
                       style={
@@ -7973,7 +9654,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   </View>
                 </View>
 
+
                 {/* PROBLEMA DO PROTOCOLO */}
+
 
                 <Text
                   style={
@@ -7982,6 +9665,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 >
                   Problema do protocolo
                 </Text>
+
 
                 {carregandoProblemasSolicitacao ? (
                   <View
@@ -8014,6 +9698,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           problemaSelecionadoId;
                         const analisado =
                           !!problema.item_garantia_id;
+
 
                         return (
                           <TouchableOpacity
@@ -8048,6 +9733,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               </Text>
                             </View>
 
+
                             <View
                               style={{
                                 flex: 1,
@@ -8066,6 +9752,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   : ''}
                               </Text>
 
+
                               <Text
                                 numberOfLines={2}
                                 style={[
@@ -8076,6 +9763,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               >
                                 {problema.descricao_problema}
                               </Text>
+
 
                               <Text
                                 style={[
@@ -8091,6 +9779,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   : 'Garantia: aguardando análise'}
                               </Text>
                             </View>
+
 
                             <Ionicons
                               name={
@@ -8115,6 +9804,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     )}
                   </View>
                 )}
+
 
                 {problemaSelecionado ? (
                   <View
@@ -8149,7 +9839,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   </View>
                 ) : null}
 
+
                 {/* URGÊNCIA */}
+
 
                 <Text
                   style={
@@ -8158,6 +9850,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 >
                   Urgência do atendimento
                 </Text>
+
 
                 {carregandoUrgencia ? (
                   <View
@@ -8169,6 +9862,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       size="small"
                       color="#0B2447"
                     />
+
 
                     <Text
                       style={
@@ -8197,9 +9891,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       style={[
                         styles.optionButton,
 
+
                         classificacaoUrgencia ===
                           'urgente' &&
                           styles.optionButtonActive,
+
 
                         salvandoUrgencia &&
                           styles.buttonDisabled,
@@ -8221,9 +9917,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         }
                       />
 
+
                       <Text
                         style={[
                           styles.optionText,
+
 
                           classificacaoUrgencia ===
                             'urgente' &&
@@ -8233,6 +9931,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         Urgente
                       </Text>
                     </TouchableOpacity>
+
 
                     <TouchableOpacity
                       activeOpacity={0.85}
@@ -8247,9 +9946,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       style={[
                         styles.optionButton,
 
+
                         classificacaoUrgencia ===
                           'nao_urgente' &&
                           styles.optionButtonActive,
+
 
                         salvandoUrgencia &&
                           styles.buttonDisabled,
@@ -8271,9 +9972,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         }
                       />
 
+
                       <Text
                         style={[
                           styles.optionText,
+
 
                           classificacaoUrgencia ===
                             'nao_urgente' &&
@@ -8286,6 +9989,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   </View>
                 )}
 
+
                 {salvandoUrgencia ? (
                   <View
                     style={
@@ -8297,6 +10001,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       color="#0B2447"
                     />
 
+
                     <Text
                       style={
                         styles.loadingInlineText
@@ -8306,6 +10011,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     </Text>
                   </View>
                 ) : null}
+
 
                 {erroUrgencia ? (
                   <View
@@ -8319,6 +10025,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       color="#9A3232"
                     />
 
+
                     <Text
                       style={
                         styles.messageErrorText
@@ -8328,6 +10035,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     </Text>
                   </View>
                 ) : null}
+
 
                 {carregandoItens ? (
                   <View
@@ -8339,6 +10047,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       color="#0B2447"
                     />
 
+
                     <Text
                       style={
                         styles.loadingInlineText
@@ -8349,7 +10058,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   </View>
                 ) : null}
 
+
                 {/* CATEGORIA */}
+
 
                 <Text
                   style={
@@ -8358,6 +10069,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 >
                   1. Categoria
                 </Text>
+
 
                 <TouchableOpacity
                   disabled={
@@ -8371,10 +10083,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       return;
                     }
 
+
                     setCategoriaDropdownAberto(
                       (aberto) =>
                         !aberto
                     );
+
 
                     setBuscaCategoria(
                       ''
@@ -8382,6 +10096,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   }}
                   style={[
                     styles.categorySelectButton,
+
 
                     analiseConfirmada &&
                       styles.optionDisabled,
@@ -8391,6 +10106,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     style={[
                       styles.categorySelectText,
 
+
                       !categoriaSelecionada &&
                         styles.categoryPlaceholder,
                     ]}
@@ -8399,6 +10115,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     {categoriaSelecionada ||
                       'Selecione a categoria'}
                   </Text>
+
 
                   <Ionicons
                     name={
@@ -8410,6 +10127,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     color="#42566D"
                   />
                 </TouchableOpacity>
+
 
                 {categoriaDropdownAberto &&
                 !analiseConfirmada ? (
@@ -8428,6 +10146,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         size={19}
                         color="#8995A5"
                       />
+
 
                       <TextInput
                         style={
@@ -8448,6 +10167,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       />
                     </View>
 
+
                     {categoriasFiltradas.length >
                     0 ? (
                       categoriasFiltradas.map(
@@ -8455,6 +10175,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           const ativo =
                             categoriaSelecionada ===
                             categoria;
+
 
                           return (
                             <TouchableOpacity
@@ -8472,6 +10193,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               style={[
                                 styles.categoryOption,
 
+
                                 ativo &&
                                   styles.categoryOptionActive,
                               ]}
@@ -8479,6 +10201,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               <Text
                                 style={[
                                   styles.categoryOptionText,
+
 
                                   ativo &&
                                     styles.categoryOptionTextActive,
@@ -8488,6 +10211,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   categoria
                                 }
                               </Text>
+
 
                               {ativo ? (
                                 <Ionicons
@@ -8512,7 +10236,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   </View>
                 ) : null}
 
+
                 {/* ELEMENTO */}
+
 
                 {categoriaSelecionada ? (
                   <>
@@ -8523,6 +10249,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     >
                       2. Elemento construtivo
                     </Text>
+
 
                     <View
                       style={
@@ -8536,6 +10263,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           const ativo =
                             elementoSelecionado ===
                             elemento;
+
 
                           return (
                             <TouchableOpacity
@@ -8553,8 +10281,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               style={[
                                 styles.optionButton,
 
+
                                 ativo &&
                                   styles.optionButtonActive,
+
 
                                 analiseConfirmada &&
                                   !ativo &&
@@ -8565,6 +10295,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 style={[
                                   styles.optionText,
 
+
                                   ativo &&
                                     styles.optionTextActive,
                                 ]}
@@ -8573,6 +10304,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   elemento
                                 }
                               </Text>
+
 
                               {ativo ? (
                                 <Ionicons
@@ -8589,7 +10321,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   </>
                 ) : null}
 
+
                 {/* PROBLEMA */}
+
 
                 {elementoSelecionado ? (
                   <>
@@ -8601,6 +10335,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       3. Problema técnico
                     </Text>
 
+
                     <View
                       style={
                         styles.problemList
@@ -8611,6 +10346,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           const ativo =
                             itemSelecionadoId ===
                             item.item_garantia_id;
+
 
                           return (
                             <TouchableOpacity
@@ -8628,8 +10364,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               style={[
                                 styles.problemCard,
 
+
                                 ativo &&
                                   styles.problemCardActive,
+
 
                                 analiseConfirmada &&
                                   !ativo &&
@@ -8640,6 +10378,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 style={[
                                   styles.problemTitle,
 
+
                                   ativo &&
                                     styles.problemTitleActive,
                                 ]}
@@ -8648,6 +10387,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   item.manifestacao_patologica
                                 }
                               </Text>
+
 
                               <Ionicons
                                 name={
@@ -8670,12 +10410,15 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   </>
                 ) : null}
 
+
                 {/* CALCULAR */}
+
 
                 {!analiseConfirmada ? (
                   <TouchableOpacity
                     style={[
                       styles.calculateButton,
+
 
                       (!itemSelecionadoId ||
                         calculando) &&
@@ -8702,6 +10445,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       />
                     )}
 
+
                     <Text
                       style={
                         styles.calculateButtonText
@@ -8713,6 +10457,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     </Text>
                   </TouchableOpacity>
                 ) : null}
+
 
                 {erroAnalise ? (
                   <View
@@ -8730,6 +10475,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   </View>
                 ) : null}
 
+
                 {sucessoAnalise ? (
                   <View
                     style={
@@ -8742,6 +10488,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       color="#287A46"
                     />
 
+
                     <Text
                       style={
                         styles.messageSuccessText
@@ -8753,9 +10500,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 ) : null}
               </View>
 
+
               {/* ==============================================
                   RESULTADO GARANTIA
               ============================================== */}
+
 
               {resultadoGarantia ? (
                 <>
@@ -8767,9 +10516,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     Resultado da garantia do problema selecionado
                   </Text>
 
+
                   <View
                     style={[
                       styles.warrantyResultCard,
+
 
                       estiloResultadoGarantia(
                         resultadoGarantia.status_garantia
@@ -8793,6 +10544,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         />
                       </View>
 
+
                       <View>
                         <Text
                           style={
@@ -8801,6 +10553,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         >
                           RESULTADO
                         </Text>
+
 
                         <Text
                           style={
@@ -8813,6 +10566,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         </Text>
                       </View>
                     </View>
+
 
                     <View
                       style={
@@ -8828,6 +10582,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         }
                       />
 
+
                       <WarrantyInfo
                         label="Prazo"
                         value={
@@ -8841,6 +10596,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         }
                       />
 
+
                       <WarrantyInfo
                         label="Data limite"
                         value={
@@ -8849,6 +10605,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           )
                         }
                       />
+
 
                       <WarrantyInfo
                         label="Dias restantes"
@@ -8863,12 +10620,15 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       />
                     </View>
 
+
                     <TouchableOpacity
                       style={[
                         styles.confirmButton,
 
+
                         analiseConfirmada &&
                           styles.confirmedButton,
+
 
                         confirmando &&
                           styles.buttonDisabled,
@@ -8891,6 +10651,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         color="#FFFFFF"
                       />
 
+
                       <Text
                         style={
                           styles.confirmButtonText
@@ -8907,9 +10668,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 </>
               ) : null}
 
+
               {/* =================================================
                   VISTORIA
               ================================================= */}
+
 
               {todosProblemasAnalisados &&
               algumProblemaDentroGarantia ? (
@@ -8922,6 +10685,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     Vistoria
                   </Text>
 
+
                   <View
                     style={
                       styles.vistoriaCard
@@ -8930,6 +10694,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     {/* ===========================================
                         AGENDAMENTO ATUAL
                     =========================================== */}
+
 
                     {agendamento ? (
                       <View
@@ -8954,6 +10719,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             />
                           </View>
 
+
                           <View
                             style={{
                               flex: 1,
@@ -8967,6 +10733,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               Vistoria agendada
                             </Text>
 
+
                             <Text
                               style={
                                 styles.agendamentoSubtitulo
@@ -8976,6 +10743,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </Text>
                           </View>
                         </View>
+
 
                         <View
                           style={
@@ -8991,6 +10759,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             }
                           />
 
+
                           <WarrantyInfo
                             label="Horário"
                             value={`${formatarHora(
@@ -8999,6 +10768,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               agendamento.hora_fim
                             )}`}
                           />
+
 
                           <WarrantyInfo
                             label="Agendado por"
@@ -9009,6 +10779,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             }
                           />
                         </View>
+
 
                         <TouchableOpacity
                           style={
@@ -9025,6 +10796,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             color="#FFFFFF"
                           />
 
+
                           <View
                             style={{
                               flex: 1,
@@ -9038,6 +10810,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               Avisar cliente no WhatsApp
                             </Text>
 
+
                             <Text
                               style={
                                 styles.whatsAppVistoriaButtonSubtext
@@ -9046,6 +10819,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               Abre a conversa com a mensagem da vistoria pronta para enviar.
                             </Text>
                           </View>
+
 
                           <Ionicons
                             name="open-outline"
@@ -9056,9 +10830,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       </View>
                     ) : null}
 
+
                     {/* ===========================================
                         INICIAR VISTORIA
                     =========================================== */}
+
 
                     {solicitacao.status ===
                     'vistoria_agendada' &&
@@ -9079,6 +10855,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             color="#0B2447"
                           />
 
+
                           <View
                             style={{
                               flex: 1,
@@ -9092,6 +10869,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               Realizar vistoria
                             </Text>
 
+
                             <Text
                               style={
                                 styles.iniciarVistoriaText
@@ -9101,6 +10879,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </Text>
                           </View>
                         </View>
+
 
                         {erroInicioVistoria ? (
                           <View
@@ -9114,6 +10893,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               color="#9A3232"
                             />
 
+
                             <Text
                               style={
                                 styles.messageErrorText
@@ -9126,6 +10906,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           </View>
                         ) : null}
 
+
                         <View
                           style={
                             styles.iniciarVistoriaAcoes
@@ -9134,6 +10915,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           <TouchableOpacity
                             style={[
                               styles.iniciarVistoriaButton,
+
 
                               (iniciandoVistoria ||
                                 preparandoAusenciaCliente ||
@@ -9162,6 +10944,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               />
                             )}
 
+
                             <Text
                               style={
                                 styles.iniciarVistoriaButtonText
@@ -9173,9 +10956,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </Text>
                           </TouchableOpacity>
 
+
                           <TouchableOpacity
                             style={[
                               styles.clienteAusenteAntesButton,
+
 
                               preparandoAusenciaCliente &&
                                 styles.buttonDisabled,
@@ -9202,6 +10987,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               />
                             )}
 
+
                             <Text
                               style={
                                 styles.clienteAusenteAntesButtonText
@@ -9213,6 +10999,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </Text>
                           </TouchableOpacity>
                         </View>
+
 
                         {ausenciaClienteAberta ? (
                           <View
@@ -9231,6 +11018,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 color="#A76500"
                               />
 
+
                               <View
                                 style={{
                                   flex: 1,
@@ -9244,6 +11032,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   Comprovação da visita
                                 </Text>
 
+
                                 <Text
                                   style={
                                     styles.ausenciaClienteText
@@ -9253,6 +11042,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 </Text>
                               </View>
                             </View>
+
 
                             <View
                               style={
@@ -9276,6 +11066,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   color="#0B5EA8"
                                 />
 
+
                                 <Text
                                   style={
                                     styles.ausenciaClienteFotoButtonText
@@ -9284,6 +11075,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   Tirar foto
                                 </Text>
                               </TouchableOpacity>
+
 
                               <TouchableOpacity
                                 style={
@@ -9302,6 +11094,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   color="#0B5EA8"
                                 />
 
+
                                 <Text
                                   style={
                                     styles.ausenciaClienteFotoButtonText
@@ -9311,6 +11104,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 </Text>
                               </TouchableOpacity>
                             </View>
+
 
                             <Text
                               style={
@@ -9322,6 +11116,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 fotosVistoriaPendentes.length
                               }
                             </Text>
+
 
                             {fotosVistoriaPendentes.length >
                             0 ? (
@@ -9351,6 +11146,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         resizeMode="cover"
                                       />
 
+
                                       <TouchableOpacity
                                         style={
                                           styles.removerFotoVistoriaButton
@@ -9373,6 +11169,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               </View>
                             ) : null}
 
+
                             <Text
                               style={
                                 styles.inputLabel
@@ -9380,6 +11177,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             >
                               OBSERVAÇÃO *
                             </Text>
+
 
                             <TextInput
                               style={[
@@ -9401,11 +11199,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   texto
                                 );
 
+
                                 setErroFinalizacaoVistoria(
                                   ''
                                 );
                               }}
                             />
+
 
                             {erroFinalizacaoVistoria ? (
                               <View
@@ -9419,6 +11219,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   color="#9A3232"
                                 />
 
+
                                 <Text
                                   style={
                                     styles.messageErrorText
@@ -9431,9 +11232,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               </View>
                             ) : null}
 
+
                             <TouchableOpacity
                               style={[
                                 styles.encerrarAusenciaButton,
+
 
                                 finalizandoVistoria &&
                                   styles.buttonDisabled,
@@ -9458,6 +11261,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 />
                               )}
 
+
                               <Text
                                 style={
                                   styles.encerrarAusenciaButtonText
@@ -9473,9 +11277,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       </View>
                     ) : null}
 
+
                     {/* ===========================================
                         FORMULÁRIO DA VISTORIA EM ANDAMENTO
                     =========================================== */}
+
 
                     {solicitacao.status ===
                     'em_vistoria' ? (
@@ -9501,6 +11307,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             />
                           </View>
 
+
                           <View
                             style={{
                               flex: 1,
@@ -9514,6 +11321,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               Vistoria em andamento
                             </Text>
 
+
                             <Text
                               style={
                                 styles.formularioVistoriaText
@@ -9521,6 +11329,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             >
                               Registre abaixo o que foi constatado durante a visita técnica.
                             </Text>
+
 
                             {vistoriaTecnica ? (
                               <Text
@@ -9541,6 +11350,130 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           </View>
                         </View>
 
+
+                        {/* =================================================
+                            AVALIAÇÃO INDIVIDUAL POR PROBLEMA
+                        ================================================= */}
+                        <View style={{ borderWidth: 1, borderColor: '#D4DFEA', borderRadius: 12, padding: 14, marginBottom: 20, backgroundColor: '#F7FAFD' }}>
+                          <Text style={{ fontSize: 18, fontWeight: '700', color: '#0B2447', marginBottom: 8 }}>
+                            Avaliação técnica de cada problema
+                          </Text>
+                          <Text style={{ color: '#42566D', marginBottom: 14 }}>
+                            Avalie individualmente cada problema dentro da garantia. Problemas fora da garantia não seguem para execução.
+                          </Text>
+
+
+                          {problemasSolicitacao.map((item) => {
+                            const coberto = ['dentro_da_garantia', 'dentro_garantia'].includes(item.status_garantia ?? '');
+                            const salvo = avaliacoesIndividuais.find((a) => a.problema_id === item.id);
+                            const selecionado = problemaEmVistoria?.id === item.id;
+                            return (
+                              <TouchableOpacity
+                                key={item.id}
+                                disabled={!coberto}
+                                onPress={() => {
+                                  setProblemaEmVistoriaId(item.id);
+                                  setErroAvaliacaoIndividual('');
+                                  setSucessoAvaliacaoIndividual('');
+                                }}
+                                style={{ borderWidth: selecionado ? 2 : 1, borderColor: selecionado ? '#0B5EA8' : '#D4DFEA', borderRadius: 10, padding: 12, marginBottom: 9, backgroundColor: selecionado ? '#EDF5FF' : '#FFFFFF' }}
+                              >
+                                <Text style={{ color: '#0B2447', fontWeight: '700' }}>
+                                  Problema {item.numero}{item.comodo ? ` • ${item.comodo}` : ''}
+                                </Text>
+                                <Text style={{ color: '#42566D', marginTop: 4 }}>
+                                  {item.descricao_problema}
+                                </Text>
+                                <Text style={{ color: !coberto ? '#9A3232' : salvo?.resultado === 'procedente' ? '#287A46' : salvo?.resultado === 'improcedente' ? '#9A3232' : '#0B5EA8', fontWeight: '700', marginTop: 6 }}>
+                                  {!coberto ? 'Fora da garantia — não executável' : salvo?.resultado === 'procedente' ? '● Procedente' : salvo?.resultado === 'improcedente' ? '● Improcedente' : 'Aguardando avaliação'}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+
+
+                          {problemaEmVistoria ? (
+                            <View style={{ marginTop: 10 }}>
+                              <Text style={{ fontSize: 16, fontWeight: '700', color: '#0B2447', marginBottom: 12 }}>
+                                Avaliar problema {problemaEmVistoria.numero}
+                              </Text>
+                              <Text style={styles.inputLabel}>O PROBLEMA FOI CONSTATADO? *</Text>
+                              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                                {([true, false] as const).map((valor) => (
+                                  <TouchableOpacity
+                                    key={String(valor)}
+                                    onPress={() => atualizarRascunhoAvaliacao(problemaEmVistoria.id, { problemaConstatado: valor, ...(valor ? {} : { resultado: 'improcedente' as const }) })}
+                                    style={{ flex: 1, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: rascunhoAtual.problemaConstatado === valor ? '#0B5EA8' : '#D4DFEA', backgroundColor: rascunhoAtual.problemaConstatado === valor ? '#E6F1FF' : '#FFFFFF', alignItems: 'center' }}
+                                  >
+                                    <Text style={{ color: '#0B2447', fontWeight: '600' }}>{valor ? 'Sim' : 'Não'}</Text>
+                                  </TouchableOpacity>
+                                ))}
+                              </View>
+                              <Text style={styles.inputLabel}>CLASSIFICAÇÃO *</Text>
+                              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                                {(['procedente', 'improcedente'] as const).map((resultado) => {
+                                  const ativo = rascunhoAtual.resultado === resultado;
+                                  const verde = resultado === 'procedente';
+                                  return (
+                                    <TouchableOpacity
+                                      key={resultado}
+                                      disabled={verde && rascunhoAtual.problemaConstatado !== true}
+                                      onPress={() => atualizarRascunhoAvaliacao(problemaEmVistoria.id, { resultado })}
+                                      style={{ flex: 1, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: verde ? '#287A46' : '#9A3232', backgroundColor: ativo ? (verde ? '#287A46' : '#9A3232') : '#FFFFFF', opacity: verde && rascunhoAtual.problemaConstatado !== true ? 0.45 : 1, alignItems: 'center' }}
+                                    >
+                                      <Text style={{ color: ativo ? '#FFFFFF' : verde ? '#287A46' : '#9A3232', fontWeight: '700' }}>
+                                        {verde ? 'Procedente' : 'Improcedente'}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </View>
+                              <Text style={styles.inputLabel}>PARECER TÉCNICO INDIVIDUAL *</Text>
+                              <TextInput
+                                style={[styles.input, styles.textArea]}
+                                value={rascunhoAtual.parecer}
+                                placeholder="Descreva a avaliação técnica deste problema"
+                                placeholderTextColor="#9AA6B4"
+                                multiline
+                                onChangeText={(parecer) => atualizarRascunhoAvaliacao(problemaEmVistoria.id, { parecer })}
+                              />
+                              {rascunhoAtual.resultado === 'improcedente' ? (
+                                <>
+                                  <Text style={styles.inputLabel}>JUSTIFICATIVA DA IMPROCEDÊNCIA *</Text>
+                                  <TextInput
+                                    style={[styles.input, styles.textArea]}
+                                    value={rascunhoAtual.justificativa}
+                                    placeholder="Explique por que este problema não é procedente"
+                                    placeholderTextColor="#9AA6B4"
+                                    multiline
+                                    onChangeText={(justificativa) => atualizarRascunhoAvaliacao(problemaEmVistoria.id, { justificativa })}
+                                  />
+                                </>
+                              ) : null}
+                              {erroAvaliacaoIndividual ? (
+                                <Text style={{ color: '#9A3232', marginBottom: 10 }}>{erroAvaliacaoIndividual}</Text>
+                              ) : null}
+                              {sucessoAvaliacaoIndividual ? (
+                                <Text style={{ color: '#287A46', marginBottom: 10 }}>{sucessoAvaliacaoIndividual}</Text>
+                              ) : null}
+                              <TouchableOpacity
+                                style={[styles.salvarFormularioVistoriaButton, salvandoAvaliacaoIndividual && styles.buttonDisabled]}
+                                disabled={salvandoAvaliacaoIndividual || !avaliacoesCarregadas}
+                                onPress={() => salvarAvaliacaoIndividual(problemaEmVistoria.id)}
+                              >
+                                {salvandoAvaliacaoIndividual ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons name="save-outline" size={20} color="#FFFFFF" />}
+                                <Text style={styles.salvarFormularioVistoriaButtonText}>
+                                  {salvandoAvaliacaoIndividual ? 'Salvando...' : avaliacaoAtual ? 'Atualizar avaliação deste problema' : 'Salvar avaliação deste problema'}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          ) : null}
+                          <Text style={{ color: todosProblemasCobertosAvaliados ? '#287A46' : '#9A6320', fontWeight: '600', marginTop: 14 }}>
+                            {todosProblemasCobertosAvaliados ? 'Todos os problemas cobertos já foram avaliados.' : 'Finalize a avaliação de todos os problemas dentro da garantia para concluir a vistoria.'}
+                          </Text>
+                        </View>
+
+
                         <Text
                           style={
                             styles.inputLabel
@@ -9548,6 +11481,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         >
                           RESPONSÁVEL PELA VISTORIA *
                         </Text>
+
 
                         <View
                           style={
@@ -9558,6 +11492,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             style={[
                               styles.responsavelModoButton,
 
+
                               modoResponsavelVistoria ===
                                 'funcionario' &&
                                 styles.responsavelModoButtonActive,
@@ -9567,13 +11502,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 'funcionario'
                               );
 
+
                               setResponsavelVistoriaNomeManual(
                                 ''
                               );
 
+
                               setDropdownResponsavelVistoriaAberto(
                                 false
                               );
+
 
                               setErroFormularioVistoria(
                                 ''
@@ -9591,9 +11529,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               }
                             />
 
+
                             <Text
                               style={[
                                 styles.responsavelModoText,
+
 
                                 modoResponsavelVistoria ===
                                   'funcionario' &&
@@ -9604,9 +11544,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </Text>
                           </TouchableOpacity>
 
+
                           <TouchableOpacity
                             style={[
                               styles.responsavelModoButton,
+
 
                               modoResponsavelVistoria ===
                                 'outro' &&
@@ -9617,13 +11559,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 'outro'
                               );
 
+
                               setResponsavelVistoriaId(
                                 ''
                               );
 
+
                               setDropdownResponsavelVistoriaAberto(
                                 false
                               );
+
 
                               setErroFormularioVistoria(
                                 ''
@@ -9641,9 +11586,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               }
                             />
 
+
                             <Text
                               style={[
                                 styles.responsavelModoText,
+
 
                                 modoResponsavelVistoria ===
                                   'outro' &&
@@ -9654,6 +11601,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </Text>
                           </TouchableOpacity>
                         </View>
+
 
                         {modoResponsavelVistoria ===
                         'funcionario' ? (
@@ -9676,6 +11624,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 style={[
                                   styles.categorySelectText,
 
+
                                   !responsavelVistoriaId &&
                                     styles.categoryPlaceholder,
                                 ]}
@@ -9691,6 +11640,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   'Selecione o funcionário'}
                               </Text>
 
+
                               <Ionicons
                                 name={
                                   dropdownResponsavelVistoriaAberto
@@ -9701,6 +11651,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 color="#42566D"
                               />
                             </TouchableOpacity>
+
 
                             {dropdownResponsavelVistoriaAberto ? (
                               <View
@@ -9716,6 +11667,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         responsavelVistoriaId ===
                                         item.responsavel_id;
 
+
                                       return (
                                         <TouchableOpacity
                                           key={
@@ -9729,13 +11681,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                               item.responsavel_id
                                             );
 
+
                                             setResponsavelVistoriaNomeManual(
                                               ''
                                             );
 
+
                                             setDropdownResponsavelVistoriaAberto(
                                               false
                                             );
+
 
                                             setErroFormularioVistoria(
                                               ''
@@ -9743,6 +11698,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                           }}
                                           style={[
                                             styles.categoryOption,
+
 
                                             ativo &&
                                               styles.categoryOptionActive,
@@ -9752,6 +11708,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                             style={[
                                               styles.categoryOptionText,
 
+
                                               ativo &&
                                                 styles.categoryOptionTextActive,
                                             ]}
@@ -9760,6 +11717,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                               item.nome
                                             }
                                           </Text>
+
 
                                           {ativo ? (
                                             <Ionicons
@@ -9799,6 +11757,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 texto
                               );
 
+
                               setErroFormularioVistoria(
                                 ''
                               );
@@ -9808,6 +11767,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           />
                         )}
 
+
                         <Text
                           style={
                             styles.inputLabel
@@ -9815,6 +11775,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         >
                           O PROBLEMA RELATADO FOI CONSTATADO?
                         </Text>
+
 
                         <View
                           style={
@@ -9825,6 +11786,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             style={[
                               styles.constatacaoButton,
 
+
                               problemaConstatado ===
                                 true &&
                                 styles.constatacaoButtonActive,
@@ -9834,9 +11796,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 true
                               );
 
+
                               setErroFormularioVistoria(
                                 ''
                               );
+
 
                               setSucessoFormularioVistoria(
                                 ''
@@ -9854,9 +11818,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               }
                             />
 
+
                             <Text
                               style={[
                                 styles.constatacaoButtonText,
+
 
                                 problemaConstatado ===
                                   true &&
@@ -9867,9 +11833,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </Text>
                           </TouchableOpacity>
 
+
                           <TouchableOpacity
                             style={[
                               styles.constatacaoButton,
+
 
                               problemaConstatado ===
                                 false &&
@@ -9880,9 +11848,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 false
                               );
 
+
                               setErroFormularioVistoria(
                                 ''
                               );
+
 
                               setSucessoFormularioVistoria(
                                 ''
@@ -9900,9 +11870,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               }
                             />
 
+
                             <Text
                               style={[
                                 styles.constatacaoButtonText,
+
 
                                 problemaConstatado ===
                                   false &&
@@ -9914,43 +11886,6 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           </TouchableOpacity>
                         </View>
 
-                        <Text
-                          style={
-                            styles.inputLabel
-                          }
-                        >
-                          PARECER TÉCNICO *
-                        </Text>
-
-                        <TextInput
-                          style={[
-                            styles.input,
-                            styles.textArea,
-                          ]}
-                          value={
-                            parecerTecnico
-                          }
-                          placeholder="Descreva o que foi encontrado durante a vistoria."
-                          placeholderTextColor="#9AA6B4"
-                          multiline
-                          numberOfLines={5}
-                          textAlignVertical="top"
-                          onChangeText={(
-                            texto
-                          ) => {
-                            setParecerTecnico(
-                              texto
-                            );
-
-                            setErroFormularioVistoria(
-                              ''
-                            );
-
-                            setSucessoFormularioVistoria(
-                              ''
-                            );
-                          }}
-                        />
 
                         <Text
                           style={
@@ -9959,6 +11894,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         >
                           OBSERVAÇÕES DA VISTORIA
                         </Text>
+
 
                         <TextInput
                           style={[
@@ -9980,15 +11916,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               texto
                             );
 
+
                             setErroFormularioVistoria(
                               ''
                             );
+
 
                             setSucessoFormularioVistoria(
                               ''
                             );
                           }}
                         />
+
 
                         <Text
                           style={
@@ -9998,6 +11937,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           FOTOS DA VISTORIA
                         </Text>
 
+
                         <Text
                           style={
                             styles.fotosVistoriaAjuda
@@ -10005,6 +11945,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         >
                           Adicione fotos do que foi constatado no imóvel. Você pode selecionar até 10 imagens.
                         </Text>
+
 
                         <TouchableOpacity
                           style={
@@ -10023,6 +11964,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             color="#0B5EA8"
                           />
 
+
                           <Text
                             style={
                               styles.adicionarFotosVistoriaButtonText
@@ -10031,6 +11973,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             + Adicionar fotos
                           </Text>
                         </TouchableOpacity>
+
 
                         {fotosVistoriaPendentes.length >
                         0 ? (
@@ -10046,6 +11989,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             >
                               Fotos aguardando salvamento
                             </Text>
+
 
                             <View
                               style={
@@ -10074,6 +12018,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       resizeMode="cover"
                                     />
 
+
                                     <TouchableOpacity
                                       style={
                                         styles.removerFotoVistoriaButton
@@ -10090,6 +12035,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         color="#FFFFFF"
                                       />
                                     </TouchableOpacity>
+
 
                                     <View
                                       style={
@@ -10111,6 +12057,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           </View>
                         ) : null}
 
+
                         {carregandoFotosVistoria ? (
                           <View
                             style={
@@ -10122,6 +12069,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               color="#0B5EA8"
                             />
 
+
                             <Text
                               style={
                                 styles.fotosVistoriaLoadingText
@@ -10131,6 +12079,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </Text>
                           </View>
                         ) : null}
+
 
                         {!carregandoFotosVistoria &&
                         fotosVistoriaSalvas.length >
@@ -10147,6 +12096,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             >
                               Fotos já salvas
                             </Text>
+
 
                             <View
                               style={
@@ -10190,6 +12140,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       </View>
                                     )}
 
+
                                     <View
                                       style={
                                         styles.fotoVistoriaSalvaBadge
@@ -10200,6 +12151,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         size={13}
                                         color="#287A46"
                                       />
+
 
                                       <Text
                                         style={
@@ -10216,6 +12168,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           </View>
                         ) : null}
 
+
                         {erroFormularioVistoria ? (
                           <View
                             style={
@@ -10227,6 +12180,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               size={19}
                               color="#9A3232"
                             />
+
 
                             <Text
                               style={
@@ -10240,6 +12194,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           </View>
                         ) : null}
 
+
                         {sucessoFormularioVistoria ? (
                           <View
                             style={
@@ -10251,6 +12206,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               size={20}
                               color="#287A46"
                             />
+
 
                             <Text
                               style={
@@ -10264,9 +12220,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           </View>
                         ) : null}
 
+
                         <TouchableOpacity
                           style={[
                             styles.salvarFormularioVistoriaButton,
+
 
                             salvandoFormularioVistoria &&
                               styles.buttonDisabled,
@@ -10291,6 +12249,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             />
                           )}
 
+
                           <Text
                             style={
                               styles.salvarFormularioVistoriaButtonText
@@ -10304,6 +12263,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 : 'Salvar vistoria'}
                           </Text>
                         </TouchableOpacity>
+
 
                         <View
                           style={
@@ -10321,6 +12281,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               color="#0B2447"
                             />
 
+
                             <View
                               style={{
                                 flex: 1,
@@ -10334,6 +12295,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 Finalizar vistoria
                               </Text>
 
+
                               <Text
                                 style={
                                   styles.finalizarVistoriaText
@@ -10344,148 +12306,23 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </View>
                           </View>
 
-                          <Text
-                            style={
-                              styles.inputLabel
-                            }
-                          >
-                            RESULTADO DA VISTORIA
-                          </Text>
 
-                          <View
-                            style={
-                              styles.resultadoVistoriaRow
-                            }
-                          >
-                            <TouchableOpacity
-                              style={[
-                                styles.resultadoVistoriaButton,
-
-                                resultadoVistoria ===
-                                  'aprovada' &&
-                                  styles.resultadoVistoriaButtonAprovada,
-                              ]}
-                              onPress={() => {
-                                setResultadoVistoria(
-                                  'aprovada'
-                                );
-
-                                setJustificativaResultado(
-                                  ''
-                                );
-
-                                setErroFinalizacaoVistoria(
-                                  ''
-                                );
-                              }}
-                            >
-                              <Ionicons
-                                name="checkmark-circle-outline"
-                                size={20}
-                                color={
-                                  resultadoVistoria ===
-                                  'aprovada'
-                                    ? '#FFFFFF'
-                                    : '#287A46'
-                                }
-                              />
-
-                              <Text
-                                style={[
-                                  styles.resultadoVistoriaButtonText,
-
-                                  resultadoVistoria ===
-                                    'aprovada' &&
-                                    styles.resultadoVistoriaButtonTextActive,
-                                ]}
-                              >
-                                Aprovada para execução
-                              </Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                              style={[
-                                styles.resultadoVistoriaButton,
-
-                                resultadoVistoria ===
-                                  'nao_aprovada' &&
-                                  styles.resultadoVistoriaButtonNaoAprovada,
-                              ]}
-                              onPress={() => {
-                                setResultadoVistoria(
-                                  'nao_aprovada'
-                                );
-
-                                setErroFinalizacaoVistoria(
-                                  ''
-                                );
-                              }}
-                            >
-                              <Ionicons
-                                name="close-circle-outline"
-                                size={20}
-                                color={
-                                  resultadoVistoria ===
-                                  'nao_aprovada'
-                                    ? '#FFFFFF'
-                                    : '#9A3232'
-                                }
-                              />
-
-                              <Text
-                                style={[
-                                  styles.resultadoVistoriaButtonText,
-
-                                  resultadoVistoria ===
-                                    'nao_aprovada' &&
-                                    styles.resultadoVistoriaButtonTextActive,
-                                ]}
-                              >
-                                Não aprovada
-                              </Text>
-                            </TouchableOpacity>
-
-
+                          <View style={{ padding: 12, backgroundColor: '#F0F5FA', borderRadius: 9, marginBottom: 12 }}>
+                            <Text style={{ color: '#0B2447', fontWeight: '700', marginBottom: 6 }}>
+                              Resultado geral calculado pelas avaliações individuais
+                            </Text>
+                            <Text style={{ color: '#42566D' }}>
+                              {!todosProblemasCobertosAvaliados
+                                ? 'Pendente: avalie todos os problemas dentro da garantia.'
+                                : existeProblemaProcedente
+                                  ? 'Aprovada para os serviços procedentes. Os improcedentes não devem ser executados.'
+                                  : 'Não aprovada: nenhum problema coberto foi considerado procedente.'}
+                            </Text>
+                            <Text style={{ color: '#42566D', marginTop: 6 }}>
+                              O agendamento independente de execução por serviço será habilitado na próxima etapa.
+                            </Text>
                           </View>
 
-                          {resultadoVistoria ===
-                          'nao_aprovada' ? (
-                            <>
-                              <Text
-                                style={
-                                  styles.inputLabel
-                                }
-                              >
-                                JUSTIFICATIVA *
-                              </Text>
-
-                              <TextInput
-                                style={[
-                                  styles.input,
-                                  styles.textArea,
-                                ]}
-                                value={
-                                  justificativaResultado
-                                }
-                                placeholder="Informe o motivo da não aprovação da vistoria."
-                                placeholderTextColor="#9AA6B4"
-                                multiline
-                                numberOfLines={4}
-                                textAlignVertical="top"
-                                onChangeText={(
-                                  texto
-                                ) => {
-                                  setJustificativaResultado(
-                                    texto
-                                  );
-
-                                  setErroFinalizacaoVistoria(
-                                    ''
-                                  );
-                                }}
-                              />
-                            </>
-                          ) : null}
 
                           {erroFinalizacaoVistoria ? (
                             <View
@@ -10499,6 +12336,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 color="#9A3232"
                               />
 
+
                               <Text
                                 style={
                                   styles.messageErrorText
@@ -10511,9 +12349,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </View>
                           ) : null}
 
+
                           <TouchableOpacity
                             style={[
                               styles.finalizarVistoriaButton,
+
 
                               finalizandoVistoria &&
                                 styles.buttonDisabled,
@@ -10538,6 +12378,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               />
                             )}
 
+
                             <Text
                               style={
                                 styles.finalizarVistoriaButtonText
@@ -10551,6 +12392,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         </View>
                       </View>
                     ) : null}
+
 
                     {vistoriaTecnica?.finalizada_em ? (
                       <View
@@ -10570,6 +12412,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           }
                           style={[
                             styles.vistoriaFinalizadaBox,
+
 
                             solicitacao.status ===
                               'nao_aprovada'
@@ -10593,6 +12436,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             }
                           />
 
+
                           <View
                             style={{
                               flex: 1,
@@ -10606,6 +12450,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               Vistoria finalizada
                             </Text>
 
+
                             <Text
                               style={
                                 styles.vistoriaFinalizadaText
@@ -10617,6 +12462,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </Text>
                           </View>
 
+
                           <Ionicons
                             name={
                               mostrarDetalhesVistoriaFinalizada
@@ -10627,6 +12473,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             color="#42566D"
                           />
                         </TouchableOpacity>
+
 
                         {mostrarDetalhesVistoriaFinalizada ? (
                           <View
@@ -10646,6 +12493,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 }
                               />
 
+
                               <WarrantyInfo
                                 label="Registrada por"
                                 value={
@@ -10653,6 +12501,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   '-'
                                 }
                               />
+
 
                               <WarrantyInfo
                                 label="Início"
@@ -10663,6 +12512,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 }
                               />
 
+
                               <WarrantyInfo
                                 label="Finalização"
                                 value={
@@ -10671,6 +12521,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   )
                                 }
                               />
+
 
                               <WarrantyInfo
                                 label="Problema constatado"
@@ -10684,6 +12535,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       : '-'
                                 }
                               />
+
 
                               <WarrantyInfo
                                 label="Resultado"
@@ -10699,6 +12551,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               />
                             </View>
 
+
                             <View
                               style={
                                 styles.vistoriaHistoricoBloco
@@ -10712,6 +12565,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 PARECER TÉCNICO
                               </Text>
 
+
                               <Text
                                 style={
                                   styles.vistoriaHistoricoTexto
@@ -10721,6 +12575,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   '-'}
                               </Text>
                             </View>
+
 
                             {vistoriaTecnica.observacoes ? (
                               <View
@@ -10736,6 +12591,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   OBSERVAÇÕES DA VISTORIA
                                 </Text>
 
+
                                 <Text
                                   style={
                                     styles.vistoriaHistoricoTexto
@@ -10747,6 +12603,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 </Text>
                               </View>
                             ) : null}
+
 
                             {fotosVistoriaSalvas.length >
                             0 ? (
@@ -10762,6 +12619,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 >
                                   FOTOS DA VISTORIA
                                 </Text>
+
 
                                 <View
                                   style={
@@ -10813,12 +12671,352 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       </View>
                     ) : null}
 
-                    {solicitacao.status ===
-                      'aprovada' ||
-                    solicitacao.status ===
-                      'em_execucao' ||
-                    solicitacao.status ===
-                      'concluida' ? (
+
+                    {/* =====================================================
+                       EXECUÇÃO INDEPENDENTE PARA CADA PROBLEMA PROCEDENTE
+                       A vistoria permanece única no protocolo.
+                    ===================================================== */}
+                    {['aprovada', 'em_execucao', 'concluida'].includes(solicitacao.status) &&
+                    avaliacoesIndividuais.length > 0 ? (
+                      <View style={{ paddingVertical: 18, gap: 15 }}>
+                        <Text style={styles.sectionTitle}>Agendamentos e execuções por problema</Text>
+                        <Text style={{ color: '#42566D', marginBottom: 5 }}>
+                          Cada problema procedente possui agenda e execução próprias.
+                          Problemas improcedentes ou fora da garantia não recebem execução.
+                        </Text>
+                        {erroServicos ? (
+                          <View style={styles.messageError}>
+                            <Text style={styles.messageErrorText}>{erroServicos}</Text>
+                          </View>
+                        ) : null}
+                        {sucessoServicos ? (
+                          <View style={styles.messageSuccess}>
+                            <Text style={styles.messageSuccessText}>{sucessoServicos}</Text>
+                          </View>
+                        ) : null}
+                        {problemasSolicitacao.map((problema) => {
+                          const servico = servicosIndividuais.find((x) => x.problema_id === problema.id);
+                          const avaliacao = avaliacoesIndividuais.find((x) => x.problema_id === problema.id);
+                          const coberto = ['dentro_da_garantia','dentro_garantia'].includes(problema.status_garantia ?? '');
+                          const autorizado = coberto && avaliacao?.resultado === 'procedente';
+                          const r = rascunhosExecucao[problema.id] ?? novoRascunhoExecucaoProblema();
+                          const ocupada = !!acaoServicoId;
+                          return (
+                            <View key={problema.id} style={{ borderWidth: 1, borderColor: '#CCD9E8', borderRadius: 14, backgroundColor: '#FFFFFF', padding: 16, gap: 10 }}>
+                              <Text style={{ color: '#0B2447', fontWeight: '800', fontSize: 16 }}>
+                                Problema {problema.numero}{problema.comodo ? ` • ${problema.comodo}` : ''}
+                              </Text>
+                              <Text style={{ color: '#42566D' }}>{problema.descricao_problema}</Text>
+                              <Text style={{ fontWeight: '700', color: autorizado ? '#287A46' : '#9A3232' }}>
+                                {!coberto ? 'Fora da garantia — sem execução' :
+                                  avaliacao?.resultado === 'improcedente' ? 'Improcedente — sem execução' :
+                                  autorizado ? 'Procedente — execução autorizada' : 'Aguardando avaliação técnica'}
+                              </Text>
+                              {autorizado ? (
+                                <View style={{ gap: 10 }}>
+                                  <Text style={{ color: '#0B2447', fontWeight: '700' }}>
+                                    Agendamento de execução — problema {problema.numero}
+                                  </Text>
+                                  {avaliacao?.servico_necessario ? (
+                                    <Text style={styles.execucaoIndividualAjuda}>
+                                      Serviço: {avaliacao.servico_necessario}
+                                    </Text>
+                                  ) : null}
+                                  {servico?.agendamento_id ? (
+                                    <View style={{ backgroundColor: '#F1F6FC', padding: 12, borderRadius: 10, gap: 5 }}>
+                                      <Text>Data: {servico.data_execucao ?? '-'}</Text>
+                                      <Text>Horário: {servico.hora_inicio?.slice(0,5)} às {servico.hora_fim?.slice(0,5)}</Text>
+                                      <Text>Responsável: {responsaveisFuncionarios.find(x => x.responsavel_id === servico.responsavel_id)?.nome ?? servico.responsavel_nome_manual ?? '-'}</Text>
+                                      <Text style={{ fontWeight: '700', color: servico.agendamento_status === 'confirmada' ? '#287A46' : '#0B5EA8' }}>
+                                        {servico.agendamento_status === 'confirmada' ? 'Confirmado pelo cliente' : 'Aguardando confirmação do cliente'}
+                                      </Text>
+                                      {!servico.execucao_id && solicitacao.status !== 'concluida' ? (
+                                        <TouchableOpacity disabled={ocupada} style={{ borderColor: '#9A3232', borderWidth: 1, borderRadius: 8, padding: 11 }} onPress={() => executarAcaoServico(problema.id, 'cancelar')}>
+                                          <Text style={{ color: '#9A3232', textAlign: 'center', fontWeight: '700' }}>Cancelar este agendamento</Text>
+                                        </TouchableOpacity>
+                                      ) : null}
+                                    </View>
+                                  ) : solicitacao.status !== 'concluida' ? (
+                                    <View style={{ gap: 8 }}>
+                                      {/* Calendário individual: datas e períodos disponíveis, sem digitação. */}
+                                      <View style={{ gap: 6, marginBottom: 4 }}>
+                                        <Text style={{ color: '#0B2447', fontSize: 13, fontWeight: '800' }}>
+                                          Escolha uma data e um horário disponíveis
+                                        </Text>
+                                        <Text style={{ color: '#697789', fontSize: 11 }}>
+                                          Todos os dias: manhã das 08:00 às 11:00 ou tarde das 14:00 às 17:00.
+                                        </Text>
+                                      </View>
+                                      {carregandoHorariosExecucao ? (
+                                        <View style={styles.carregandoAgendaFuncionario}>
+                                          <ActivityIndicator color="#0B2447" />
+                                          <Text style={styles.textoGerenciarAgendaFuncionario}>
+                                            Carregando datas e horários disponíveis...
+                                          </Text>
+                                        </View>
+                                      ) : (
+                                        <AgendaCalendarPicker
+                                          horarios={horariosExecucaoDisponiveis}
+                                          dataSelecionada={r.data}
+                                          horarioSelecionadoId={r.horarioId}
+                                          onSelecionarData={(data) =>
+                                            alterarRascunhoServico(problema.id, {
+                                              data,
+                                              horarioId: '',
+                                              inicio: '',
+                                              fim: '',
+                                            })
+                                          }
+                                          onSelecionarHorario={(horario) =>
+                                            alterarRascunhoServico(problema.id, {
+                                              data: horario.data_vistoria,
+                                              horarioId: horario.horario_vistoria_id,
+                                              inicio: horario.hora_inicio.slice(0, 5),
+                                              fim: horario.hora_fim.slice(0, 5),
+                                            })
+                                          }
+                                        />
+                                      )}
+                                      {r.data && r.horarioId ? (
+                                        <View style={styles.agendamentoExecucaoConfirmado}>
+                                          <Ionicons name="checkmark-circle-outline" size={22} color="#287A46" />
+                                          <View style={{ flex: 1 }}>
+                                            <Text style={styles.agendamentoExecucaoConfirmadoTitle}>
+                                              Período selecionado para o problema {problema.numero}
+                                            </Text>
+                                            <Text style={styles.agendamentoExecucaoConfirmadoValue}>
+                                              {formatarData(r.data)} • {r.inicio} às {r.fim}
+                                            </Text>
+                                          </View>
+                                        </View>
+                                      ) : null}
+                                      <Text style={styles.inputLabel}>RESPONSÁVEL CADASTRADO</Text>
+                                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                                        {responsaveisFuncionarios.map((func) => (
+                                          <TouchableOpacity key={func.responsavel_id} onPress={() => alterarRascunhoServico(problema.id, {responsavelId:func.responsavel_id, responsavelManual:''})}
+                                            style={{ padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#0B5EA8', backgroundColor: r.responsavelId === func.responsavel_id ? '#D9ECFC' : '#FFFFFF' }}>
+                                            <Text style={{ color: '#0B2447' }}>{func.nome}</Text>
+                                          </TouchableOpacity>
+                                        ))}
+                                      </View>
+                                      <Text style={styles.inputLabel}>OU OUTRO RESPONSÁVEL</Text>
+                                      <TextInput style={styles.input} value={r.responsavelManual} placeholder="Nome do profissional" onChangeText={(v) => alterarRascunhoServico(problema.id, {responsavelManual:v, responsavelId:''})}/>
+                                      <TouchableOpacity disabled={ocupada} onPress={() => executarAcaoServico(problema.id, 'propor')}
+                                        style={{ backgroundColor: '#0B2447', borderRadius: 9, padding: 14, opacity: ocupada ? .5 : 1 }}>
+                                        <Text style={{ color: '#FFFFFF', textAlign: 'center', fontWeight: '800' }}>Agendar execução deste problema</Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                  ) : null}
+                                  {servico?.agendamento_status === 'confirmada' ? (
+                                    <View style={styles.execucaoIndividualSecao}>
+                                      <View style={styles.execucaoIndividualTituloLinha}>
+                                        <Ionicons name="construct-outline" size={19} color="#0B2447" />
+                                        <Text style={styles.execucaoIndividualTitulo}>
+                                          Execução do serviço • problema {problema.numero}
+                                        </Text>
+                                      </View>
+
+                                      {/* Exibe o que foi salvo, sem confundir o início real com o agendamento. */}
+                                      {servico.execucao_id ? (
+                                        <View style={styles.execucaoIndividualResumo}>
+                                          <View style={styles.execucaoIndividualResumoLinha}>
+                                            <Ionicons name="time-outline" size={17} color="#0B5EA8" />
+                                            <Text style={styles.execucaoIndividualResumoTexto}>
+                                              Início real: {formatarInicioRealDoServico(servico.iniciada_em)}
+                                            </Text>
+                                          </View>
+                                          <View style={styles.execucaoIndividualResumoLinha}>
+                                            <Ionicons name="person-outline" size={17} color="#0B5EA8" />
+                                            <Text style={styles.execucaoIndividualResumoTexto}>
+                                              Responsável: {
+                                                responsaveisFuncionarios.find(x => x.responsavel_id === servico.responsavel_execucao_id)?.nome
+                                                  ?? servico.responsavel_execucao_nome_manual
+                                                  ?? responsaveisFuncionarios.find(x => x.responsavel_id === servico.responsavel_id)?.nome
+                                                  ?? servico.responsavel_nome_manual
+                                                  ?? 'Não informado'
+                                              }
+                                            </Text>
+                                          </View>
+                                          {servico.concluida_em ? (
+                                            <View style={styles.execucaoIndividualResumoLinha}>
+                                              <Ionicons name="checkmark-circle-outline" size={17} color="#287A46" />
+                                              <Text style={styles.execucaoIndividualResumoTexto}>
+                                                Conclusão: {formatarInicioRealDoServico(servico.concluida_em)}
+                                              </Text>
+                                            </View>
+                                          ) : null}
+                                        </View>
+                                      ) : null}
+
+                                      {servico.execucao_status === 'concluida' ? (
+                                        <View style={styles.execucaoIndividualConcluido}>
+                                          <Ionicons name="checkmark-circle" size={20} color="#287A46" />
+                                          <View style={{ flex: 1, gap: 3 }}>
+                                            <Text style={styles.execucaoIndividualConcluidoTitulo}>Serviço concluído</Text>
+                                            <Text style={styles.execucaoIndividualResumoTexto}>
+                                              {servico.conclusao || 'Execução finalizada.'}
+                                            </Text>
+                                          </View>
+                                        </View>
+                                      ) : (
+                                        <View style={styles.execucaoIndividualFormulario}>
+                                          <Text style={styles.execucaoIndividualSubtitulo}>Dados reais da execução</Text>
+                                          <Text style={styles.execucaoIndividualAjuda}>
+                                            Registre o início efetivo do serviço e quem o executou, mesmo que seja diferente do agendamento.
+                                          </Text>
+
+                                          <View style={styles.execucaoIndividualLinhaCampos}>
+                                            <View style={styles.execucaoIndividualColunaCampo}>
+                                              <Text style={styles.execucaoIndividualRotulo}>DATA DO INÍCIO *</Text>
+                                              <TextInput
+                                                style={styles.execucaoIndividualCampo}
+                                                value={r.dataRealInicio}
+                                                placeholder="DD/MM/AAAA"
+                                                placeholderTextColor="#9AA6B4"
+                                                keyboardType="numeric"
+                                                maxLength={10}
+                                                editable={!ocupada}
+                                                onChangeText={(texto) => alterarRascunhoServico(problema.id, {
+                                                  dataRealInicio: formatarDataDigitada(texto),
+                                                })}
+                                              />
+                                            </View>
+                                            <View style={styles.execucaoIndividualColunaCampo}>
+                                              <Text style={styles.execucaoIndividualRotulo}>HORA DO INÍCIO *</Text>
+                                              <TextInput
+                                                style={styles.execucaoIndividualCampo}
+                                                value={r.horaRealInicio}
+                                                placeholder="HH:MM"
+                                                placeholderTextColor="#9AA6B4"
+                                                keyboardType="numeric"
+                                                maxLength={5}
+                                                editable={!ocupada}
+                                                onChangeText={(texto) => alterarRascunhoServico(problema.id, {
+                                                  horaRealInicio: formatarHoraDigitada(texto),
+                                                })}
+                                              />
+                                            </View>
+                                          </View>
+
+                                          <Text style={styles.execucaoIndividualRotulo}>RESPONSÁVEL PELA EXECUÇÃO *</Text>
+                                          <View style={styles.execucaoIndividualOpcoes}>
+                                            {responsaveisFuncionarios.map((func) => {
+                                              const selecionado = r.responsavelRealId === func.responsavel_id;
+                                              return (
+                                                <TouchableOpacity
+                                                  key={func.responsavel_id}
+                                                  disabled={ocupada}
+                                                  onPress={() => alterarRascunhoServico(problema.id, {
+                                                    responsavelRealId: func.responsavel_id,
+                                                    responsavelRealManual: '',
+                                                  })}
+                                                  style={[
+                                                    styles.execucaoIndividualOpcao,
+                                                    selecionado && styles.execucaoIndividualOpcaoSelecionada,
+                                                  ]}
+                                                >
+                                                  {selecionado ? (
+                                                    <Ionicons name="checkmark-circle" size={15} color="#0B5EA8" />
+                                                  ) : null}
+                                                  <Text style={[
+                                                    styles.execucaoIndividualOpcaoTexto,
+                                                    selecionado && styles.execucaoIndividualOpcaoTextoSelecionada,
+                                                  ]}>
+                                                    {func.nome}
+                                                  </Text>
+                                                </TouchableOpacity>
+                                              );
+                                            })}
+                                          </View>
+                                          <Text style={styles.execucaoIndividualAjuda}>Outro profissional (não cadastrado):</Text>
+                                          <TextInput
+                                            style={styles.execucaoIndividualCampo}
+                                            value={r.responsavelRealManual}
+                                            placeholder="Nome completo do responsável"
+                                            placeholderTextColor="#9AA6B4"
+                                            editable={!ocupada}
+                                            onChangeText={(texto) => alterarRascunhoServico(problema.id, {
+                                              responsavelRealManual: texto,
+                                              responsavelRealId: '',
+                                            })}
+                                          />
+                                          <TouchableOpacity
+                                            disabled={ocupada}
+                                            onPress={() => executarAcaoServico(problema.id,
+                                              servico.execucao_id ? 'atualizar_inicio' : 'iniciar')}
+                                            style={[styles.execucaoIndividualBotao, ocupada && styles.execucaoIndividualBotaoDesabilitado]}
+                                          >
+                                            <Ionicons name={servico.execucao_id ? 'save-outline' : 'play-outline'} size={17} color="#FFFFFF" />
+                                            <Text style={styles.execucaoIndividualBotaoTexto}>
+                                              {servico.execucao_id ? 'Salvar dados do início' : 'Iniciar execução deste serviço'}
+                                            </Text>
+                                          </TouchableOpacity>
+                                        </View>
+                                      )}
+
+                                      {servico.execucao_id && servico.execucao_status !== 'concluida' ? (
+                                        <View style={styles.execucaoIndividualEtapas}>
+                                          <Text style={styles.execucaoIndividualSubtitulo}>Registro do serviço</Text>
+                                          <Text style={styles.execucaoIndividualRotulo}>SOLUÇÃO TÉCNICA *</Text>
+                                          <TextInput
+                                            style={styles.execucaoIndividualTextoLongo}
+                                            multiline
+                                            textAlignVertical="top"
+                                            value={r.solucao}
+                                            placeholder="Descreva o serviço realizado"
+                                            placeholderTextColor="#9AA6B4"
+                                            editable={!ocupada}
+                                            onChangeText={(texto) => alterarRascunhoServico(problema.id, { solucao: texto })}
+                                          />
+                                          <TouchableOpacity
+                                            disabled={ocupada}
+                                            onPress={() => executarAcaoServico(problema.id, 'salvar')}
+                                            style={[styles.execucaoIndividualBotao, ocupada && styles.execucaoIndividualBotaoDesabilitado]}
+                                          >
+                                            <Ionicons name="save-outline" size={17} color="#FFFFFF" />
+                                            <Text style={styles.execucaoIndividualBotaoTexto}>Salvar solução técnica</Text>
+                                          </TouchableOpacity>
+
+                                          <Text style={styles.execucaoIndividualRotulo}>CONCLUSÃO DO SERVIÇO *</Text>
+                                          <TextInput
+                                            style={styles.execucaoIndividualTextoLongo}
+                                            multiline
+                                            textAlignVertical="top"
+                                            value={r.conclusao}
+                                            placeholder="Descreva o resultado do serviço"
+                                            placeholderTextColor="#9AA6B4"
+                                            editable={!ocupada}
+                                            onChangeText={(texto) => alterarRascunhoServico(problema.id, { conclusao: texto })}
+                                          />
+                                          <TouchableOpacity
+                                            disabled={ocupada || !servico.solucao_tecnica}
+                                            onPress={() => executarAcaoServico(problema.id, 'finalizar')}
+                                            style={[
+                                              styles.execucaoIndividualBotao,
+                                              styles.execucaoIndividualBotaoFinalizar,
+                                              (ocupada || !servico.solucao_tecnica) && styles.execucaoIndividualBotaoDesabilitado,
+                                            ]}
+                                          >
+                                            <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" />
+                                            <Text style={styles.execucaoIndividualBotaoTexto}>Finalizar apenas este serviço</Text>
+                                          </TouchableOpacity>
+                                        </View>
+                                      ) : null}
+                                    </View>
+                                  ) : null}
+                                </View>
+                              ) : null}
+                            </View>
+                          );
+                        })}
+                      </View>
+                    ) : null}
+
+
+                    {avaliacoesIndividuais.length === 0 && (
+                      solicitacao.status === 'aprovada' ||
+                      solicitacao.status === 'em_execucao' ||
+                      solicitacao.status === 'concluida') ? (
                       <View
                         style={
                           styles.execucaoServicoBox
@@ -10841,6 +13039,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             />
                           </View>
 
+
                           <View
                             style={{
                               flex: 1,
@@ -10853,6 +13052,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             >
                               Execução do serviço
                             </Text>
+
 
                             <Text
                               style={
@@ -10869,6 +13069,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </Text>
                           </View>
                         </View>
+
 
                         <View
                           style={
@@ -10888,6 +13089,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               Nº DO TERMO DE SERVIÇO
                             </Text>
 
+
                             <Text
                               style={
                                 styles.execucaoServicoInfoValue
@@ -10900,6 +13102,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 : 'Será gerado ao iniciar'}
                             </Text>
                           </View>
+
 
                           {execucaoServico?.responsavel_servico_nome ? (
                             <View
@@ -10915,6 +13118,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 REGISTRADO POR
                               </Text>
 
+
                               <Text
                                 style={
                                   styles.execucaoServicoInfoValue
@@ -10926,6 +13130,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               </Text>
                             </View>
                           ) : null}
+
 
                           {execucaoServico?.iniciada_em ? (
                             <View
@@ -10941,6 +13146,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 INÍCIO
                               </Text>
 
+
                               <Text
                                 style={
                                   styles.execucaoServicoInfoValue
@@ -10954,6 +13160,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           ) : null}
                         </View>
 
+
                         {erroExecucao ? (
                           <View
                             style={
@@ -10966,6 +13173,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               color="#9A3232"
                             />
 
+
                             <Text
                               style={
                                 styles.messageErrorText
@@ -10975,6 +13183,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </Text>
                           </View>
                         ) : null}
+
 
                         {sucessoExecucao ? (
                           <View
@@ -10988,6 +13197,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               color="#287A46"
                             />
 
+
                             <Text
                               style={
                                 styles.messageSuccessText
@@ -10997,6 +13207,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </Text>
                           </View>
                         ) : null}
+
 
                         {solicitacao.status ===
                         'aprovada' ? (
@@ -11016,6 +13227,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 color="#0B5EA8"
                               />
 
+
                               <View
                                 style={{
                                   flex: 1,
@@ -11029,6 +13241,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   Agendamento da execução
                                 </Text>
 
+
                                 <Text
                                   style={
                                     styles.agendamentoExecucaoSubtitle
@@ -11038,6 +13251,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 </Text>
                               </View>
                             </View>
+
 
                             {carregandoAgendamentoExecucao ? (
                               <View
@@ -11050,6 +13264,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   color="#0B5EA8"
                                 />
 
+
                                 <Text
                                   style={
                                     styles.agendamentoExecucaoLoadingText
@@ -11059,6 +13274,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 </Text>
                               </View>
                             ) : null}
+
 
                             {erroAgendamentoExecucao ? (
                               <View
@@ -11072,6 +13288,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   color="#9A3232"
                                 />
 
+
                                 <Text
                                   style={
                                     styles.messageErrorText
@@ -11083,6 +13300,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 </Text>
                               </View>
                             ) : null}
+
 
                             {sucessoAgendamentoExecucao ? (
                               <View
@@ -11096,6 +13314,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   color="#287A46"
                                 />
 
+
                                 <Text
                                   style={
                                     styles.messageSuccessText
@@ -11107,6 +13326,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 </Text>
                               </View>
                             ) : null}
+
 
                             {propostaAgendamentoExecucao?.status ===
                             'aguardando_cliente' ? (
@@ -11122,6 +13342,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     color="#8A6418"
                                   />
 
+
                                   <View
                                     style={{
                                       flex: 1,
@@ -11135,6 +13356,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       Aguardando confirmação do cliente
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.agendamentoExecucaoStatusText
@@ -11144,6 +13366,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     </Text>
                                   </View>
                                 </View>
+
 
                                 <View
                                   style={
@@ -11163,6 +13386,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       AGENDAMENTO PROPOSTO
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.agendamentoExecucaoOpcaoValue
@@ -11179,6 +13403,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </View>
                                 </View>
 
+
                                 <TouchableOpacity
                                   style={
                                     styles.whatsAppVistoriaButton
@@ -11194,6 +13419,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     color="#FFFFFF"
                                   />
 
+
                                   <View
                                     style={{
                                       flex: 1,
@@ -11207,6 +13433,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       Avisar cliente no WhatsApp
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.whatsAppVistoriaButtonSubtext
@@ -11215,6 +13442,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       Abre a conversa com o agendamento da execução pronto para enviar.
                                     </Text>
                                   </View>
+
 
                                   <Ionicons
                                     name="open-outline"
@@ -11237,6 +13465,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     color="#287A46"
                                   />
 
+
                                   <View
                                     style={{
                                       flex: 1,
@@ -11249,6 +13478,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     >
                                       Execução confirmada pelo cliente
                                     </Text>
+
 
                                     <Text
                                       style={
@@ -11266,6 +13496,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </View>
                                 </View>
 
+
                                 <TouchableOpacity
                                   style={
                                     styles.whatsAppVistoriaButton
@@ -11281,6 +13512,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     color="#FFFFFF"
                                   />
 
+
                                   <View
                                     style={{
                                       flex: 1,
@@ -11294,6 +13526,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       Enviar lembrete no WhatsApp
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.whatsAppVistoriaButtonSubtext
@@ -11303,12 +13536,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     </Text>
                                   </View>
 
+
                                   <Ionicons
                                     name="open-outline"
                                     size={18}
                                     color="#FFFFFF"
                                   />
                                 </TouchableOpacity>
+
 
                                 <View
                                   style={{
@@ -11323,6 +13558,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     DATA REAL DO INÍCIO *
                                   </Text>
 
+
                                   <TextInput
                                     style={
                                       styles.input
@@ -11330,9 +13566,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     value={
                                       dataRealInicioExecucao
                                     }
-                                    onChangeText={
-                                      setDataRealInicioExecucao
-                                    }
+                                    onChangeText={(texto) => setDataRealInicioExecucao(formatarDataDigitada(texto))}
                                     placeholder="DD/MM/AAAA"
                                     keyboardType="numeric"
                                     maxLength={10}
@@ -11340,6 +13574,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       !iniciandoExecucao
                                     }
                                   />
+
 
                                   <Text
                                     style={
@@ -11349,6 +13584,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     HORA REAL DO INÍCIO *
                                   </Text>
 
+
                                   <TextInput
                                     style={
                                       styles.input
@@ -11356,9 +13592,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     value={
                                       horaRealInicioExecucao
                                     }
-                                    onChangeText={
-                                      setHoraRealInicioExecucao
-                                    }
+                                    onChangeText={(texto) => setHoraRealInicioExecucao(formatarHoraDigitada(texto))}
                                     placeholder="HH:MM"
                                     keyboardType="numeric"
                                     maxLength={5}
@@ -11366,6 +13600,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       !iniciandoExecucao
                                     }
                                   />
+
 
                                   <Text
                                     style={{
@@ -11380,9 +13615,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </Text>
                                 </View>
 
+
                                 <TouchableOpacity
                                   style={[
                                     styles.iniciarExecucaoButton,
+
 
                                     (iniciandoExecucao ||
                                       !dataRealInicioExecucao.trim() ||
@@ -11411,6 +13648,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     />
                                   )}
 
+
                                   <Text
                                     style={
                                       styles.iniciarExecucaoButtonText
@@ -11437,6 +13675,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       color="#9A5E16"
                                     />
 
+
                                     <View
                                       style={{
                                         flex: 1,
@@ -11450,6 +13689,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         Cliente solicitou novas datas
                                       </Text>
 
+
                                       <Text
                                         style={
                                           styles.agendamentoExecucaoReagendamentoText
@@ -11462,6 +13702,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </View>
                                 ) : null}
 
+
                                 <Text
                                   style={
                                     styles.agendamentoExecucaoFormTitle
@@ -11469,6 +13710,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 >
                                   Escolha a data e o horário da execução
                                 </Text>
+
 
                                 <View
                                   style={
@@ -11480,6 +13722,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     size={20}
                                     color="#0B2447"
                                   />
+
 
                                   <View
                                     style={{
@@ -11494,6 +13737,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       Agendamento da execução
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.execucaoCalendarioText
@@ -11504,6 +13748,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </View>
                                 </View>
 
+
                                 {carregandoHorariosExecucao ? (
                                   <View
                                     style={
@@ -11513,6 +13758,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     <ActivityIndicator
                                       color="#0B2447"
                                     />
+
 
                                     <Text
                                       style={
@@ -11542,6 +13788,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   />
                                 )}
 
+
                                 {dataExecucaoSelecionada &&
                                 horaExecucaoSelecionada ? (
                                   <View
@@ -11555,6 +13802,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       color="#287A46"
                                     />
 
+
                                     <View
                                       style={{
                                         flex: 1,
@@ -11567,6 +13815,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       >
                                         Agendamento selecionado
                                       </Text>
+
 
                                       <Text
                                         style={
@@ -11585,9 +13834,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </View>
                                 ) : null}
 
+
                                 <TouchableOpacity
                                   style={[
                                     styles.enviarPropostaExecucaoButton,
+
 
                                     enviandoPropostaExecucao &&
                                       styles.buttonDisabled,
@@ -11611,6 +13862,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       color="#FFFFFF"
                                     />
                                   )}
+
 
                                   <Text
                                     style={
@@ -11639,6 +13891,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 color="#0B5EA8"
                               />
 
+
                               <Text
                                 style={
                                   styles.execucaoEmAndamentoText
@@ -11647,6 +13900,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 Execução em andamento
                               </Text>
                             </View>
+
 
                             <View
                               style={
@@ -11664,6 +13918,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   color="#0B2447"
                                 />
 
+
                                 <View
                                   style={{
                                     flex: 1,
@@ -11677,6 +13932,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     Registro da execução
                                   </Text>
 
+
                                   <Text
                                     style={
                                       styles.formularioExecucaoText
@@ -11687,6 +13943,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 </View>
                               </View>
 
+
                               <Text
                                 style={
                                   styles.inputLabel
@@ -11694,6 +13951,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               >
                                 RESPONSÁVEL PELA EXECUÇÃO *
                               </Text>
+
 
                               <View
                                 style={
@@ -11704,6 +13962,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   style={[
                                     styles.responsavelModoButton,
 
+
                                     modoResponsavelExecucao ===
                                       'funcionario' &&
                                       styles.responsavelModoButtonActive,
@@ -11713,13 +13972,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       'funcionario'
                                     );
 
+
                                     setResponsavelExecucaoNomeManual(
                                       ''
                                     );
 
+
                                     setDropdownResponsavelExecucaoAberto(
                                       false
                                     );
+
 
                                     setErroFormularioExecucao(
                                       ''
@@ -11737,9 +13999,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     }
                                   />
 
+
                                   <Text
                                     style={[
                                       styles.responsavelModoText,
+
 
                                       modoResponsavelExecucao ===
                                         'funcionario' &&
@@ -11750,9 +14014,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </Text>
                                 </TouchableOpacity>
 
+
                                 <TouchableOpacity
                                   style={[
                                     styles.responsavelModoButton,
+
 
                                     modoResponsavelExecucao ===
                                       'outro' &&
@@ -11763,13 +14029,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       'outro'
                                     );
 
+
                                     setResponsavelExecucaoId(
                                       ''
                                     );
 
+
                                     setDropdownResponsavelExecucaoAberto(
                                       false
                                     );
+
 
                                     setErroFormularioExecucao(
                                       ''
@@ -11787,9 +14056,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     }
                                   />
 
+
                                   <Text
                                     style={[
                                       styles.responsavelModoText,
+
 
                                       modoResponsavelExecucao ===
                                         'outro' &&
@@ -11800,6 +14071,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </Text>
                                 </TouchableOpacity>
                               </View>
+
 
                               {modoResponsavelExecucao ===
                               'funcionario' ? (
@@ -11822,6 +14094,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       style={[
                                         styles.categorySelectText,
 
+
                                         !responsavelExecucaoId &&
                                           styles.categoryPlaceholder,
                                       ]}
@@ -11837,6 +14110,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         'Selecione o funcionário'}
                                     </Text>
 
+
                                     <Ionicons
                                       name={
                                         dropdownResponsavelExecucaoAberto
@@ -11847,6 +14121,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       color="#42566D"
                                     />
                                   </TouchableOpacity>
+
 
                                   {dropdownResponsavelExecucaoAberto ? (
                                     <View
@@ -11862,6 +14137,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                               responsavelExecucaoId ===
                                               item.responsavel_id;
 
+
                                             return (
                                               <TouchableOpacity
                                                 key={
@@ -11875,13 +14151,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                                     item.responsavel_id
                                                   );
 
+
                                                   setResponsavelExecucaoNomeManual(
                                                     ''
                                                   );
 
+
                                                   setDropdownResponsavelExecucaoAberto(
                                                     false
                                                   );
+
 
                                                   setErroFormularioExecucao(
                                                     ''
@@ -11889,6 +14168,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                                 }}
                                                 style={[
                                                   styles.categoryOption,
+
 
                                                   ativo &&
                                                     styles.categoryOptionActive,
@@ -11898,6 +14178,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                                   style={[
                                                     styles.categoryOptionText,
 
+
                                                     ativo &&
                                                       styles.categoryOptionTextActive,
                                                   ]}
@@ -11906,6 +14187,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                                     item.nome
                                                   }
                                                 </Text>
+
 
                                                 {ativo ? (
                                                   <Ionicons
@@ -11945,6 +14227,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       texto
                                     );
 
+
                                     setErroFormularioExecucao(
                                       ''
                                     );
@@ -11954,6 +14237,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 />
                               )}
 
+
                               <Text
                                 style={
                                   styles.inputLabel
@@ -11961,6 +14245,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               >
                                 SOLUÇÃO TÉCNICA *
                               </Text>
+
 
                               <TextInput
                                 style={[
@@ -11982,15 +14267,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     texto
                                   );
 
+
                                   setErroFormularioExecucao(
                                     ''
                                   );
+
 
                                   setSucessoFormularioExecucao(
                                     ''
                                   );
                                 }}
                               />
+
 
                               <Text
                                 style={
@@ -11999,6 +14287,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               >
                                 OBSERVAÇÕES DA EXECUÇÃO
                               </Text>
+
 
                               <TextInput
                                 style={[
@@ -12020,15 +14309,18 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     texto
                                   );
 
+
                                   setErroFormularioExecucao(
                                     ''
                                   );
+
 
                                   setSucessoFormularioExecucao(
                                     ''
                                   );
                                 }}
                               />
+
 
                               <Text
                                 style={
@@ -12038,6 +14330,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 FOTOS DA EXECUÇÃO
                               </Text>
 
+
                               <Text
                                 style={
                                   styles.fotosExecucaoAjuda
@@ -12045,6 +14338,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               >
                                 Adicione fotos do serviço executado no imóvel. Você pode selecionar até 10 imagens.
                               </Text>
+
 
                               <TouchableOpacity
                                 style={
@@ -12063,6 +14357,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   color="#0B5EA8"
                                 />
 
+
                                 <Text
                                   style={
                                     styles.adicionarFotosExecucaoButtonText
@@ -12071,6 +14366,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   + Adicionar fotos
                                 </Text>
                               </TouchableOpacity>
+
 
                               {fotosExecucaoPendentes.length >
                               0 ? (
@@ -12086,6 +14382,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   >
                                     Fotos aguardando salvamento
                                   </Text>
+
 
                                   <View
                                     style={
@@ -12114,6 +14411,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                             resizeMode="cover"
                                           />
 
+
                                           <TouchableOpacity
                                             style={
                                               styles.removerFotoExecucaoButton
@@ -12130,6 +14428,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                               color="#FFFFFF"
                                             />
                                           </TouchableOpacity>
+
 
                                           <View
                                             style={
@@ -12151,6 +14450,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 </View>
                               ) : null}
 
+
                               {carregandoFotosExecucao ? (
                                 <View
                                   style={
@@ -12162,6 +14462,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     color="#0B5EA8"
                                   />
 
+
                                   <Text
                                     style={
                                       styles.fotosExecucaoLoadingText
@@ -12171,6 +14472,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </Text>
                                 </View>
                               ) : null}
+
 
                               {!carregandoFotosExecucao &&
                               fotosExecucaoSalvas.length >
@@ -12187,6 +14489,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   >
                                     Fotos já salvas
                                   </Text>
+
 
                                   <View
                                     style={
@@ -12230,6 +14533,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                             </View>
                                           )}
 
+
                                           <View
                                             style={
                                               styles.fotoExecucaoSalvaBadge
@@ -12240,6 +14544,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                               size={13}
                                               color="#287A46"
                                             />
+
 
                                             <Text
                                               style={
@@ -12256,6 +14561,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 </View>
                               ) : null}
 
+
                               {erroFormularioExecucao ? (
                                 <View
                                   style={
@@ -12267,6 +14573,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     size={19}
                                     color="#9A3232"
                                   />
+
 
                                   <Text
                                     style={
@@ -12280,6 +14587,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 </View>
                               ) : null}
 
+
                               {sucessoFormularioExecucao ? (
                                 <View
                                   style={
@@ -12291,6 +14599,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     size={20}
                                     color="#287A46"
                                   />
+
 
                                   <Text
                                     style={
@@ -12304,9 +14613,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 </View>
                               ) : null}
 
+
                               <TouchableOpacity
                                 style={[
                                   styles.salvarExecucaoButton,
+
 
                                   salvandoExecucao &&
                                     styles.buttonDisabled,
@@ -12331,6 +14642,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   />
                                 )}
 
+
                                 <Text
                                   style={
                                     styles.salvarExecucaoButtonText
@@ -12344,6 +14656,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       : 'Salvar execução'}
                                 </Text>
                               </TouchableOpacity>
+
 
                               <View
                                 style={
@@ -12361,6 +14674,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     color="#0B2447"
                                   />
 
+
                                   <View
                                     style={{
                                       flex: 1,
@@ -12374,6 +14688,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       Finalizar serviço
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.finalizarExecucaoText
@@ -12384,6 +14699,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </View>
                                 </View>
 
+
                                 <Text
                                   style={
                                     styles.inputLabel
@@ -12391,6 +14707,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 >
                                   CONCLUSÃO
                                 </Text>
+
 
                                 <View
                                   style={
@@ -12401,6 +14718,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     style={[
                                       styles.conclusaoExecucaoButton,
 
+
                                       conclusaoExecucao ===
                                         'total' &&
                                         styles.conclusaoExecucaoButtonTotal,
@@ -12409,6 +14727,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       setConclusaoExecucao(
                                         'total'
                                       );
+
 
                                       setErroFinalizacaoExecucao(
                                         ''
@@ -12426,9 +14745,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       }
                                     />
 
+
                                     <Text
                                       style={[
                                         styles.conclusaoExecucaoButtonText,
+
 
                                         conclusaoExecucao ===
                                           'total' &&
@@ -12439,9 +14760,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     </Text>
                                   </TouchableOpacity>
 
+
                                   <TouchableOpacity
                                     style={[
                                       styles.conclusaoExecucaoButton,
+
 
                                       conclusaoExecucao ===
                                         'improcedente' &&
@@ -12451,6 +14774,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       setConclusaoExecucao(
                                         'improcedente'
                                       );
+
 
                                       setErroFinalizacaoExecucao(
                                         ''
@@ -12468,9 +14792,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       }
                                     />
 
+
                                     <Text
                                       style={[
                                         styles.conclusaoExecucaoButtonText,
+
 
                                         conclusaoExecucao ===
                                           'improcedente' &&
@@ -12481,6 +14807,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     </Text>
                                   </TouchableOpacity>
                                 </View>
+
 
                                 {erroFinalizacaoExecucao ? (
                                   <View
@@ -12494,6 +14821,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       color="#9A3232"
                                     />
 
+
                                     <Text
                                       style={
                                         styles.messageErrorText
@@ -12505,6 +14833,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     </Text>
                                   </View>
                                 ) : null}
+
 
                                 {sucessoFinalizacaoExecucao ? (
                                   <View
@@ -12518,6 +14847,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       color="#287A46"
                                     />
 
+
                                     <Text
                                       style={
                                         styles.messageSuccessText
@@ -12530,9 +14860,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </View>
                                 ) : null}
 
+
                                 <TouchableOpacity
                                   style={[
                                     styles.finalizarExecucaoButton,
+
 
                                     finalizandoExecucao &&
                                       styles.buttonDisabled,
@@ -12556,6 +14888,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       color="#FFFFFF"
                                     />
                                   )}
+
 
                                   <Text
                                     style={
@@ -12582,6 +14915,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               color="#287A46"
                             />
 
+
                             <View
                               style={{
                                 flex: 1,
@@ -12595,6 +14929,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 Serviço concluído
                               </Text>
 
+
                               <Text
                                 style={
                                   styles.execucaoConcluidaText
@@ -12602,6 +14937,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               >
                                 A execução foi encerrada e o chamado foi concluído.
                               </Text>
+
 
                               {execucaoServico?.conclusao ? (
                                 <Text
@@ -12616,6 +14952,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     : 'Improcedente'}
                                 </Text>
                               ) : null}
+
 
                               {execucaoServico?.concluida_em ? (
                                 <Text
@@ -12633,6 +14970,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           </View>
                         )}
 
+
+
+                      </View>
+                    ) : null}
+
+
+                    {/* FORM 03 — um documento para o protocolo concluído,
+                        inclusive quando as execuções foram finalizadas por problema. */}
                         {solicitacao.status ===
                         'concluida' ? (
                           <View
@@ -12657,6 +15002,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 />
                               </View>
 
+
                               <View
                                 style={{
                                   flex: 1,
@@ -12670,6 +15016,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   FORM 03 — Termo de Vistoria e Execução
                                 </Text>
 
+
                                 <Text
                                   style={
                                     styles.form03Text
@@ -12680,10 +15027,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               </View>
                             </View>
 
+
                             {!dadosForm03 ? (
                               <TouchableOpacity
                                 style={[
                                   styles.form03Button,
+
 
                                   carregandoForm03 &&
                                     styles.buttonDisabled,
@@ -12707,6 +15056,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     color="#FFFFFF"
                                   />
                                 )}
+
 
                                 <Text
                                   style={
@@ -12738,6 +15088,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       PROTOCOLO
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -12748,6 +15099,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       }
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -12762,6 +15114,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       SOLICITANTE
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -12772,6 +15125,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       }
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -12786,6 +15140,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       EMPREENDIMENTO
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -12796,6 +15151,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       }
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -12810,6 +15166,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       UNIDADE
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -12820,6 +15177,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       }
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -12834,6 +15192,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       RESPONSÁVEL PELA VISTORIA
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -12846,6 +15205,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     </Text>
                                   </View>
 
+
                                   <View
                                     style={
                                       styles.form03InfoCard
@@ -12856,8 +15216,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         styles.form03Label
                                       }
                                     >
-                                      Nº DO TERMO
+                                      {dadosForm03.numero_termo != null
+                                        ? 'Nº DO TERMO'
+                                        : 'PROTOCOLO DE REFERÊNCIA'}
                                     </Text>
+
 
                                     <Text
                                       style={
@@ -12865,9 +15228,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       }
                                     >
                                       {dadosForm03.numero_termo ??
-                                        '-'}
+                                        dadosForm03.protocolo ?? '-'}
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -12882,6 +15246,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       RESPONSÁVEL PELO SERVIÇO
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -12893,6 +15258,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       }
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -12906,6 +15272,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     >
                                       CONCLUSÃO
                                     </Text>
+
 
                                     <Text
                                       style={
@@ -12923,6 +15290,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </View>
                                 </View>
 
+
                                 <Text
                                   style={
                                     styles.form03SectionTitle
@@ -12930,6 +15298,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 >
                                   Dados da solicitação
                                 </Text>
+
 
                                 <View
                                   style={
@@ -12949,6 +15318,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       DATA DA RECLAMAÇÃO
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -12959,6 +15329,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       )}
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -12973,6 +15344,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       CONTATO
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -12981,6 +15353,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       {dadosForm03.telefone ??
                                         '-'}
                                     </Text>
+
 
                                     <Text
                                       style={
@@ -12991,6 +15364,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         '-'}
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -13005,6 +15379,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       DISPONIBILIDADE
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -13014,6 +15389,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         '-'}
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -13028,6 +15404,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       LOCAL / CÔMODO
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -13038,6 +15415,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     </Text>
                                   </View>
                                 </View>
+
 
                                 <View
                                   style={
@@ -13052,6 +15430,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     PROBLEMA RELATADO
                                   </Text>
 
+
                                   <Text
                                     style={
                                       styles.form03Value
@@ -13063,6 +15442,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </Text>
                                 </View>
 
+
                                 <Text
                                   style={
                                     styles.form03SectionTitle
@@ -13070,6 +15450,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 >
                                   Vistoria
                                 </Text>
+
 
                                 <View
                                   style={
@@ -13089,6 +15470,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       DATA DA VISTORIA
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -13099,6 +15481,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       )}
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -13112,6 +15495,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     >
                                       CONSTATAÇÃO DO PROBLEMA
                                     </Text>
+
 
                                     <Text
                                       style={
@@ -13128,6 +15512,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     </Text>
                                   </View>
 
+
                                   <View
                                     style={
                                       styles.form03InfoCard
@@ -13140,6 +15525,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     >
                                       RESULTADO DA VISTORIA
                                     </Text>
+
 
                                     <Text
                                       style={
@@ -13156,6 +15542,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     </Text>
                                   </View>
 
+
                                   <View
                                     style={
                                       styles.form03InfoCard
@@ -13169,6 +15556,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       FIM DA VISTORIA
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -13180,6 +15568,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     </Text>
                                   </View>
                                 </View>
+
 
                                 <View
                                   style={
@@ -13194,6 +15583,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     PARECER TÉCNICO
                                   </Text>
 
+
                                   <Text
                                     style={
                                       styles.form03Value
@@ -13203,6 +15593,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       '-'}
                                   </Text>
                                 </View>
+
 
                                 <View
                                   style={
@@ -13217,6 +15608,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     SERVIÇO NECESSÁRIO
                                   </Text>
 
+
                                   <Text
                                     style={
                                       styles.form03Value
@@ -13226,6 +15618,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       '-'}
                                   </Text>
                                 </View>
+
 
                                 <View
                                   style={
@@ -13240,6 +15633,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     OBSERVAÇÕES DA VISTORIA
                                   </Text>
 
+
                                   <Text
                                     style={
                                       styles.form03Value
@@ -13250,6 +15644,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </Text>
                                 </View>
 
+
                                 <Text
                                   style={
                                     styles.form03SectionTitle
@@ -13257,6 +15652,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 >
                                   Garantia
                                 </Text>
+
 
                                 <View
                                   style={
@@ -13276,6 +15672,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       PROBLEMA / CATEGORIA
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -13285,6 +15682,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         '-'}
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -13299,6 +15697,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       ELEMENTO CONSTRUTIVO
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -13308,6 +15707,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         '-'}
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -13322,6 +15722,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       MANIFESTAÇÃO PATOLÓGICA
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -13331,6 +15732,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         '-'}
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -13345,6 +15747,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       STATUS DA GARANTIA
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -13355,6 +15758,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       )}
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -13369,6 +15773,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       PRAZO DA GARANTIA
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -13380,6 +15785,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         ''}
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -13394,6 +15800,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       VIGÊNCIA ATÉ
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -13404,6 +15811,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       )}
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -13417,6 +15825,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     >
                                       PROCEDÊNCIA
                                     </Text>
+
 
                                     <Text
                                       style={
@@ -13434,6 +15843,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </View>
                                 </View>
 
+
                                 <Text
                                   style={
                                     styles.form03SectionTitle
@@ -13441,6 +15851,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 >
                                   Execução do serviço
                                 </Text>
+
 
                                 <View
                                   style={
@@ -13460,6 +15871,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       INÍCIO DA EXECUÇÃO
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -13470,6 +15882,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       )}
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -13484,6 +15897,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       DATA DA CONCLUSÃO
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03Value
@@ -13495,6 +15909,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     </Text>
                                   </View>
                                 </View>
+
 
                                 <View
                                   style={
@@ -13509,6 +15924,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     SOLUÇÃO TÉCNICA
                                   </Text>
 
+
                                   <Text
                                     style={
                                       styles.form03Value
@@ -13520,6 +15936,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     }
                                   </Text>
                                 </View>
+
 
                                 <View
                                   style={
@@ -13534,6 +15951,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     OBSERVAÇÕES DA EXECUÇÃO
                                   </Text>
 
+
                                   <Text
                                     style={
                                       styles.form03Value
@@ -13544,6 +15962,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </Text>
                                 </View>
 
+
                                 <Text
                                   style={
                                     styles.form03SectionTitle
@@ -13551,6 +15970,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 >
                                   Registros e assinaturas
                                 </Text>
+
 
                                 <View
                                   style={
@@ -13562,6 +15982,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     size={18}
                                     color="#0B5EA8"
                                   />
+
 
                                   <Text
                                     style={
@@ -13583,6 +16004,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </Text>
                                 </View>
 
+
                                 <View
                                   style={
                                     styles.form03Grid
@@ -13601,6 +16023,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       ASSINATURA DO CLIENTE
                                     </Text>
 
+
                                     <Text
                                       style={
                                         estadoAssinaturasForm03?.assinatura_cliente_svg
@@ -13611,6 +16034,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       {estadoAssinaturasForm03?.assinatura_cliente_svg ? 'Assinado' : 'Pendente'}
                                     </Text>
                                   </View>
+
 
                                   <View
                                     style={
@@ -13625,6 +16049,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       ASSINATURA DO RESPONSÁVEL
                                     </Text>
 
+
                                     <Text
                                       style={
                                         estadoAssinaturasForm03?.assinatura_funcionario_svg
@@ -13637,6 +16062,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </View>
                                 </View>
 
+
                                 <View
                                   style={
                                     styles.messageSuccess
@@ -13648,6 +16074,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     color="#287A46"
                                   />
 
+
                                   <Text
                                     style={
                                       styles.messageSuccessText
@@ -13656,6 +16083,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     Dados do FORM 03 carregados com sucesso.
                                   </Text>
                                 </View>
+
 
                                 <TouchableOpacity
                                   style={
@@ -13674,6 +16102,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     color="#0B5EA8"
                                   />
 
+
                                   <Text
                                     style={
                                       styles.form03SecondaryButtonText
@@ -13682,6 +16111,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     Atualizar dados
                                   </Text>
                                 </TouchableOpacity>
+
 
                                 {dadosForm03 ? (
                                   <View
@@ -13697,6 +16127,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       Assinaturas do FORM 03
                                     </Text>
 
+
                                     <Text
                                       style={
                                         styles.form03AssinaturaText
@@ -13705,9 +16136,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       O FORM 03 utiliza assinatura manual no aplicativo EMAFE.
                                     </Text>
 
+
                                     <TouchableOpacity
                                       style={[
                                         styles.form03ModoButton,
+
 
                                         modoAssinaturaForm03 ===
                                           'manual_app' &&
@@ -13733,6 +16166,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         }
                                       />
 
+
                                       <View
                                         style={{
                                           flex: 1,
@@ -13742,6 +16176,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                           style={[
                                             styles.form03ModoButtonTitle,
 
+
                                             modoAssinaturaForm03 ===
                                               'manual_app' &&
                                               styles.form03ModoButtonTitleActive,
@@ -13750,9 +16185,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                           Assinar no aplicativo
                                         </Text>
 
+
                                         <Text
                                           style={[
                                             styles.form03ModoButtonText,
+
 
                                             modoAssinaturaForm03 ===
                                               'manual_app' &&
@@ -13763,6 +16200,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         </Text>
                                       </View>
                                     </TouchableOpacity>
+
 
                                     {definindoModoAssinatura ? (
                                       <View
@@ -13775,6 +16213,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                           color="#0B5EA8"
                                         />
 
+
                                         <Text
                                           style={
                                             styles.form03ModoLoadingText
@@ -13784,6 +16223,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         </Text>
                                       </View>
                                     ) : null}
+
 
                                     {modoAssinaturaForm03 ===
                                     'manual_app' ? (
@@ -13800,6 +16240,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                           Assinaturas do FORM 03
                                         </Text>
 
+
                                         <Text
                                           style={
                                             styles.assinaturasManuaisText
@@ -13807,6 +16248,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         >
                                           Cada pessoa assina na sua própria área. O cliente assina na Área do Cliente e o responsável pela execução assina aqui na Área do Funcionário.
                                         </Text>
+
 
                                         <View
                                           style={
@@ -13821,6 +16263,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                             Assinatura do cliente
                                           </Text>
 
+
                                           {estadoAssinaturasForm03
                                             ?.assinatura_cliente_svg ? (
                                             <View
@@ -13834,6 +16277,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                                 color="#287A46"
                                               />
 
+
                                               <View
                                                 style={{
                                                   flex: 1,
@@ -13846,6 +16290,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                                 >
                                                   Cliente já assinou
                                                 </Text>
+
 
                                                 <Text
                                                   style={
@@ -13870,6 +16315,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                                 color="#9A6A00"
                                               />
 
+
                                               <View
                                                 style={{
                                                   flex: 1,
@@ -13883,6 +16329,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                                   Aguardando o cliente
                                                 </Text>
 
+
                                                 <Text
                                                   style={
                                                     styles.assinaturaPendenteText
@@ -13894,6 +16341,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                             </View>
                                           )}
                                         </View>
+
 
                                         <View
                                           style={
@@ -13908,6 +16356,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                             Assinatura do responsável pela execução
                                           </Text>
 
+
                                           {estadoAssinaturasForm03
                                             ?.assinatura_funcionario_svg ? (
                                             <View
@@ -13921,6 +16370,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                                 color="#287A46"
                                               />
 
+
                                               <View
                                                 style={{
                                                   flex: 1,
@@ -13933,6 +16383,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                                 >
                                                   Sua assinatura foi salva
                                                 </Text>
+
 
                                                 <Text
                                                   style={
@@ -13956,6 +16407,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                                   '-'}
                                               </Text>
 
+
                                               <SignaturePad
                                                 titulo="Assine com o dedo, mouse ou caneta"
                                                 salvando={
@@ -13969,6 +16421,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                             </>
                                           )}
                                         </View>
+
 
                                         {estadoAssinaturasForm03
                                           ?.assinatura_cliente_svg &&
@@ -13988,6 +16441,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                               color="#287A46"
                                             />
 
+
                                             <Text
                                               style={
                                                 styles.messageSuccessText
@@ -13996,6 +16450,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                               As duas assinaturas foram coletadas. O FORM 03 está finalizado e o PDF final já pode ser gerado.
                                             </Text>
                                           </View>
+
 
                                           <TouchableOpacity
                                             style={[
@@ -14019,6 +16474,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                               />
                                             )}
 
+
                                             <Text
                                               style={
                                                 styles.form03GerarPdfButtonText
@@ -14029,6 +16485,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                                 : 'Gerar PDF final do FORM 03'}
                                             </Text>
                                           </TouchableOpacity>
+
 
                                           {pdfForm03Uri &&
                                           Platform.OS !== 'web' ? (
@@ -14043,6 +16500,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                                 size={18}
                                                 color="#0B5EA8"
                                               />
+
 
                                               <Text
                                                 style={
@@ -14060,6 +16518,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   </View>
                                 ) : null}
 
+
                                 {mensagemAssinaturaForm03 ? (
                                   <View
                                     style={
@@ -14071,6 +16530,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       size={20}
                                       color="#287A46"
                                     />
+
 
                                     <Text
                                       style={
@@ -14086,6 +16546,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               </>
                             )}
 
+
                             {erroForm03 ? (
                               <View
                                 style={
@@ -14097,6 +16558,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   size={19}
                                   color="#9A3232"
                                 />
+
 
                                 <Text
                                   style={
@@ -14111,12 +16573,12 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             ) : null}
                           </View>
                         ) : null}
-                      </View>
-                    ) : null}
+
 
                     {/* ===========================================
                         GERENCIAR AGENDAMENTO
                     =========================================== */}
+
 
                     {!ausenciaClienteAberta &&
                     [
@@ -14141,6 +16603,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             color="#0B2447"
                           />
 
+
                           <View
                             style={{
                               flex: 1,
@@ -14156,6 +16619,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 : 'Agendar vistoria'}
                             </Text>
 
+
                             <Text
                               style={
                                 styles.definirAgendamentoTexto
@@ -14167,6 +16631,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </Text>
                           </View>
                         </View>
+
 
                         <View
                           style={
@@ -14194,6 +16659,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               color="#0B5EA8"
                             />
 
+
                             <Text
                               style={
                                 styles.reagendarFuncionarioButtonText
@@ -14205,6 +16671,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </Text>
                           </TouchableOpacity>
 
+
                           {agendamento ? (
                             <TouchableOpacity
                               style={
@@ -14215,9 +16682,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   false
                                 );
 
+
                                 setMostrarCancelamentoVistoria(
                                   !mostrarCancelamentoVistoria
                                 );
+
 
                                 setErroVistoria('');
                                 setSucessoVistoria('');
@@ -14232,6 +16701,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 color="#9A3232"
                               />
 
+
                               <Text
                                 style={
                                   styles.cancelarFuncionarioButtonText
@@ -14242,6 +16712,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </TouchableOpacity>
                           ) : null}
                         </View>
+
 
                         {mostrarCancelamentoVistoria ? (
                           <View
@@ -14257,6 +16728,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               Cancelar vistoria
                             </Text>
 
+
                             <Text
                               style={
                                 styles.textoGerenciarAgendaFuncionario
@@ -14264,6 +16736,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             >
                               Informe o motivo do cancelamento. O horário será liberado automaticamente para outro cliente.
                             </Text>
+
 
                             <TextInput
                               style={[
@@ -14282,6 +16755,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 setMotivoCancelamentoVistoria
                               }
                             />
+
 
                             <View
                               style={
@@ -14306,6 +16780,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   Voltar
                                 </Text>
                               </TouchableOpacity>
+
 
                               <TouchableOpacity
                                 style={
@@ -14337,6 +16812,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           </View>
                         ) : null}
 
+
                         {mostrarAgendaVistoria ? (
                           <View
                             style={
@@ -14353,6 +16829,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 : 'Escolha o horário'}
                             </Text>
 
+
                             <Text
                               style={
                                 styles.textoGerenciarAgendaFuncionario
@@ -14360,6 +16837,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             >
                               Só aparecem datas e horários que continuam livres na agenda.
                             </Text>
+
 
                             {carregandoAgendaVistoria ? (
                               <View
@@ -14371,6 +16849,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   color="#0B2447"
                                 />
 
+
                                 <Text
                                   style={
                                     styles.textoGerenciarAgendaFuncionario
@@ -14380,6 +16859,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 </Text>
                               </View>
                             ) : null}
+
 
                             {!carregandoAgendaVistoria &&
                             datasDisponiveisVistoria.length ===
@@ -14395,6 +16875,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                   color="#7B5A12"
                                 />
 
+
                                 <Text
                                   style={
                                     styles.semHorarioFuncionarioText
@@ -14404,6 +16885,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 </Text>
                               </View>
                             ) : null}
+
 
                             {!carregandoAgendaVistoria &&
                             horariosVistoriaDisponiveis.length >
@@ -14425,9 +16907,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     data
                                   );
 
+
                                   setNovoHorarioVistoriaId(
                                     ''
                                   );
+
 
                                   setErroVistoria(
                                     ''
@@ -14440,9 +16924,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     horario.data_vistoria
                                   );
 
+
                                   setNovoHorarioVistoriaId(
                                     horario.horario_vistoria_id
                                   );
+
 
                                   setErroVistoria(
                                     ''
@@ -14450,6 +16936,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 }}
                               />
                             ) : null}
+
 
                             <View
                               style={
@@ -14475,9 +16962,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 </Text>
                               </TouchableOpacity>
 
+
                               <TouchableOpacity
                                 style={[
                                   styles.confirmarAgendaFuncionarioButton,
+
 
                                   (!novaDataVistoria ||
                                     !novoHorarioVistoriaId ||
@@ -14514,6 +17003,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           </View>
                         ) : null}
 
+
                         {erroVistoria ? (
                           <View
                             style={
@@ -14526,6 +17016,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               color="#9A3232"
                             />
 
+
                             <Text
                               style={
                                 styles.messageErrorText
@@ -14535,6 +17026,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             </Text>
                           </View>
                         ) : null}
+
 
                         {sucessoVistoria ? (
                           <View
@@ -14547,6 +17039,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                               size={20}
                               color="#287A46"
                             />
+
 
                             <Text
                               style={
@@ -14563,6 +17056,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 </>
               ) : null}
 
+
               {todosProblemasAnalisados &&
               !algumProblemaDentroGarantia ? (
                 <>
@@ -14574,6 +17068,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     Vistoria
                   </Text>
 
+
                   <View
                     style={
                       styles.foraGarantiaBox
@@ -14584,6 +17079,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       size={24}
                       color="#9A3232"
                     />
+
 
                     <View
                       style={{
@@ -14598,6 +17094,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                         Atendimento fora da garantia
                       </Text>
 
+
                       <Text
                         style={
                           styles.foraGarantiaTexto
@@ -14610,9 +17107,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 </>
               ) : null}
 
+
               {/* ==============================================
                   ANDAMENTO
               ============================================== */}
+
 
               <Text
                 style={
@@ -14621,6 +17120,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               >
                 Andamento
               </Text>
+
 
               <View
                 style={
@@ -14637,6 +17137,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                   icon="checkmark"
                 />
 
+
                 {solicitacao.status !==
                 'aberta' ? (
                   <TimelineItem
@@ -14645,6 +17146,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     icon="search-outline"
                   />
                 ) : null}
+
 
                 {agendamento ? (
                   <TimelineItem
@@ -14661,6 +17163,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 ) : null}
               </View>
 
+
               <Text
                 style={
                   styles.updateText
@@ -14673,6 +17176,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               </Text>
             </>
           ) : null}
+
 
           <Text
             style={
@@ -14687,9 +17191,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   );
 }
 
+
 // ============================================================
 // COMPONENTES
 // ============================================================
+
 
 function InfoItem({
   label,
@@ -14714,6 +17220,7 @@ function InfoItem({
         {label}
       </Text>
 
+
       <Text
         style={
           styles.infoValue
@@ -14724,6 +17231,7 @@ function InfoItem({
     </View>
   );
 }
+
 
 function WarrantyInfo({
   label,
@@ -14746,6 +17254,7 @@ function WarrantyInfo({
         {label}
       </Text>
 
+
       <Text
         style={
           styles.warrantyInfoValue
@@ -14756,6 +17265,7 @@ function WarrantyInfo({
     </View>
   );
 }
+
 
 function TimelineItem({
   title,
@@ -14784,6 +17294,7 @@ function TimelineItem({
         />
       </View>
 
+
       <View
         style={{
           flex: 1,
@@ -14797,6 +17308,7 @@ function TimelineItem({
           {title}
         </Text>
 
+
         <Text
           style={
             styles.timelineDate
@@ -14809,9 +17321,11 @@ function TimelineItem({
   );
 }
 
+
 // ============================================================
 // CAMPO DE ASSINATURA MANUAL
 // ============================================================
+
 
 function SignaturePad({
   titulo,
@@ -14827,15 +17341,18 @@ function SignaturePad({
   const larguraSvg = 600;
   const alturaSvg = 180;
 
+
   const [
     caminhos,
     setCaminhos,
   ] = useState<string[]>([]);
 
+
   const [
     caminhoAtual,
     setCaminhoAtual,
   ] = useState('');
+
 
   const [
     tamanho,
@@ -14845,8 +17362,10 @@ function SignaturePad({
     height: 1,
   });
 
+
   const caminhoRef =
     useRef('');
+
 
   function converterPonto(
     x: number,
@@ -14861,6 +17380,7 @@ function SignaturePad({
           )) *
         larguraSvg,
 
+
       y:
         (y /
           Math.max(
@@ -14871,6 +17391,7 @@ function SignaturePad({
     };
   }
 
+
   const panResponder =
     useMemo(
       () =>
@@ -14878,8 +17399,10 @@ function SignaturePad({
           onStartShouldSetPanResponder:
             () => true,
 
+
           onMoveShouldSetPanResponder:
             () => true,
+
 
           onPanResponderGrant: (
             evento
@@ -14890,11 +17413,13 @@ function SignaturePad({
             } =
               evento.nativeEvent;
 
+
             const ponto =
               converterPonto(
                 locationX,
                 locationY
               );
+
 
             const novo =
               `M ${ponto.x.toFixed(
@@ -14903,13 +17428,16 @@ function SignaturePad({
                 2
               )}`;
 
+
             caminhoRef.current =
               novo;
+
 
             setCaminhoAtual(
               novo
             );
           },
+
 
           onPanResponderMove: (
             evento
@@ -14920,11 +17448,13 @@ function SignaturePad({
             } =
               evento.nativeEvent;
 
+
             const ponto =
               converterPonto(
                 locationX,
                 locationY
               );
+
 
             caminhoRef.current +=
               ` L ${ponto.x.toFixed(
@@ -14933,16 +17463,19 @@ function SignaturePad({
                 2
               )}`;
 
+
             setCaminhoAtual(
               caminhoRef.current
             );
           },
+
 
           onPanResponderRelease:
             () => {
               const caminhoFinal =
                 caminhoRef.current;
 
+
               if (
                 caminhoFinal
               ) {
@@ -14954,18 +17487,22 @@ function SignaturePad({
                 );
               }
 
+
               caminhoRef.current =
                 '';
+
 
               setCaminhoAtual(
                 ''
               );
             },
 
+
           onPanResponderTerminate:
             () => {
               const caminhoFinal =
                 caminhoRef.current;
+
 
               if (
                 caminhoFinal
@@ -14978,8 +17515,10 @@ function SignaturePad({
                 );
               }
 
+
               caminhoRef.current =
                 '';
+
 
               setCaminhoAtual(
                 ''
@@ -14992,11 +17531,13 @@ function SignaturePad({
       ]
     );
 
+
   function limpar() {
     setCaminhos([]);
     setCaminhoAtual('');
     caminhoRef.current = '';
   }
+
 
   function salvar() {
     const todos = [
@@ -15006,11 +17547,13 @@ function SignaturePad({
         : []),
     ];
 
+
     if (
       todos.length === 0
     ) {
       return;
     }
+
 
     const paths =
       todos
@@ -15020,17 +17563,21 @@ function SignaturePad({
         )
         .join('');
 
+
     const assinatura =
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${larguraSvg} ${alturaSvg}" preserveAspectRatio="xMidYMid meet">${paths}</svg>`;
+
 
     onSave(
       assinatura
     );
   }
 
+
   const possuiAssinatura =
     caminhos.length > 0 ||
     caminhoAtual.length > 0;
+
 
   return (
     <View
@@ -15046,6 +17593,7 @@ function SignaturePad({
         {titulo}
       </Text>
 
+
       <Text
         style={
           styles.signaturePadHelp
@@ -15053,6 +17601,7 @@ function SignaturePad({
       >
         Desenhe sua assinatura dentro do quadro.
       </Text>
+
 
       <View
         style={
@@ -15067,6 +17616,7 @@ function SignaturePad({
           } =
             evento.nativeEvent
               .layout;
+
 
           setTamanho({
             width,
@@ -15097,6 +17647,7 @@ function SignaturePad({
             )
           )}
 
+
           {caminhoAtual ? (
             <SvgPath
               d={
@@ -15111,6 +17662,7 @@ function SignaturePad({
           ) : null}
         </Svg>
       </View>
+
 
       <View
         style={
@@ -15132,6 +17684,7 @@ function SignaturePad({
             color="#9A3232"
           />
 
+
           <Text
             style={
               styles.signatureClearButtonText
@@ -15141,9 +17694,11 @@ function SignaturePad({
           </Text>
         </TouchableOpacity>
 
+
         <TouchableOpacity
           style={[
             styles.signatureSaveButton,
+
 
             (!possuiAssinatura ||
               salvando) &&
@@ -15168,6 +17723,7 @@ function SignaturePad({
             />
           )}
 
+
           <Text
             style={
               styles.signatureSaveButtonText
@@ -15183,9 +17739,11 @@ function SignaturePad({
   );
 }
 
+
 // ============================================================
 // ESTILOS
 // ============================================================
+
 
 const styles = StyleSheet.create({
   container: {
@@ -15194,9 +17752,11 @@ const styles = StyleSheet.create({
       '#F5F7FA',
   },
 
+
   scrollContent: {
     flexGrow: 1,
   },
+
 
   content: {
     width: '100%',
@@ -15207,9 +17767,11 @@ const styles = StyleSheet.create({
     paddingBottom: 50,
   },
 
+
   // ==========================================================
   // TOPO
   // ==========================================================
+
 
   topBar: {
     flexDirection: 'row',
@@ -15218,11 +17780,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
+
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
   },
+
 
   backText: {
     color: '#0B2447',
@@ -15230,14 +17794,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+
   logo: {
     width: 190,
     height: 65,
   },
 
+
   // ==========================================================
   // PROTOCOLO
   // ==========================================================
+
 
   protocolCard: {
     backgroundColor:
@@ -15255,11 +17822,13 @@ const styles = StyleSheet.create({
     gap: 15,
   },
 
+
   protocolLabel: {
     color: '#8995A5',
     fontSize: 9,
     fontWeight: '800',
   },
+
 
   protocolNumber: {
     color: '#0B2447',
@@ -15268,11 +17837,13 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 
+
   protocolDate: {
     color: '#8995A5',
     fontSize: 10,
     marginTop: 6,
   },
+
 
   statusBadge: {
     backgroundColor:
@@ -15282,15 +17853,18 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
 
+
   statusText: {
     color: '#24364B',
     fontSize: 10,
     fontWeight: '800',
   },
 
+
   // ==========================================================
   // CARDS
   // ==========================================================
+
 
   twoColumns: {
     flexDirection: 'row',
@@ -15298,6 +17872,7 @@ const styles = StyleSheet.create({
     gap: 14,
     marginTop: 20,
   },
+
 
   columnCard: {
     flexGrow: 1,
@@ -15311,6 +17886,7 @@ const styles = StyleSheet.create({
     padding: 18,
   },
 
+
   cardTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -15318,11 +17894,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
+
   cardHeaderTitle: {
     color: '#0B2447',
     fontSize: 15,
     fontWeight: '800',
   },
+
 
   infoItem: {
     paddingVertical: 9,
@@ -15331,11 +17909,13 @@ const styles = StyleSheet.create({
       '#EEF1F4',
   },
 
+
   infoLabel: {
     color: '#8995A5',
     fontSize: 9,
     fontWeight: '700',
   },
+
 
   infoValue: {
     color: '#24364B',
@@ -15344,6 +17924,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+
   sectionTitle: {
     color: '#0B2447',
     fontSize: 17,
@@ -15351,6 +17932,7 @@ const styles = StyleSheet.create({
     marginTop: 27,
     marginBottom: 10,
   },
+
 
   sectionHeader: {
     flexDirection: 'row',
@@ -15361,11 +17943,13 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
+
   sectionTitleSemMargem: {
     color: '#0B2447',
     fontSize: 17,
     fontWeight: '800',
   },
+
 
   card: {
     backgroundColor:
@@ -15377,12 +17961,14 @@ const styles = StyleSheet.create({
     padding: 17,
   },
 
+
   inlineInfo: {
     flexDirection: 'row',
     alignItems:
       'flex-start',
     gap: 10,
   },
+
 
   descriptionText: {
     flex: 1,
@@ -15391,20 +17977,24 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
 
+
   // ==========================================================
   // FOTOS
   // ==========================================================
+
 
   photoCount: {
     color: '#8995A5',
     fontSize: 10,
   },
 
+
   photoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
   },
+
 
   photoContainer: {
     width: 180,
@@ -15415,10 +18005,12 @@ const styles = StyleSheet.create({
       '#E9EEF4',
   },
 
+
   photo: {
     width: '100%',
     height: '100%',
   },
+
 
   photoOverlay: {
     position: 'absolute',
@@ -15435,20 +18027,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
+
   photoNumber: {
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '700',
   },
 
+
   // ==========================================================
   // ANÁLISE
   // ==========================================================
+
 
   protocolProblemsList: {
     gap: 10,
     marginBottom: 14,
   },
+
 
   protocolProblemCard: {
     flexDirection: 'row',
@@ -15461,10 +18057,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
 
+
   protocolProblemCardActive: {
     backgroundColor: '#0B2447',
     borderColor: '#0B2447',
   },
+
 
   protocolProblemNumber: {
     width: 34,
@@ -15475,9 +18073,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#E9F0F7',
   },
 
+
   protocolProblemNumberActive: {
     backgroundColor: '#FFFFFF',
   },
+
 
   protocolProblemNumberText: {
     color: '#0B2447',
@@ -15485,9 +18085,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+
   protocolProblemNumberTextActive: {
     color: '#0B2447',
   },
+
 
   protocolProblemTitle: {
     color: '#24364B',
@@ -15495,9 +18097,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+
   protocolProblemTitleActive: {
     color: '#FFFFFF',
   },
+
 
   protocolProblemDescription: {
     color: '#65758A',
@@ -15506,9 +18110,11 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
+
   protocolProblemDescriptionActive: {
     color: '#DCE7F4',
   },
+
 
   protocolProblemStatus: {
     color: '#7B5A12',
@@ -15517,9 +18123,11 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 
+
   protocolProblemStatusDone: {
     color: '#287A46',
   },
+
 
   selectedProblemSummary: {
     borderRadius: 14,
@@ -15530,12 +18138,14 @@ const styles = StyleSheet.create({
     borderColor: '#D6E2EE',
   },
 
+
   selectedProblemSummaryLabel: {
     color: '#0B5EA8',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.6,
   },
+
 
   selectedProblemSummaryTitle: {
     color: '#0B2447',
@@ -15544,12 +18154,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+
   selectedProblemSummaryText: {
     color: '#5F6F82',
     fontSize: 12,
     lineHeight: 18,
     marginTop: 5,
   },
+
 
   analysisCard: {
     backgroundColor:
@@ -15560,6 +18172,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
   },
+
 
   analysisIntro: {
     backgroundColor:
@@ -15573,11 +18186,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
+
   analysisIntroTitle: {
     color: '#0B2447',
     fontSize: 13,
     fontWeight: '800',
   },
+
 
   analysisIntroText: {
     color: '#697789',
@@ -15585,6 +18200,7 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: 4,
   },
+
 
   fieldNumber: {
     color: '#24364B',
@@ -15594,12 +18210,14 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
+
   responsavelModoRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
     marginBottom: 10,
   },
+
 
   responsavelModoButton: {
     flex: 1,
@@ -15616,10 +18234,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
+
   responsavelModoButtonActive: {
     backgroundColor: '#0B5EA8',
     borderColor: '#0B5EA8',
   },
+
 
   responsavelModoText: {
     color: '#0B5EA8',
@@ -15628,9 +18248,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+
   responsavelModoTextActive: {
     color: '#FFFFFF',
   },
+
 
   categorySelectButton: {
     borderWidth: 1,
@@ -15645,6 +18267,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 
+
   categorySelectText: {
     flex: 1,
     color: '#0B2447',
@@ -15652,10 +18275,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+
   categoryPlaceholder: {
     color: '#8995A5',
     fontWeight: '600',
   },
+
 
   categoryDropdownPanel: {
     marginTop: 8,
@@ -15666,6 +18291,7 @@ const styles = StyleSheet.create({
     padding: 8,
     gap: 6,
   },
+
 
   categorySearchRow: {
     borderWidth: 1,
@@ -15680,6 +18306,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
 
+
   categorySearchInput: {
     flex: 1,
     minHeight: 42,
@@ -15687,6 +18314,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     outlineStyle: 'none',
   } as any,
+
 
   categoryOption: {
     minHeight: 42,
@@ -15699,9 +18327,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
+
   categoryOptionActive: {
     backgroundColor: '#0B2447',
   },
+
 
   categoryOptionText: {
     flex: 1,
@@ -15710,10 +18340,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+
   categoryOptionTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
+
 
   categoryEmptyText: {
     paddingHorizontal: 10,
@@ -15723,11 +18355,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+
   optionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
+
 
   optionButton: {
     borderWidth: 1,
@@ -15743,6 +18377,7 @@ const styles = StyleSheet.create({
     gap: 7,
   },
 
+
   optionButtonActive: {
     backgroundColor:
       '#0B2447',
@@ -15750,9 +18385,11 @@ const styles = StyleSheet.create({
       '#0B2447',
   },
 
+
   optionDisabled: {
     opacity: 0.4,
   },
+
 
   optionText: {
     color: '#42566D',
@@ -15760,14 +18397,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+
   optionTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
 
+
   problemList: {
     gap: 8,
   },
+
 
   problemCard: {
     borderWidth: 1,
@@ -15784,12 +18424,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 
+
   problemCardActive: {
     backgroundColor:
       '#0B2447',
     borderColor:
       '#0B2447',
   },
+
 
   problemTitle: {
     flex: 1,
@@ -15798,9 +18440,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+
   problemTitleActive: {
     color: '#FFFFFF',
   },
+
 
   calculateButton: {
     minHeight: 54,
@@ -15815,25 +18459,30 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
+
   calculateButtonText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
   },
 
+
   buttonDisabled: {
     opacity: 0.5,
   },
 
+
   // ==========================================================
   // GARANTIA
   // ==========================================================
+
 
   warrantyResultCard: {
     borderWidth: 1,
     borderRadius: 16,
     padding: 19,
   },
+
 
   resultadoDentro: {
     backgroundColor:
@@ -15842,12 +18491,14 @@ const styles = StyleSheet.create({
       '#A8D1B4',
   },
 
+
   resultadoFora: {
     backgroundColor:
       '#FFF2F2',
     borderColor:
       '#E1AAAA',
   },
+
 
   resultadoNeutro: {
     backgroundColor:
@@ -15856,12 +18507,14 @@ const styles = StyleSheet.create({
       '#D8DEE7',
   },
 
+
   warrantyResultHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 11,
     marginBottom: 18,
   },
+
 
   warrantyIcon: {
     width: 46,
@@ -15874,11 +18527,13 @@ const styles = StyleSheet.create({
       'center',
   },
 
+
   warrantySmallLabel: {
     color: '#8995A5',
     fontSize: 9,
     fontWeight: '800',
   },
+
 
   warrantyResultTitle: {
     color: '#0B2447',
@@ -15887,11 +18542,13 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   warrantyInfoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
   },
+
 
   warrantyInfo: {
     flexGrow: 1,
@@ -15902,11 +18559,13 @@ const styles = StyleSheet.create({
     padding: 12,
   },
 
+
   warrantyInfoLabel: {
     color: '#8995A5',
     fontSize: 9,
     fontWeight: '700',
   },
+
 
   warrantyInfoValue: {
     color: '#24364B',
@@ -15914,6 +18573,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 5,
   },
+
 
   confirmButton: {
     minHeight: 56,
@@ -15928,10 +18588,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
+
   confirmedButton: {
     backgroundColor:
       '#287A46',
   },
+
 
   confirmButtonText: {
     color: '#FFFFFF',
@@ -15939,9 +18601,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+
   // ==========================================================
   // VISTORIA
   // ==========================================================
+
 
   vistoriaCard: {
     backgroundColor:
@@ -15953,7 +18617,9 @@ const styles = StyleSheet.create({
     padding: 20,
   },
 
+
   // DISPONIBILIDADE
+
 
   disponibilidadeClienteBox: {
     backgroundColor:
@@ -15966,12 +18632,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
+
   disponibilidadeClienteHeader: {
     flexDirection: 'row',
     alignItems:
       'flex-start',
     gap: 12,
   },
+
 
   disponibilidadeIcon: {
     width: 42,
@@ -15984,11 +18652,13 @@ const styles = StyleSheet.create({
       'center',
   },
 
+
   disponibilidadeClienteLabel: {
     color: '#697789',
     fontSize: 9,
     fontWeight: '800',
   },
+
 
   disponibilidadeClienteTexto: {
     color: '#0B2447',
@@ -15997,6 +18667,7 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginTop: 5,
   },
+
 
   disponibilidadeAviso: {
     flexDirection: 'row',
@@ -16010,6 +18681,7 @@ const styles = StyleSheet.create({
     marginTop: 13,
   },
 
+
   disponibilidadeAvisoTexto: {
     flex: 1,
     color: '#52667D',
@@ -16017,7 +18689,9 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 
+
   // AGENDAMENTO SALVO
+
 
   acoesAgendaFuncionario: {
     flexDirection: 'row',
@@ -16025,6 +18699,7 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 12,
   },
+
 
   reagendarFuncionarioButton: {
     flexGrow: 1,
@@ -16040,11 +18715,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
 
+
   reagendarFuncionarioButtonText: {
     color: '#0B5EA8',
     fontSize: 12,
     fontWeight: '800',
   },
+
 
   cancelarFuncionarioButton: {
     flexGrow: 1,
@@ -16060,11 +18737,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
 
+
   cancelarFuncionarioButtonText: {
     color: '#9A3232',
     fontSize: 12,
     fontWeight: '800',
   },
+
 
   boxGerenciarAgendaFuncionario: {
     marginTop: 12,
@@ -16075,11 +18754,13 @@ const styles = StyleSheet.create({
     padding: 14,
   },
 
+
   tituloGerenciarAgendaFuncionario: {
     color: '#0B2447',
     fontSize: 14,
     fontWeight: '800',
   },
+
 
   textoGerenciarAgendaFuncionario: {
     color: '#697789',
@@ -16088,12 +18769,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+
   carregandoAgendaFuncionario: {
     minHeight: 70,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
+
 
   semHorarioFuncionario: {
     marginTop: 10,
@@ -16105,6 +18788,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
+
   semHorarioFuncionarioText: {
     flex: 1,
     color: '#7B5A12',
@@ -16112,9 +18796,11 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 
+
   dataAgendaFuncionarioBox: {
     marginTop: 9,
   },
+
 
   dataAgendaFuncionarioButton: {
     minHeight: 46,
@@ -16128,10 +18814,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
+
   dataAgendaFuncionarioButtonSelected: {
     backgroundColor: '#0B2447',
     borderColor: '#0B2447',
   },
+
 
   dataAgendaFuncionarioText: {
     color: '#0B2447',
@@ -16139,9 +18827,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+
   dataAgendaFuncionarioTextSelected: {
     color: '#FFFFFF',
   },
+
 
   horariosAgendaFuncionario: {
     flexDirection: 'row',
@@ -16149,6 +18839,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 8,
   },
+
 
   horarioAgendaFuncionarioButton: {
     minHeight: 42,
@@ -16162,10 +18853,12 @@ const styles = StyleSheet.create({
     gap: 7,
   },
 
+
   horarioAgendaFuncionarioButtonSelected: {
     backgroundColor: '#0B5EA8',
     borderColor: '#0B5EA8',
   },
+
 
   horarioAgendaFuncionarioText: {
     color: '#0B2447',
@@ -16173,9 +18866,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+
   horarioAgendaFuncionarioTextSelected: {
     color: '#FFFFFF',
   },
+
 
   acoesConfirmacaoAgendaFuncionario: {
     flexDirection: 'row',
@@ -16184,6 +18879,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 12,
   },
+
 
   voltarAgendaFuncionarioButton: {
     minHeight: 42,
@@ -16196,11 +18892,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
   },
 
+
   voltarAgendaFuncionarioButtonText: {
     color: '#42566D',
     fontSize: 11,
     fontWeight: '800',
   },
+
 
   confirmarAgendaFuncionarioButton: {
     minHeight: 42,
@@ -16211,11 +18909,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
   },
 
+
   confirmarAgendaFuncionarioButtonText: {
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '800',
   },
+
 
   confirmarCancelamentoFuncionarioButton: {
     minHeight: 42,
@@ -16226,11 +18926,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
   },
 
+
   confirmarCancelamentoFuncionarioButtonText: {
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '800',
   },
+
 
   agendamentoAtual: {
     backgroundColor:
@@ -16243,12 +18945,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
+
   agendamentoTituloLinha: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     marginBottom: 15,
   },
+
 
   agendamentoCheckIcon: {
     width: 36,
@@ -16261,11 +18965,13 @@ const styles = StyleSheet.create({
       'center',
   },
 
+
   agendamentoTitulo: {
     color: '#287A46',
     fontSize: 14,
     fontWeight: '800',
   },
+
 
   agendamentoSubtitulo: {
     color: '#697789',
@@ -16273,11 +18979,13 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   agendamentoInfoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
+
 
   whatsAppVistoriaButton: {
     minHeight: 54,
@@ -16292,11 +19000,13 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
 
+
   whatsAppVistoriaButtonText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '800',
   },
+
 
   whatsAppVistoriaButtonSubtext: {
     color: '#EAF7EF',
@@ -16304,6 +19014,7 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     marginTop: 2,
   },
+
 
   observacaoAtual: {
     backgroundColor:
@@ -16313,6 +19024,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
+
   observacaoAtualText: {
     color: '#42566D',
     fontSize: 11,
@@ -16320,7 +19032,9 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 
+
   // FORA DA GARANTIA
+
 
   foraGarantiaBox: {
     backgroundColor:
@@ -16337,11 +19051,13 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 
+
   foraGarantiaTitulo: {
     color: '#9A3232',
     fontSize: 14,
     fontWeight: '800',
   },
+
 
   foraGarantiaTexto: {
     color: '#7A4A4A',
@@ -16350,7 +19066,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+
   // FORMULÁRIO DA VISTORIA
+
 
   formularioVistoriaBox: {
     backgroundColor:
@@ -16364,6 +19082,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
 
+
   formularioVistoriaHeader: {
     flexDirection: 'row',
     alignItems:
@@ -16371,6 +19090,7 @@ const styles = StyleSheet.create({
     gap: 11,
     marginBottom: 18,
   },
+
 
   formularioVistoriaIcon: {
     width: 42,
@@ -16383,11 +19103,13 @@ const styles = StyleSheet.create({
       'center',
   },
 
+
   formularioVistoriaTitle: {
     color: '#0B2447',
     fontSize: 15,
     fontWeight: '800',
   },
+
 
   formularioVistoriaText: {
     color: '#697789',
@@ -16396,6 +19118,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   formularioVistoriaMeta: {
     color: '#8995A5',
     fontSize: 10,
@@ -16403,12 +19126,14 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
 
+
   constatacaoRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
     marginBottom: 18,
   },
+
 
   constatacaoButton: {
     minWidth: 110,
@@ -16427,6 +19152,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
 
+
   constatacaoButtonActive: {
     backgroundColor:
       '#0B2447',
@@ -16434,15 +19160,18 @@ const styles = StyleSheet.create({
       '#0B2447',
   },
 
+
   constatacaoButtonText: {
     color: '#24364B',
     fontSize: 12,
     fontWeight: '700',
   },
 
+
   constatacaoButtonTextActive: {
     color: '#FFFFFF',
   },
+
 
   fotosVistoriaAjuda: {
     color: '#697789',
@@ -16451,6 +19180,7 @@ const styles = StyleSheet.create({
     marginTop: -2,
     marginBottom: 10,
   },
+
 
   adicionarFotosVistoriaButton: {
     minHeight: 48,
@@ -16466,15 +19196,18 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
+
   adicionarFotosVistoriaButtonText: {
     color: '#0B5EA8',
     fontSize: 12,
     fontWeight: '800',
   },
 
+
   fotosVistoriaSection: {
     marginBottom: 16,
   },
+
 
   fotosVistoriaSubtitulo: {
     color: '#42566D',
@@ -16483,11 +19216,13 @@ const styles = StyleSheet.create({
     marginBottom: 9,
   },
 
+
   fotosVistoriaGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
   },
+
 
   fotoVistoriaCard: {
     width: 145,
@@ -16500,10 +19235,12 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
 
+
   fotoVistoriaImagem: {
     width: '100%',
     height: '100%',
   },
+
 
   fotoVistoriaSemImagem: {
     width: '100%',
@@ -16511,6 +19248,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
 
   removerFotoVistoriaButton: {
     position: 'absolute',
@@ -16524,6 +19262,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+
   fotoVistoriaPendenteBadge: {
     position: 'absolute',
     left: 7,
@@ -16534,11 +19273,13 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
 
+
   fotoVistoriaPendenteText: {
     color: '#FFFFFF',
     fontSize: 8,
     fontWeight: '700',
   },
+
 
   fotoVistoriaSalvaBadge: {
     position: 'absolute',
@@ -16553,11 +19294,13 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
 
+
   fotoVistoriaSalvaText: {
     color: '#287A46',
     fontSize: 8,
     fontWeight: '800',
   },
+
 
   fotosVistoriaLoading: {
     flexDirection: 'row',
@@ -16566,9 +19309,181 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
+
   fotosVistoriaLoadingText: {
     color: '#697789',
     fontSize: 10,
+  },
+
+
+  // ABA DE EXECUÇÃO INDIVIDUAL — layout alinhado aos cartões do aplicativo.
+  execucaoIndividualSecao: {
+    borderTopWidth: 1,
+    borderTopColor: '#E4EAF2',
+    marginTop: 10,
+    paddingTop: 15,
+    gap: 12,
+  },
+  execucaoIndividualTituloLinha: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  execucaoIndividualTitulo: {
+    color: '#0B2447',
+    fontWeight: '800',
+    fontSize: 14,
+    flexShrink: 1,
+  },
+  execucaoIndividualResumo: {
+    backgroundColor: '#F2F6FB',
+    borderRadius: 11,
+    padding: 13,
+    gap: 9,
+  },
+  execucaoIndividualResumoLinha: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  execucaoIndividualResumoTexto: {
+    color: '#42566D',
+    fontSize: 12,
+    lineHeight: 19,
+    flexShrink: 1,
+  },
+  execucaoIndividualFormulario: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E1E7EF',
+    borderRadius: 12,
+    padding: 15,
+    gap: 10,
+  },
+  execucaoIndividualSubtitulo: {
+    color: '#0B2447',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  execucaoIndividualAjuda: {
+    color: '#697789',
+    fontSize: 11,
+    lineHeight: 17,
+  },
+  execucaoIndividualLinhaCampos: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  execucaoIndividualColunaCampo: {
+    flexGrow: 1,
+    flexBasis: 170,
+    minWidth: 140,
+    gap: 7,
+  },
+  execucaoIndividualRotulo: {
+    color: '#697789',
+    fontSize: 10,
+    fontWeight: '800',
+    marginTop: 8,
+  },
+  execucaoIndividualCampo: {
+    width: '100%',
+    minHeight: 45,
+    paddingHorizontal: 13,
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 11,
+    fontSize: 12,
+    color: '#24364B',
+  },
+  execucaoIndividualOpcoes: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  execucaoIndividualOpcao: {
+    minHeight: 40,
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  execucaoIndividualOpcaoSelecionada: {
+    borderColor: '#0B5EA8',
+    backgroundColor: '#EAF3FB',
+  },
+  execucaoIndividualOpcaoTexto: {
+    color: '#24364B',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  execucaoIndividualOpcaoTextoSelecionada: {
+    color: '#0B5EA8',
+    fontWeight: '800',
+  },
+  execucaoIndividualBotao: {
+    backgroundColor: '#0B2447',
+    borderRadius: 11,
+    minHeight: 47,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 5,
+  },
+  execucaoIndividualBotaoFinalizar: {
+    backgroundColor: '#287A46',
+  },
+  execucaoIndividualBotaoDesabilitado: {
+    opacity: 0.48,
+  },
+  execucaoIndividualBotaoTexto: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  execucaoIndividualEtapas: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E1E7EF',
+    borderRadius: 12,
+    padding: 15,
+    gap: 11,
+  },
+  execucaoIndividualTextoLongo: {
+    minHeight: 82,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#D8DEE7',
+    borderRadius: 11,
+    paddingHorizontal: 13,
+    paddingTop: 12,
+    paddingBottom: 12,
+    fontSize: 12,
+    color: '#24364B',
+  },
+  execucaoIndividualConcluido: {
+    backgroundColor: '#EAF6EE',
+    borderRadius: 11,
+    padding: 13,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  execucaoIndividualConcluidoTitulo: {
+    color: '#287A46',
+    fontWeight: '800',
+    fontSize: 12,
   },
 
   execucaoServicoBox: {
@@ -16581,12 +19496,14 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
 
+
   execucaoServicoHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 11,
     marginBottom: 16,
   },
+
 
   execucaoServicoIcon: {
     width: 42,
@@ -16597,11 +19514,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+
   execucaoServicoTitle: {
     color: '#0B2447',
     fontSize: 15,
     fontWeight: '800',
   },
+
 
   execucaoServicoText: {
     color: '#697789',
@@ -16610,12 +19529,14 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   execucaoServicoInfoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
     marginBottom: 14,
   },
+
 
   execucaoServicoInfoCard: {
     flexGrow: 1,
@@ -16627,11 +19548,13 @@ const styles = StyleSheet.create({
     padding: 13,
   },
 
+
   execucaoServicoInfoLabel: {
     color: '#8995A5',
     fontSize: 9,
     fontWeight: '800',
   },
+
 
   execucaoServicoInfoValue: {
     color: '#24364B',
@@ -16639,6 +19562,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 5,
   },
+
 
   calendarCard: {
     backgroundColor: '#FFFFFF',
@@ -16649,12 +19573,14 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
+
   calendarHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 13,
   },
+
 
   calendarArrowButton: {
     width: 38,
@@ -16665,9 +19591,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+
   calendarArrowButtonDisabled: {
     opacity: 0.45,
   },
+
 
   calendarMonthTitle: {
     color: '#0B2447',
@@ -16675,10 +19603,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+
   calendarWeekRow: {
     flexDirection: 'row',
     marginBottom: 5,
   },
+
 
   calendarWeekText: {
     width: '14.2857%',
@@ -16688,16 +19618,19 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+
   calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
+
 
   calendarDayWrapper: {
     width: '14.2857%',
     alignItems: 'center',
     paddingVertical: 3,
   },
+
 
   calendarDay: {
     width: 38,
@@ -16707,13 +19640,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+
   calendarDayOutside: {
     opacity: 0.18,
   },
 
+
   calendarDayUnavailable: {
     backgroundColor: '#F3F5F7',
   },
+
 
   calendarDayAvailable: {
     backgroundColor: '#FFFFFF',
@@ -16721,10 +19657,12 @@ const styles = StyleSheet.create({
     borderColor: '#0B5EA8',
   },
 
+
   calendarDaySelected: {
     backgroundColor: '#0B2447',
     borderColor: '#0B2447',
   },
+
 
   calendarDayText: {
     color: '#42566D',
@@ -16732,23 +19670,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+
   calendarDayTextOutside: {
     color: '#AAB3BE',
   },
 
+
   calendarDayTextUnavailable: {
     color: '#B0B8C2',
   },
+
 
   calendarDayTextAvailable: {
     color: '#0B5EA8',
     fontWeight: '800',
   },
 
+
   calendarDayTextSelected: {
     color: '#FFFFFF',
     fontWeight: '800',
   },
+
 
   calendarLegend: {
     marginTop: 13,
@@ -16760,11 +19703,13 @@ const styles = StyleSheet.create({
     gap: 14,
   },
 
+
   calendarLegendItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
+
 
   calendarLegendAvailable: {
     width: 12,
@@ -16775,6 +19720,7 @@ const styles = StyleSheet.create({
     borderColor: '#0B5EA8',
   },
 
+
   calendarLegendUnavailable: {
     width: 12,
     height: 12,
@@ -16784,10 +19730,12 @@ const styles = StyleSheet.create({
     borderColor: '#D8DEE7',
   },
 
+
   calendarLegendText: {
     color: '#697789',
     fontSize: 10,
   },
+
 
   timeSelectionCard: {
     marginTop: 12,
@@ -16798,6 +19746,7 @@ const styles = StyleSheet.create({
     padding: 15,
   },
 
+
   timeSelectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -16805,11 +19754,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
+
   timeSelectionTitle: {
     color: '#0B2447',
     fontSize: 13,
     fontWeight: '800',
   },
+
 
   timeSelectionDate: {
     color: '#697789',
@@ -16818,9 +19769,11 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
+
   timeButtonsContainer: {
     gap: 8,
   },
+
 
   timeButton: {
     minHeight: 50,
@@ -16834,10 +19787,12 @@ const styles = StyleSheet.create({
     gap: 9,
   },
 
+
   timeButtonSelected: {
     backgroundColor: '#0B2447',
     borderColor: '#0B2447',
   },
+
 
   timeButtonText: {
     color: '#0B2447',
@@ -16845,9 +19800,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+
   timeButtonTextSelected: {
     color: '#FFFFFF',
   },
+
 
   agendaHintBox: {
     marginTop: 10,
@@ -16859,6 +19816,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
+
   agendaHintText: {
     flex: 1,
     color: '#0B5EA8',
@@ -16866,12 +19824,14 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 
+
   execucaoOpcoesResumo: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
     marginBottom: 12,
   },
+
 
   execucaoOpcaoResumoCard: {
     flex: 1,
@@ -16883,10 +19843,12 @@ const styles = StyleSheet.create({
     padding: 13,
   },
 
+
   execucaoOpcaoResumoCardActive: {
     backgroundColor: '#0B2447',
     borderColor: '#0B2447',
   },
+
 
   execucaoOpcaoResumoLabel: {
     color: '#697789',
@@ -16894,9 +19856,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+
   execucaoOpcaoResumoLabelActive: {
     color: '#C8D8EA',
   },
+
 
   execucaoOpcaoResumoValue: {
     color: '#0B2447',
@@ -16905,9 +19869,11 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 
+
   execucaoOpcaoResumoValueActive: {
     color: '#FFFFFF',
   },
+
 
   execucaoCalendarioHeader: {
     flexDirection: 'row',
@@ -16916,17 +19882,20 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+
   execucaoCalendarioTitle: {
     color: '#0B2447',
     fontSize: 12,
     fontWeight: '800',
   },
 
+
   execucaoCalendarioText: {
     color: '#697789',
     fontSize: 10,
     marginTop: 2,
   },
+
 
   irParaOpcao2Button: {
     minHeight: 44,
@@ -16942,11 +19911,13 @@ const styles = StyleSheet.create({
     gap: 7,
   },
 
+
   irParaOpcao2ButtonText: {
     color: '#0B5EA8',
     fontSize: 11,
     fontWeight: '800',
   },
+
 
   agendamentoExecucaoBox: {
     marginTop: 16,
@@ -16957,6 +19928,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
 
+
   agendamentoExecucaoHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -16964,11 +19936,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
+
   agendamentoExecucaoTitle: {
     color: '#0B2447',
     fontSize: 14,
     fontWeight: '800',
   },
+
 
   agendamentoExecucaoSubtitle: {
     color: '#697789',
@@ -16977,6 +19951,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   agendamentoExecucaoLoading: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -16984,10 +19959,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
 
+
   agendamentoExecucaoLoadingText: {
     color: '#697789',
     fontSize: 11,
   },
+
 
   agendamentoExecucaoStatusAguardando: {
     flexDirection: 'row',
@@ -17000,11 +19977,13 @@ const styles = StyleSheet.create({
     padding: 13,
   },
 
+
   agendamentoExecucaoStatusTitle: {
     color: '#755313',
     fontSize: 12,
     fontWeight: '800',
   },
+
 
   agendamentoExecucaoStatusText: {
     color: '#806A3D',
@@ -17013,12 +19992,14 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   agendamentoExecucaoOpcoesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
     marginTop: 12,
   },
+
 
   agendamentoExecucaoOpcaoCard: {
     flex: 1,
@@ -17030,11 +20011,13 @@ const styles = StyleSheet.create({
     padding: 13,
   },
 
+
   agendamentoExecucaoOpcaoLabel: {
     color: '#697789',
     fontSize: 9,
     fontWeight: '800',
   },
+
 
   agendamentoExecucaoOpcaoValue: {
     color: '#0B2447',
@@ -17042,6 +20025,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: 5,
   },
+
 
   agendamentoExecucaoConfirmado: {
     flexDirection: 'row',
@@ -17054,11 +20038,13 @@ const styles = StyleSheet.create({
     padding: 14,
   },
 
+
   agendamentoExecucaoConfirmadoTitle: {
     color: '#287A46',
     fontSize: 12,
     fontWeight: '800',
   },
+
 
   agendamentoExecucaoConfirmadoValue: {
     color: '#1E5F36',
@@ -17066,6 +20052,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: 4,
   },
+
 
   agendamentoExecucaoReagendamento: {
     flexDirection: 'row',
@@ -17079,11 +20066,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
+
   agendamentoExecucaoReagendamentoTitle: {
     color: '#8A5316',
     fontSize: 12,
     fontWeight: '800',
   },
+
 
   agendamentoExecucaoReagendamentoText: {
     color: '#7A6549',
@@ -17092,12 +20081,14 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   agendamentoExecucaoFormTitle: {
     color: '#0B2447',
     fontSize: 12,
     fontWeight: '800',
     marginBottom: 10,
   },
+
 
   agendamentoExecucaoFormCard: {
     backgroundColor: '#FFFFFF',
@@ -17107,6 +20098,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 10,
   },
+
 
   enviarPropostaExecucaoButton: {
     minHeight: 50,
@@ -17119,11 +20111,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+
   enviarPropostaExecucaoButtonText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '800',
   },
+
 
   iniciarExecucaoButton: {
     minHeight: 55,
@@ -17136,11 +20130,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+
   iniciarExecucaoButtonText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
   },
+
 
   formularioExecucaoBox: {
     backgroundColor: '#FFFFFF',
@@ -17151,6 +20147,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
 
+
   formularioExecucaoHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -17158,11 +20155,13 @@ const styles = StyleSheet.create({
     marginBottom: 17,
   },
 
+
   formularioExecucaoTitle: {
     color: '#0B2447',
     fontSize: 14,
     fontWeight: '800',
   },
+
 
   formularioExecucaoText: {
     color: '#697789',
@@ -17171,6 +20170,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   fotosExecucaoAjuda: {
     color: '#697789',
     fontSize: 11,
@@ -17178,6 +20178,7 @@ const styles = StyleSheet.create({
     marginTop: -2,
     marginBottom: 10,
   },
+
 
   adicionarFotosExecucaoButton: {
     minHeight: 48,
@@ -17193,15 +20194,18 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
+
   adicionarFotosExecucaoButtonText: {
     color: '#0B5EA8',
     fontSize: 12,
     fontWeight: '800',
   },
 
+
   fotosExecucaoSection: {
     marginBottom: 16,
   },
+
 
   fotosExecucaoSubtitulo: {
     color: '#42566D',
@@ -17210,11 +20214,13 @@ const styles = StyleSheet.create({
     marginBottom: 9,
   },
 
+
   fotosExecucaoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
   },
+
 
   fotoExecucaoCard: {
     width: 145,
@@ -17227,10 +20233,12 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
 
+
   fotoExecucaoImagem: {
     width: '100%',
     height: '100%',
   },
+
 
   fotoExecucaoSemImagem: {
     width: '100%',
@@ -17238,6 +20246,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
 
   removerFotoExecucaoButton: {
     position: 'absolute',
@@ -17251,6 +20260,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+
   fotoExecucaoPendenteBadge: {
     position: 'absolute',
     left: 7,
@@ -17261,11 +20271,13 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
 
+
   fotoExecucaoPendenteText: {
     color: '#FFFFFF',
     fontSize: 8,
     fontWeight: '700',
   },
+
 
   fotoExecucaoSalvaBadge: {
     position: 'absolute',
@@ -17280,11 +20292,13 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
 
+
   fotoExecucaoSalvaText: {
     color: '#287A46',
     fontSize: 8,
     fontWeight: '800',
   },
+
 
   fotosExecucaoLoading: {
     flexDirection: 'row',
@@ -17293,10 +20307,12 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
+
   fotosExecucaoLoadingText: {
     color: '#697789',
     fontSize: 10,
   },
+
 
   salvarExecucaoButton: {
     minHeight: 54,
@@ -17309,11 +20325,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 
+
   salvarExecucaoButtonText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
   },
+
 
   finalizarExecucaoBox: {
     backgroundColor: '#F8FAFC',
@@ -17324,6 +20342,7 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
 
+
   finalizarExecucaoHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -17331,11 +20350,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 
+
   finalizarExecucaoTitle: {
     color: '#0B2447',
     fontSize: 14,
     fontWeight: '800',
   },
+
 
   finalizarExecucaoText: {
     color: '#697789',
@@ -17344,12 +20365,14 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   conclusaoExecucaoRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
     marginBottom: 16,
   },
+
 
   conclusaoExecucaoButton: {
     flexGrow: 1,
@@ -17366,15 +20389,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
 
+
   conclusaoExecucaoButtonTotal: {
     backgroundColor: '#287A46',
     borderColor: '#287A46',
   },
 
+
   conclusaoExecucaoButtonImprocedente: {
     backgroundColor: '#9A3232',
     borderColor: '#9A3232',
   },
+
 
   conclusaoExecucaoButtonText: {
     color: '#24364B',
@@ -17382,9 +20408,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+
   conclusaoExecucaoButtonTextActive: {
     color: '#FFFFFF',
   },
+
 
   finalizarExecucaoButton: {
     minHeight: 55,
@@ -17397,11 +20425,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 
+
   finalizarExecucaoButtonText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
   },
+
 
   execucaoConcluidaBox: {
     backgroundColor: '#EAF6EE',
@@ -17415,11 +20445,13 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 
+
   execucaoConcluidaTitle: {
     color: '#287A46',
     fontSize: 14,
     fontWeight: '800',
   },
+
 
   execucaoConcluidaText: {
     color: '#567362',
@@ -17428,12 +20460,14 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   execucaoConcluidaInfo: {
     color: '#42566D',
     fontSize: 10,
     fontWeight: '700',
     marginTop: 6,
   },
+
 
   form03Box: {
     backgroundColor: '#F8FAFC',
@@ -17444,12 +20478,14 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
 
+
   form03Header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 11,
     marginBottom: 16,
   },
+
 
   form03Icon: {
     width: 42,
@@ -17460,11 +20496,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+
   form03Title: {
     color: '#0B2447',
     fontSize: 15,
     fontWeight: '800',
   },
+
 
   form03Text: {
     color: '#697789',
@@ -17472,6 +20510,7 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: 3,
   },
+
 
   form03Button: {
     minHeight: 54,
@@ -17483,17 +20522,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
+
   form03ButtonText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
   },
 
+
   form03Grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
   },
+
 
   form03InfoCard: {
     flexGrow: 1,
@@ -17506,6 +20548,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
 
+
   form03WideCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -17515,12 +20558,14 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
+
   form03Label: {
     color: '#8995A5',
     fontSize: 9,
     fontWeight: '800',
     marginBottom: 6,
   },
+
 
   form03Value: {
     color: '#24364B',
@@ -17529,12 +20574,14 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
+
   form03SubValue: {
     color: '#697789',
     fontSize: 10,
     lineHeight: 15,
     marginTop: 4,
   },
+
 
   form03SectionTitle: {
     color: '#0B2447',
@@ -17543,6 +20590,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 10,
   },
+
 
   form03SignatureCard: {
     flexGrow: 1,
@@ -17556,13 +20604,16 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
+
   form03SignedText: { color: '#287A46', fontSize: 12, fontWeight: '800' },
+
 
   form03PendingText: {
     color: '#9A6A00',
     fontSize: 12,
     fontWeight: '800',
   },
+
 
   form03FotosResumo: {
     flexDirection: 'row',
@@ -17575,11 +20626,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
+
   form03FotosResumoText: {
     color: '#42566D',
     fontSize: 11,
     fontWeight: '700',
   },
+
 
   form03SecondaryButton: {
     minHeight: 46,
@@ -17594,11 +20647,13 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
+
   form03SecondaryButtonText: {
     color: '#0B5EA8',
     fontSize: 11,
     fontWeight: '800',
   },
+
 
   form03GerarPdfButton: {
     minHeight: 56,
@@ -17611,11 +20666,13 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 
+
   form03GerarPdfButtonText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
   },
+
 
   form03AssinaturaBox: {
     backgroundColor: '#FFFFFF',
@@ -17626,11 +20683,13 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
 
+
   form03AssinaturaTitle: {
     color: '#0B2447',
     fontSize: 14,
     fontWeight: '800',
   },
+
 
   form03AssinaturaText: {
     color: '#697789',
@@ -17639,6 +20698,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
     marginBottom: 12,
   },
+
 
   form03ModoButton: {
     minHeight: 72,
@@ -17653,10 +20713,12 @@ const styles = StyleSheet.create({
     marginTop: 9,
   },
 
+
   form03ModoButtonActive: {
     backgroundColor: '#0B2447',
     borderColor: '#0B2447',
   },
+
 
   form03ModoButtonTitle: {
     color: '#0B2447',
@@ -17664,9 +20726,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+
   form03ModoButtonTitleActive: {
     color: '#FFFFFF',
   },
+
 
   form03ModoButtonText: {
     color: '#697789',
@@ -17675,9 +20739,11 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   form03ModoButtonTextActive: {
     color: '#DDE7F2',
   },
+
 
   form03ModoLoading: {
     flexDirection: 'row',
@@ -17686,10 +20752,12 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 
+
   form03ModoLoadingText: {
     color: '#697789',
     fontSize: 10,
   },
+
 
   assinaturasManuaisBox: {
     marginTop: 18,
@@ -17698,11 +20766,13 @@ const styles = StyleSheet.create({
     borderTopColor: '#E2E8F0',
   },
 
+
   assinaturasManuaisTitle: {
     color: '#0B2447',
     fontSize: 14,
     fontWeight: '800',
   },
+
 
   assinaturasManuaisText: {
     color: '#697789',
@@ -17711,6 +20781,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 12,
   },
+
 
   assinaturaManualCard: {
     backgroundColor: '#F8FAFC',
@@ -17721,6 +20792,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
+
   assinaturaManualCardTitle: {
     color: '#0B2447',
     fontSize: 12,
@@ -17728,12 +20800,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
+
   assinaturaResponsavelNome: {
     color: '#42566D',
     fontSize: 11,
     fontWeight: '700',
     marginBottom: 10,
   },
+
 
   assinaturaSalvaBox: {
     flexDirection: 'row',
@@ -17746,6 +20820,7 @@ const styles = StyleSheet.create({
     borderRadius: 11,
   },
 
+
   assinaturaPendenteBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -17757,11 +20832,13 @@ const styles = StyleSheet.create({
     borderRadius: 11,
   },
 
+
   assinaturaPendenteTitle: {
     color: '#9A6A00',
     fontSize: 11,
     fontWeight: '800',
   },
+
 
   assinaturaPendenteText: {
     color: '#7A6540',
@@ -17770,11 +20847,13 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   assinaturaSalvaTitle: {
     color: '#287A46',
     fontSize: 11,
     fontWeight: '800',
   },
+
 
   assinaturaSalvaText: {
     color: '#567362',
@@ -17782,9 +20861,11 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   signaturePadContainer: {
     marginTop: 4,
   },
+
 
   signaturePadTitle: {
     color: '#24364B',
@@ -17792,12 +20873,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+
   signaturePadHelp: {
     color: '#8995A5',
     fontSize: 10,
     marginTop: 3,
     marginBottom: 8,
   },
+
 
   signaturePadArea: {
     height: 180,
@@ -17808,6 +20891,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 
+
   signaturePadActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -17815,6 +20899,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 10,
   },
+
 
   signatureClearButton: {
     minHeight: 42,
@@ -17829,11 +20914,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
 
+
   signatureClearButtonText: {
     color: '#9A3232',
     fontSize: 10,
     fontWeight: '800',
   },
+
 
   signatureSaveButton: {
     minHeight: 42,
@@ -17846,11 +20933,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
   },
 
+
   signatureSaveButtonText: {
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '800',
   },
+
 
   execucaoEmAndamentoBox: {
     minHeight: 52,
@@ -17864,11 +20953,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
+
   execucaoEmAndamentoText: {
     color: '#0B5EA8',
     fontSize: 12,
     fontWeight: '800',
   },
+
 
   finalizarVistoriaBox: {
     backgroundColor: '#FFFFFF',
@@ -17879,6 +20970,7 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
 
+
   finalizarVistoriaHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -17886,11 +20978,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 
+
   finalizarVistoriaTitle: {
     color: '#0B2447',
     fontSize: 14,
     fontWeight: '800',
   },
+
 
   finalizarVistoriaText: {
     color: '#697789',
@@ -17899,12 +20993,14 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   resultadoVistoriaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
     marginBottom: 16,
   },
+
 
   resultadoVistoriaButton: {
     flexGrow: 1,
@@ -17921,20 +21017,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
 
+
   resultadoVistoriaButtonAprovada: {
     backgroundColor: '#287A46',
     borderColor: '#287A46',
   },
+
 
   resultadoVistoriaButtonNaoAprovada: {
     backgroundColor: '#9A3232',
     borderColor: '#9A3232',
   },
 
+
   resultadoVistoriaButtonAusente: {
     backgroundColor: '#A76500',
     borderColor: '#A76500',
   },
+
 
   ausenciaClienteBox: {
     backgroundColor: '#FFF7E8',
@@ -17945,6 +21045,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
+
   ausenciaClienteHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -17952,11 +21053,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
+
   ausenciaClienteTitle: {
     color: '#6D4700',
     fontSize: 13,
     fontWeight: '800',
   },
+
 
   ausenciaClienteText: {
     color: '#7B6540',
@@ -17965,12 +21068,14 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   ausenciaClienteAcoes: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 9,
     marginBottom: 10,
   },
+
 
   ausenciaClienteFotoButton: {
     flexGrow: 1,
@@ -17987,11 +21092,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
 
+
   ausenciaClienteFotoButtonText: {
     color: '#0B5EA8',
     fontSize: 11,
     fontWeight: '800',
   },
+
 
   ausenciaClienteContagem: {
     color: '#697789',
@@ -17999,6 +21106,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 12,
   },
+
 
   encerrarAusenciaButton: {
     minHeight: 52,
@@ -18011,12 +21119,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 
+
   encerrarAusenciaButtonText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '800',
     textAlign: 'center',
   },
+
 
   resultadoVistoriaButtonText: {
     color: '#24364B',
@@ -18025,9 +21135,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+
   resultadoVistoriaButtonTextActive: {
     color: '#FFFFFF',
   },
+
 
   finalizarVistoriaButton: {
     minHeight: 55,
@@ -18040,16 +21152,19 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 
+
   finalizarVistoriaButtonText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
   },
 
+
   vistoriaHistoricoWrapper: {
     marginTop: 18,
     marginBottom: 18,
   },
+
 
   vistoriaHistoricoConteudo: {
     borderWidth: 1,
@@ -18061,17 +21176,20 @@ const styles = StyleSheet.create({
     gap: 14,
   },
 
+
   vistoriaHistoricoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
   },
 
+
   vistoriaHistoricoBloco: {
     borderTopWidth: 1,
     borderTopColor: '#E7EBF0',
     paddingTop: 12,
   },
+
 
   vistoriaHistoricoLabel: {
     color: '#607086',
@@ -18080,11 +21198,13 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
 
+
   vistoriaHistoricoTexto: {
     color: '#24364B',
     fontSize: 12,
     lineHeight: 18,
   },
+
 
   vistoriaFinalizadaBox: {
     borderWidth: 1,
@@ -18097,15 +21217,18 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 
+
   vistoriaFinalizadaAprovada: {
     backgroundColor: '#EAF6EE',
     borderColor: '#AED7BA',
   },
 
+
   vistoriaFinalizadaNaoAprovada: {
     backgroundColor: '#FCEEEE',
     borderColor: '#D29A9A',
   },
+
 
   vistoriaFinalizadaTitle: {
     color: '#24364B',
@@ -18113,12 +21236,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+
   vistoriaFinalizadaText: {
     color: '#697789',
     fontSize: 11,
     lineHeight: 17,
     marginTop: 4,
   },
+
 
   salvarFormularioVistoriaButton: {
     minHeight: 54,
@@ -18133,13 +21258,16 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 
+
   salvarFormularioVistoriaButtonText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
   },
 
+
   // INICIAR VISTORIA
+
 
   iniciarVistoriaBox: {
     backgroundColor:
@@ -18153,6 +21281,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
 
+
   iniciarVistoriaHeader: {
     flexDirection: 'row',
     alignItems:
@@ -18160,11 +21289,13 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 
+
   iniciarVistoriaTitle: {
     color: '#0B2447',
     fontSize: 14,
     fontWeight: '800',
   },
+
 
   iniciarVistoriaText: {
     color: '#697789',
@@ -18173,12 +21304,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+
   iniciarVistoriaAcoes: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
     marginTop: 16,
   },
+
 
   iniciarVistoriaButton: {
     minHeight: 54,
@@ -18193,6 +21326,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: 220,
   },
+
 
   clienteAusenteAntesButton: {
     minHeight: 54,
@@ -18211,11 +21345,13 @@ const styles = StyleSheet.create({
     flexBasis: 220,
   },
 
+
   clienteAusenteAntesButtonText: {
     color: '#A76500',
     fontSize: 13,
     fontWeight: '800',
   },
+
 
   iniciarVistoriaButtonText: {
     color: '#FFFFFF',
@@ -18223,7 +21359,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+
   // DEFINIR AGENDAMENTO
+
 
   definirAgendamentoHeader: {
     flexDirection: 'row',
@@ -18234,11 +21372,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
+
   definirAgendamentoTitulo: {
     color: '#0B2447',
     fontSize: 13,
     fontWeight: '800',
   },
+
 
   definirAgendamentoTexto: {
     color: '#697789',
@@ -18247,7 +21387,9 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   // INPUTS
+
 
   inputRow: {
     flexDirection: 'row',
@@ -18255,10 +21397,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 
+
   inputColumn: {
     flexGrow: 1,
     flexBasis: 200,
   },
+
 
   inputLabel: {
     color: '#697789',
@@ -18267,6 +21411,7 @@ const styles = StyleSheet.create({
     marginBottom: 7,
     marginTop: 10,
   },
+
 
   input: {
     width: '100%',
@@ -18282,6 +21427,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
+
   inputComIcone: {
     minHeight: 48,
     backgroundColor:
@@ -18296,6 +21442,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
+
   inputInterno: {
     flex: 1,
     height: 46,
@@ -18306,12 +21453,15 @@ const styles = StyleSheet.create({
       'transparent',
   },
 
+
   textArea: {
     minHeight: 100,
     paddingTop: 13,
   },
 
+
   // BOTÃO AGENDAR
+
 
   agendarButton: {
     minHeight: 54,
@@ -18326,15 +21476,18 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
 
+
   agendarButtonText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
   },
 
+
   // ==========================================================
   // MENSAGENS
   // ==========================================================
+
 
   messageError: {
     backgroundColor:
@@ -18348,12 +21501,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
+
   messageErrorText: {
     flex: 1,
     color: '#9A3232',
     fontSize: 11,
     lineHeight: 17,
   },
+
 
   messageSuccess: {
     backgroundColor:
@@ -18367,6 +21522,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
+
   messageSuccessText: {
     flex: 1,
     color: '#287A46',
@@ -18375,9 +21531,11 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
 
+
   // ==========================================================
   // ANDAMENTO
   // ==========================================================
+
 
   timelineCard: {
     backgroundColor:
@@ -18390,11 +21548,13 @@ const styles = StyleSheet.create({
     gap: 16,
   },
 
+
   timelineItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 11,
   },
+
 
   timelineIcon: {
     width: 34,
@@ -18407,17 +21567,20 @@ const styles = StyleSheet.create({
       'center',
   },
 
+
   timelineTitle: {
     color: '#24364B',
     fontSize: 12,
     fontWeight: '700',
   },
 
+
   timelineDate: {
     color: '#8995A5',
     fontSize: 10,
     marginTop: 3,
   },
+
 
   updateText: {
     color: '#8995A5',
@@ -18426,9 +21589,11 @@ const styles = StyleSheet.create({
     marginTop: 15,
   },
 
+
   // ==========================================================
   // LOADING
   // ==========================================================
+
 
   loadingContainer: {
     flex: 1,
@@ -18437,11 +21602,13 @@ const styles = StyleSheet.create({
       'center',
   },
 
+
   loadingText: {
     color: '#697789',
     fontSize: 11,
     marginTop: 8,
   },
+
 
   loadingInline: {
     flexDirection: 'row',
@@ -18450,14 +21617,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
 
+
   loadingInlineText: {
     color: '#697789',
     fontSize: 11,
   },
 
+
   // ==========================================================
   // MODAL
   // ==========================================================
+
 
   modalOverlay: {
     flex: 1,
@@ -18468,6 +21638,7 @@ const styles = StyleSheet.create({
       'center',
     padding: 20,
   },
+
 
   modalClose: {
     position: 'absolute',
@@ -18484,14 +21655,17 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
 
+
   modalImage: {
     width: '100%',
     height: '82%',
   },
 
+
   // ==========================================================
   // RODAPÉ
   // ==========================================================
+
 
   footer: {
     color: '#8995A5',

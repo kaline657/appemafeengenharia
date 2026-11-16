@@ -883,6 +883,26 @@ type AgendamentoExecucaoCliente = {
   created_at: string;
 };
 
+type ServicoProblemaCliente = {
+  problema_id: string;
+  numero: number;
+  comodo: string | null;
+  descricao: string;
+  garantia: string | null;
+  procedencia: 'procedente' | 'improcedente' | null;
+  agendamento_id: string | null;
+  data_execucao: string | null;
+  hora_inicio: string | null;
+  hora_fim: string | null;
+  agendamento_status: string | null;
+  execucao_status: string | null;
+};
+
+type FeedbackAgendamentoProblema = {
+  tipo: 'sucesso' | 'erro';
+  mensagem: string;
+};
+
 type FotoAusenciaCliente = {
   foto_id: string;
   caminho_storage: string;
@@ -1106,6 +1126,30 @@ export default function DetalhesSolicitacaoScreen() {
     setHorarioExecucaoSelecionadoId,
   ] = useState('');
 
+  // Cada problema possui seu próprio agendamento e sua própria confirmação.
+  const [servicosPorProblema, setServicosPorProblema] =
+    useState<ServicoProblemaCliente[]>([]);
+  const [carregandoServicosPorProblema, setCarregandoServicosPorProblema] =
+    useState(false);
+  const [erroServicosPorProblema, setErroServicosPorProblema] =
+    useState('');
+  const [confirmandoProblemaId, setConfirmandoProblemaId] =
+    useState<string | null>(null);
+  const [feedbackPorProblema, setFeedbackPorProblema] =
+    useState<Record<string, FeedbackAgendamentoProblema>>({});
+
+  const problemasProcedentesParaExecucao = servicosPorProblema.filter(
+    (item) =>
+      item.procedencia === 'procedente' &&
+      ['dentro_da_garantia', 'dentro_garantia'].includes(item.garantia ?? '')
+  );
+
+  const haAgendamentoIndividualAtivo = servicosPorProblema.some(
+    (item) =>
+      Boolean(item.agendamento_id) &&
+      ['aguardando_cliente', 'confirmada'].includes(item.agendamento_status ?? '')
+  );
+
   const [
     garantiaSolicitacao,
     setGarantiaSolicitacao,
@@ -1259,6 +1303,7 @@ export default function DetalhesSolicitacaoScreen() {
     await carregarAgendamentoVistoria();
     await carregarResultadoVistoriaCliente();
     await carregarAgendamentoExecucaoCliente();
+    await carregarServicosPorProblema();
     await carregarForm03Cliente();
     await carregarAvaliacaoCliente();
   }
@@ -1977,6 +2022,63 @@ export default function DetalhesSolicitacaoScreen() {
       setCarregandoAgendamentoExecucao(
         false
       );
+    }
+  }
+
+  async function carregarServicosPorProblema() {
+    try {
+      setCarregandoServicosPorProblema(true);
+      setErroServicosPorProblema('');
+      const { data, error } = await supabase.rpc('listar_servicos_problema', {
+        p_solicitacao_id: solicitacaoId,
+      });
+      if (error) throw error;
+      setServicosPorProblema(
+        Array.isArray(data) ? (data as ServicoProblemaCliente[]) : []
+      );
+    } catch (error: any) {
+      console.error('Erro ao carregar agendamentos individuais:', error);
+      setErroServicosPorProblema(
+        error?.message || 'Não foi possível carregar os agendamentos por problema.'
+      );
+    } finally {
+      setCarregandoServicosPorProblema(false);
+    }
+  }
+
+  async function confirmarExecucaoDoProblema(item: ServicoProblemaCliente) {
+    if (confirmandoProblemaId || !item.agendamento_id ||
+        item.agendamento_status !== 'aguardando_cliente') return;
+    try {
+      setConfirmandoProblemaId(item.problema_id);
+      setFeedbackPorProblema((atual) => {
+        const copia = { ...atual };
+        delete copia[item.problema_id];
+        return copia;
+      });
+      const { error } = await supabase.rpc('confirmar_execucao_problema_cliente', {
+        p_agendamento_id: item.agendamento_id,
+      });
+      if (error) throw error;
+      await carregarServicosPorProblema();
+      setFeedbackPorProblema((atual) => ({
+        ...atual,
+        [item.problema_id]: {
+          tipo: 'sucesso',
+          mensagem: `Agendamento do problema ${item.numero} confirmado com sucesso.`,
+        },
+      }));
+    } catch (error: any) {
+      console.error('Erro ao confirmar execução do problema:', error);
+      setFeedbackPorProblema((atual) => ({
+        ...atual,
+        [item.problema_id]: {
+          tipo: 'erro',
+          mensagem: error?.message || 'Não foi possível confirmar este agendamento.',
+        },
+      }));
+    } finally {
+      setConfirmandoProblemaId(null);
     }
   }
 
@@ -3536,7 +3638,7 @@ export default function DetalhesSolicitacaoScreen() {
         return 'A vistoria técnica está em andamento. As próximas atualizações serão registradas neste protocolo.';
 
       case 'aprovada':
-        return 'A vistoria foi aprovada. Confira abaixo o agendamento proposto para a execução do serviço.';
+        return 'A vistoria foi aprovada. Confira abaixo os agendamentos de execução dos problemas procedentes.';
 
       case 'nao_aprovada':
         return 'A vistoria foi finalizada como não aprovada. Consulte abaixo o resultado e a justificativa registrada pela equipe técnica.';
@@ -5611,9 +5713,154 @@ export default function DetalhesSolicitacaoScreen() {
                 </View>
               ) : null}
 
+              {/* AGENDAMENTOS DE EXECUÇÃO INDEPENDENTES POR PROBLEMA */}
+              {carregandoServicosPorProblema && servicosPorProblema.length === 0 ? (
+                <View style={styles.execucaoAgendaLoading}>
+                  <ActivityIndicator color="#0B2447" />
+                  <Text style={styles.execucaoAgendaLoadingText}>
+                    Carregando execuções por problema...
+                  </Text>
+                </View>
+              ) : null}
+
+              {erroServicosPorProblema ? (
+                <View style={styles.execucaoAgendaError}>
+                  <Ionicons name="alert-circle-outline" size={19} color="#9A3232" />
+                  <Text style={styles.execucaoAgendaErrorText}>{erroServicosPorProblema}</Text>
+                </View>
+              ) : null}
+
+              {problemasProcedentesParaExecucao.length > 0 ? (
+                <>
+                  <Text style={styles.sectionTitle}>Execução por problema</Text>
+                  <Text style={[styles.execucaoAgendaSubtitle, { marginBottom: 12 }]}>
+                    Cada problema procedente possui agendamento próprio. Confirme apenas
+                    o horário do serviço indicado; os demais não serão alterados.
+                  </Text>
+                  {problemasProcedentesParaExecucao.map((item) => {
+                    const pendente = item.agendamento_status === 'aguardando_cliente';
+                    const confirmada = item.agendamento_status === 'confirmada';
+                    const agendado = pendente || confirmada;
+                    const feedback = feedbackPorProblema[item.problema_id];
+                    const processando = confirmandoProblemaId === item.problema_id;
+                    return (
+                      <View key={item.problema_id} style={[styles.execucaoAgendaCard, { marginBottom: 12 }]}>
+                        <View style={styles.execucaoAgendaHeader}>
+                          <View style={styles.execucaoAgendaIcon}>
+                            <Ionicons name="construct-outline" size={22} color="#FFFFFF" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.execucaoAgendaTitle}>
+                              Problema {item.numero}{item.comodo ? ` • ${item.comodo}` : ''}
+                            </Text>
+                            <Text style={styles.execucaoAgendaSubtitle}>
+                              {item.descricao}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {agendado ? (
+                          <View style={styles.execucaoAgendaProposta}>
+                            <Text style={styles.execucaoAgendaPropostaLabel}>
+                              {pendente ? 'AGENDAMENTO AGUARDANDO SUA CONFIRMAÇÃO' : 'AGENDAMENTO CONFIRMADO'}
+                            </Text>
+                            <View style={styles.execucaoAgendaDataRow}>
+                              <View style={styles.execucaoAgendaDataItem}>
+                                <Ionicons name="calendar-outline" size={19} color="#0B2447" />
+                                <View>
+                                  <Text style={styles.execucaoAgendaInfoLabel}>DATA</Text>
+                                  <Text style={styles.execucaoAgendaInfoValue}>
+                                    {formatarData(item.data_execucao)}
+                                  </Text>
+                                </View>
+                              </View>
+                              <View style={styles.execucaoAgendaDataItem}>
+                                <Ionicons name="time-outline" size={19} color="#0B2447" />
+                                <View>
+                                  <Text style={styles.execucaoAgendaInfoLabel}>HORÁRIO</Text>
+                                  <Text style={styles.execucaoAgendaInfoValue}>
+                                    {formatarHora(item.hora_inicio)} às {formatarHora(item.hora_fim)}
+                                  </Text>
+                                </View>
+                              </View>
+                            </View>
+                          </View>
+                        ) : (
+                          <Text style={styles.execucaoAgendaSubtitle}>
+                            {item.execucao_status === 'concluida'
+                              ? 'Serviço concluído.'
+                              : 'Aguardando proposta de agendamento da EMAFE para este problema.'}
+                          </Text>
+                        )}
+
+                        {pendente && item.agendamento_id ? (
+                          <>
+                            <Text style={styles.execucaoAgendaPergunta}>
+                              Você confirma este agendamento do problema {item.numero}?
+                            </Text>
+                            <TouchableOpacity
+                              style={[
+                                styles.execucaoAgendaConfirmButton,
+                                confirmandoProblemaId !== null && styles.execucaoAgendaButtonDisabled,
+                              ]}
+                              disabled={confirmandoProblemaId !== null}
+                              onPress={() => confirmarExecucaoDoProblema(item)}
+                            >
+                              {processando ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                              ) : (
+                                <Ionicons name="checkmark-circle-outline" size={19} color="#FFFFFF" />
+                              )}
+                              <Text style={styles.execucaoAgendaConfirmButtonText}>
+                                Confirmar problema {item.numero}
+                              </Text>
+                            </TouchableOpacity>
+                            <Text style={[styles.execucaoAgendaSubtitle, { marginTop: 8 }]}>
+                              Para solicitar outra data, entre em contato com a EMAFE.
+                            </Text>
+                          </>
+                        ) : null}
+
+                        {confirmada ? (
+                          <View style={styles.execucaoAgendaConfirmadaBox}>
+                            <Ionicons name="checkmark-circle" size={25} color="#287A46" />
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.execucaoAgendaConfirmadaTitle}>
+                                Agendamento do problema {item.numero} confirmado
+                              </Text>
+                              <Text style={styles.execucaoAgendaConfirmadaDate}>
+                                {formatarData(item.data_execucao)} • {formatarHora(item.hora_inicio)} às {formatarHora(item.hora_fim)}
+                              </Text>
+                            </View>
+                          </View>
+                        ) : null}
+
+                        {feedback ? (
+                          <View style={feedback.tipo === 'erro'
+                            ? styles.execucaoAgendaError
+                            : styles.execucaoAgendaSuccess}>
+                            <Ionicons
+                              name={feedback.tipo === 'erro' ? 'alert-circle-outline' : 'checkmark-circle-outline'}
+                              size={19}
+                              color={feedback.tipo === 'erro' ? '#9A3232' : '#287A46'}
+                            />
+                            <Text style={feedback.tipo === 'erro'
+                              ? styles.execucaoAgendaErrorText
+                              : styles.execucaoAgendaSuccessText}>
+                              {feedback.mensagem}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                </>
+              ) : null}
+
               {/* AGENDAMENTO DA EXECUÇÃO */}
 
               {agendamentoExecucao &&
+              !haAgendamentoIndividualAtivo &&
               agendamentoExecucao.status !==
                 'cancelada' ? (
                 <>

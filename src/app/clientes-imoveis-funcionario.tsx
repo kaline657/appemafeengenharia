@@ -357,6 +357,10 @@ export default function ClientesImoveisFuncionarioScreen() {
   const [telefone, setTelefone] = useState('');
   const [unidadeSelecionadaId, setUnidadeSelecionadaId] = useState('');
   const [buscaUnidade, setBuscaUnidade] = useState('');
+  // Vínculo independente de imóveis ao cliente já cadastrado.
+  const [clienteVinculoId, setClienteVinculoId] = useState<string | null>(null);
+  const [buscaUnidadeVinculo, setBuscaUnidadeVinculo] = useState('');
+  const [unidadeVinculoSelecionadaId, setUnidadeVinculoSelecionadaId] = useState('');
 
   // EMPREENDIMENTOS E UNIDADES
   const [catalogo, setCatalogo] = useState<Catalogo>(CATALOGO_VAZIO);
@@ -376,6 +380,24 @@ export default function ClientesImoveisFuncionarioScreen() {
   const [dataChaves, setDataChaves] = useState('');
   const [dataObra, setDataObra] = useState('');
   const [dataContrato, setDataContrato] = useState('');
+
+  // Edição segura das datas das casas já cadastradas. As demais relações
+  // (empreendimento, manual e cliente) permanecem inalteradas.
+  const [unidadeEdicaoDatas, setUnidadeEdicaoDatas] =
+    useState<UnidadeCadastro | null>(null);
+  const [edicaoHabiteSe, setEdicaoHabiteSe] = useState('');
+  const [edicaoEntregaChaves, setEdicaoEntregaChaves] = useState('');
+  const [edicaoEntregaObra, setEdicaoEntregaObra] = useState('');
+  const [edicaoAssinaturaContrato, setEdicaoAssinaturaContrato] = useState('');
+  const [regrasDataEdicao, setRegrasDataEdicao] = useState<string[]>([]);
+  const [carregandoRegrasEdicao, setCarregandoRegrasEdicao] = useState(false);
+  const [erroRegrasEdicao, setErroRegrasEdicao] = useState('');
+  // Regras das datas-base exigidas pelo manual escolhido para uma nova casa.
+  const [regrasDataModeloUnidade, setRegrasDataModeloUnidade] =
+    useState<string[]>([]);
+  const [carregandoRegrasDataUnidade, setCarregandoRegrasDataUnidade] =
+    useState(false);
+  const [erroRegrasDataUnidade, setErroRegrasDataUnidade] = useState('');
 
   // MODELOS E ITENS DE GARANTIA
   const [modeloSelecionadoId, setModeloSelecionadoId] = useState('');
@@ -399,6 +421,168 @@ export default function ClientesImoveisFuncionarioScreen() {
   useEffect(() => {
     iniciar();
   }, []);
+
+  // Consulta as regras REAIS do modelo, não as deduz pelo nome do empreendimento.
+  // A consulta é somente leitura e não altera o manual nem os imóveis existentes.
+  useEffect(() => {
+    let vigente = true;
+
+    if (!formUnidade || !novaUnidadeModeloId) {
+      setRegrasDataModeloUnidade([]);
+      setErroRegrasDataUnidade('');
+      setCarregandoRegrasDataUnidade(false);
+      return;
+    }
+
+    setCarregandoRegrasDataUnidade(true);
+    setRegrasDataModeloUnidade([]);
+    setErroRegrasDataUnidade('');
+
+    // A chamada RPC do Supabase retorna PromiseLike, que nem sempre
+    // disponibiliza .catch() e .finally(). O await trata esse retorno.
+    void (async () => {
+      try {
+        const { data, error } = await supabase.rpc(
+          'gerenciar_cadastro_empreendimentos_garantias_funcionario',
+          {
+            p_acao: 'listar',
+            p_dados: { modelo_id: novaUnidadeModeloId },
+          }
+        );
+
+        if (!vigente) return;
+
+        if (error) {
+          setErroRegrasDataUnidade(
+            'Não foi possível consultar as datas-base deste manual. Confira os itens na aba Garantias.'
+          );
+          return;
+        }
+
+        const itens = (data as Partial<Catalogo> | null)?.itens ?? [];
+        setRegrasDataModeloUnidade(
+          Array.from(
+            new Set(
+              itens
+                .filter((item) => item.ativo)
+                .map((item) => item.regra_data_base)
+                .filter(Boolean)
+            )
+          )
+        );
+      } catch {
+        if (vigente) {
+          setErroRegrasDataUnidade(
+            'Não foi possível consultar as datas-base deste manual.'
+          );
+        }
+      } finally {
+        if (vigente) setCarregandoRegrasDataUnidade(false);
+      }
+    })();
+
+    return () => { vigente = false; };
+  }, [formUnidade, novaUnidadeModeloId]);
+
+  const avisosDatasGarantia = useMemo(() => {
+    const avisos: string[] = [];
+    const regras = new Set(regrasDataModeloUnidade);
+    if (regras.has('habite_se') && !dataHabiteSe.trim()) {
+      avisos.push('Informe o Habite-se quando essa data estiver disponível.');
+    }
+    if (regras.has('entrega_obra') && !dataObra.trim()) {
+      avisos.push('Falta a data de entrega da obra.');
+    }
+    if ((regras.has('entrega_chaves') || regras.has('ato_entrega')) && !dataChaves.trim()) {
+      avisos.push('Falta a data de entrega das chaves.');
+    }
+    if (regras.has('entrega_chaves_e_contrato')) {
+      if (!dataChaves.trim()) avisos.push('Falta a data de entrega das chaves.');
+      if (!dataContrato.trim()) avisos.push('Falta a data de assinatura do contrato.');
+    }
+    if (regras.has('primeiro_habite_se_ou_entrega_obra') && !dataHabiteSe.trim() && !dataObra.trim()) {
+      avisos.push('Informe a data do Habite-se ou da entrega da obra, quando conhecida.');
+    }
+    if (regras.has('conclusao_servico')) {
+      avisos.push('Alguns prazos dependem da conclusão de um serviço e só poderão ser calculados após esse registro.');
+    }
+    return Array.from(new Set(avisos));
+  }, [regrasDataModeloUnidade, dataHabiteSe, dataChaves, dataObra, dataContrato]);
+
+  // Busca as regras do manual específico da casa que está sendo editada.
+  // É somente leitura e não altera o vínculo da garantia.
+  useEffect(() => {
+    let vigente = true;
+    const modeloId = unidadeEdicaoDatas?.modelo_garantia_id;
+    if (!modeloId) {
+      setRegrasDataEdicao([]);
+      setErroRegrasEdicao('');
+      setCarregandoRegrasEdicao(false);
+      return;
+    }
+
+    setRegrasDataEdicao([]);
+    setErroRegrasEdicao('');
+    setCarregandoRegrasEdicao(true);
+
+    void (async () => {
+      try {
+        const { data, error } = await supabase.rpc(
+          'gerenciar_cadastro_empreendimentos_garantias_funcionario',
+          { p_acao: 'listar', p_dados: { modelo_id: modeloId } }
+        );
+        if (!vigente) return;
+        if (error) throw error;
+        const itens = (data as Partial<Catalogo> | null)?.itens ?? [];
+        setRegrasDataEdicao(
+          Array.from(
+            new Set(
+              itens.filter((item) => item.ativo)
+                .map((item) => item.regra_data_base)
+                .filter(Boolean)
+            )
+          )
+        );
+      } catch {
+        if (vigente) {
+          setErroRegrasEdicao('Não foi possível conferir as regras deste manual.');
+        }
+      } finally {
+        if (vigente) setCarregandoRegrasEdicao(false);
+      }
+    })();
+
+    return () => { vigente = false; };
+  }, [unidadeEdicaoDatas?.modelo_garantia_id]);
+
+  const avisosDatasEdicao = useMemo(() => {
+    if (!unidadeEdicaoDatas?.modelo_garantia_id) return [] as string[];
+    const regras = new Set(regrasDataEdicao);
+    const avisos: string[] = [];
+    if (regras.has('habite_se') && !edicaoHabiteSe.trim()) {
+      avisos.push('Falta a data do Habite-se.');
+    }
+    if (regras.has('entrega_obra') && !edicaoEntregaObra.trim()) {
+      avisos.push('Falta a data de entrega da obra.');
+    }
+    if ((regras.has('entrega_chaves') || regras.has('ato_entrega'))
+      && !edicaoEntregaChaves.trim()) {
+      avisos.push('Falta a data de entrega das chaves.');
+    }
+    if (regras.has('entrega_chaves_e_contrato')) {
+      if (!edicaoEntregaChaves.trim()) avisos.push('Falta a data de entrega das chaves.');
+      if (!edicaoAssinaturaContrato.trim()) avisos.push('Falta a data de assinatura do contrato.');
+    }
+    if (regras.has('primeiro_habite_se_ou_entrega_obra')
+      && !edicaoHabiteSe.trim() && !edicaoEntregaObra.trim()) {
+      avisos.push('Informe o Habite-se ou a data de entrega da obra.');
+    }
+    if (regras.has('conclusao_servico')) {
+      avisos.push('Há prazos que dependem da conclusão de um serviço.');
+    }
+    return Array.from(new Set(avisos));
+  }, [unidadeEdicaoDatas?.modelo_garantia_id, regrasDataEdicao,
+      edicaoHabiteSe, edicaoEntregaChaves, edicaoEntregaObra, edicaoAssinaturaContrato]);
 
   async function iniciar() {
     try {
@@ -528,12 +712,11 @@ export default function ClientesImoveisFuncionarioScreen() {
         await carregarClientes();
       } else if (aba === 'funcionarios') {
         await carregarFuncionarios();
+      } else if (aba === 'empreendimentos') {
+        // Atualiza tanto as casas como os clientes vinculados a elas.
+        await Promise.all([carregarCatalogo(), carregarClientes()]);
       } else {
-        await carregarCatalogo(
-          aba === 'garantias' && modeloSelecionadoId
-            ? modeloSelecionadoId
-            : undefined
-        );
+        await carregarCatalogo(modeloSelecionadoId || undefined);
       }
     } catch (e: any) {
       setErro(e?.message ?? 'Não foi possível atualizar.');
@@ -546,6 +729,12 @@ export default function ClientesImoveisFuncionarioScreen() {
     setAba(novaAba);
     setErro('');
     setSucesso('');
+    if (novaAba === 'empreendimentos') {
+      // Ao abrir a aba, confere os vínculos atuais no Supabase.
+      void carregarClientes().catch((e: any) => {
+        setErro(e?.message ?? 'Não foi possível carregar os clientes vinculados.');
+      });
+    }
   }
 
   async function executarCadastro(
@@ -617,6 +806,11 @@ export default function ClientesImoveisFuncionarioScreen() {
   }
 
   function abrirNovoFuncionario() {
+    if (mostrarFormularioFuncionario && !editandoFuncionarioId) {
+      setMostrarFormularioFuncionario(false);
+      limparFuncionario();
+      return;
+    }
     limparFuncionario();
     setErro('');
     setSucesso('');
@@ -626,6 +820,11 @@ export default function ClientesImoveisFuncionarioScreen() {
   function abrirEdicaoFuncionario(
     funcionario: FuncionarioPreCadastro
   ) {
+    if (mostrarFormularioFuncionario && editandoFuncionarioId === funcionario.pre_cadastro_id) {
+      setMostrarFormularioFuncionario(false);
+      limparFuncionario();
+      return;
+    }
     if (funcionario.acesso_ativado) {
       setErro(
         'O acesso deste funcionário já foi ativado. Este pré-cadastro não pode mais ser editado.'
@@ -797,23 +996,42 @@ export default function ClientesImoveisFuncionarioScreen() {
     });
   }, [clientes, busca]);
 
+  // Um imóvel pode pertencer a apenas um cliente. Não oferecemos
+  // unidades que já estão vinculadas a outro pré-cadastro.
+  const unidadesOcupadas = useMemo(
+    () => new Set(clientes.flatMap((cliente) => cliente.unidades.map((u) => u.unidade_id))),
+    [clientes]
+  );
+
   const unidadesFiltradas = useMemo(() => {
     const termo = buscaUnidade.trim().toLowerCase();
-
     if (!termo) return [];
-
     return unidades
-      .filter(
-        (unidade) =>
+      .filter((unidade) =>
+        unidade.ativo && !unidadesOcupadas.has(unidade.unidade_id) && (
           unidade.identificacao.toLowerCase().includes(termo) ||
           unidade.empreendimento_nome.toLowerCase().includes(termo) ||
           (unidade.cidade ?? '').toLowerCase().includes(termo) ||
-          (unidade.proprietario_informado ?? '')
-            .toLowerCase()
-            .includes(termo)
+          (unidade.proprietario_informado ?? '').toLowerCase().includes(termo)
+        )
       )
       .slice(0, 12);
-  }, [unidades, buscaUnidade]);
+  }, [unidades, buscaUnidade, unidadesOcupadas]);
+
+  const unidadesDisponiveisVinculo = useMemo(() => {
+    const termo = buscaUnidadeVinculo.trim().toLowerCase();
+    if (!termo) return [];
+    return unidades
+      .filter((unidade) =>
+        unidade.ativo && !unidadesOcupadas.has(unidade.unidade_id) && (
+          unidade.identificacao.toLowerCase().includes(termo) ||
+          unidade.empreendimento_nome.toLowerCase().includes(termo) ||
+          (unidade.cidade ?? '').toLowerCase().includes(termo) ||
+          (unidade.proprietario_informado ?? '').toLowerCase().includes(termo)
+        )
+      )
+      .slice(0, 12);
+  }, [unidades, buscaUnidadeVinculo, unidadesOcupadas]);
 
   function limparCliente() {
     setEditandoId(null);
@@ -826,20 +1044,33 @@ export default function ClientesImoveisFuncionarioScreen() {
   }
 
   function abrirNovoCliente() {
+    if (mostrarFormularioCliente && !editandoId) {
+      setMostrarFormularioCliente(false);
+      limparCliente();
+      return;
+    }
     limparCliente();
+    setClienteVinculoId(null);
     setErro('');
     setSucesso('');
     setMostrarFormularioCliente(true);
   }
 
   function abrirEdicaoCliente(cliente: Cliente) {
+    if (mostrarFormularioCliente && editandoId === cliente.pre_cadastro_id) {
+      setMostrarFormularioCliente(false);
+      limparCliente();
+      return;
+    }
     setEditandoId(cliente.pre_cadastro_id);
     setNomeCompleto(cliente.nome_completo);
     setCpfCnpj(cliente.cpf_cnpj);
     setEmail(cliente.email);
     setTelefone(cliente.telefone ?? '');
-    setUnidadeSelecionadaId(cliente.unidades[0]?.unidade_id ?? '');
+    // Editar os dados pessoais não reatribui automaticamente a primeira casa.
+    setUnidadeSelecionadaId('');
     setBuscaUnidade('');
+    setClienteVinculoId(null);
     setErro('');
     setSucesso('');
     setMostrarFormularioCliente(true);
@@ -867,11 +1098,6 @@ export default function ClientesImoveisFuncionarioScreen() {
       return;
     }
 
-    if (!unidadeSelecionadaId) {
-      setErro('Selecione uma unidade para o cliente.');
-      return;
-    }
-
     try {
       setSalvando(true);
 
@@ -883,7 +1109,8 @@ export default function ClientesImoveisFuncionarioScreen() {
           p_cpf_cnpj: documento,
           p_email: emailNormalizado,
           p_telefone: telefone.trim() || null,
-          p_unidade_id: unidadeSelecionadaId,
+          // A edição dos dados pessoais nunca altera os vínculos do cliente.
+          p_unidade_id: editandoId ? null : (unidadeSelecionadaId || null),
         }
       );
 
@@ -893,14 +1120,58 @@ export default function ClientesImoveisFuncionarioScreen() {
 
       setSucesso(
         editandoId
-          ? 'Cliente atualizado e unidade vinculada com sucesso.'
-          : 'Cliente cadastrado. O acesso pode ser ativado pelo Primeiro acesso.'
+          ? 'Dados do cliente atualizados. Os imóveis vinculados foram preservados.'
+          : (unidadeSelecionadaId
+              ? 'Cliente cadastrado e imóvel vinculado. O primeiro acesso já pode ser realizado.'
+              : 'Cliente cadastrado sem imóvel. Para adicionar uma casa, utilize Vincular imóvel no cartão do cliente.')
       );
 
       setMostrarFormularioCliente(false);
       limparCliente();
     } catch (e: any) {
       setErro(e?.message ?? 'Não foi possível salvar o cliente.');
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  function abrirVinculoCliente(cliente: Cliente) {
+    const abrir = clienteVinculoId !== cliente.pre_cadastro_id;
+    setClienteVinculoId(abrir ? cliente.pre_cadastro_id : null);
+    setUnidadeVinculoSelecionadaId('');
+    setBuscaUnidadeVinculo('');
+    setMostrarFormularioCliente(false);
+    limparCliente();
+    setErro('');
+    setSucesso('');
+  }
+
+  async function vincularUnidadeCliente(clienteId: string) {
+    if (!unidadeVinculoSelecionadaId) {
+      setErro('Selecione uma casa disponível para vincular ao cliente.');
+      return;
+    }
+
+    try {
+      setSalvando(true);
+      setErro('');
+      setSucesso('');
+      const { data, error } = await supabase.rpc(
+        'vincular_unidade_cliente_funcionario',
+        {
+          p_pre_cadastro_id: clienteId,
+          p_unidade_id: unidadeVinculoSelecionadaId,
+        }
+      );
+      if (error) throw new Error(error.message);
+      const resultado = data as { mensagem?: string } | null;
+      await carregarClientes();
+      setSucesso(resultado?.mensagem ?? 'Imóvel vinculado ao cliente com sucesso.');
+      setClienteVinculoId(null);
+      setUnidadeVinculoSelecionadaId('');
+      setBuscaUnidadeVinculo('');
+    } catch (e: any) {
+      setErro(e?.message ?? 'Não foi possível vincular este imóvel ao cliente.');
     } finally {
       setSalvando(false);
     }
@@ -1176,6 +1447,102 @@ export default function ClientesImoveisFuncionarioScreen() {
     }
   }
 
+  function abrirEdicaoDatasUnidade(unidade: UnidadeCadastro) {
+    if (unidadeEdicaoDatas?.id === unidade.id) {
+      setUnidadeEdicaoDatas(null);
+      return;
+    }
+    setFormUnidade(false);
+    setUnidadeEdicaoDatas({ ...unidade });
+    setEdicaoHabiteSe(formatarDataBrasileira(unidade.data_habite_se).replace(/^\-$/, ''));
+    setEdicaoEntregaChaves(formatarDataBrasileira(unidade.data_entrega_chaves).replace(/^\-$/, ''));
+    setEdicaoEntregaObra(formatarDataBrasileira(unidade.data_entrega_obra).replace(/^\-$/, ''));
+    setEdicaoAssinaturaContrato(
+      formatarDataBrasileira(unidade.data_assinatura_contrato).replace(/^\-$/, '')
+    );
+    setErro('');
+    setSucesso('');
+  }
+
+  async function confirmarMudancaDatas(): Promise<boolean> {
+    const mensagem =
+      'As datas definem o início e o vencimento das garantias. Alterá-las pode ' +
+      'recalcular a cobertura de serviços e solicitações. Salvar apenas datas comprovadas?';
+    if (Platform.OS === 'web') {
+      return globalThis.confirm?.(mensagem) ?? false;
+    }
+    return new Promise((resolve) => {
+      Alert.alert(
+        'Confirmar alteração das datas',
+        mensagem,
+        [
+          { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Salvar datas', onPress: () => resolve(true) },
+        ],
+        { cancelable: true, onDismiss: () => resolve(false) }
+      );
+    });
+  }
+
+  async function salvarEdicaoDatasUnidade() {
+    const unidade = unidadeEdicaoDatas;
+    if (!unidade || salvando) return;
+
+    const campos = [
+      edicaoHabiteSe, edicaoEntregaChaves,
+      edicaoEntregaObra, edicaoAssinaturaContrato,
+    ];
+    if (campos.some((valor) => !dataValida(valor))) {
+      setErro('Confira as datas. Utilize DD/MM/AAAA ou deixe vazio quando desconhecido.');
+      return;
+    }
+
+    const novasDatas = {
+      data_habite_se: converterDataParaISO(edicaoHabiteSe),
+      data_entrega_chaves: converterDataParaISO(edicaoEntregaChaves),
+      data_entrega_obra: converterDataParaISO(edicaoEntregaObra),
+      data_assinatura_contrato: converterDataParaISO(edicaoAssinaturaContrato),
+    };
+    const datasOriginais = {
+      data_habite_se: unidade.data_habite_se,
+      data_entrega_chaves: unidade.data_entrega_chaves,
+      data_entrega_obra: unidade.data_entrega_obra,
+      data_assinatura_contrato: unidade.data_assinatura_contrato,
+    };
+
+    const confirmou = await confirmarMudancaDatas();
+    if (!confirmou) return;
+
+    try {
+      setSalvando(true);
+      setErro('');
+      setSucesso('');
+      const { data, error } = await supabase.rpc(
+        'atualizar_datas_garantia_unidade_funcionario',
+        {
+          p_unidade_id: unidade.id,
+          p_data_habite_se: novasDatas.data_habite_se,
+          p_data_entrega_chaves: novasDatas.data_entrega_chaves,
+          p_data_entrega_obra: novasDatas.data_entrega_obra,
+          p_data_assinatura_contrato: novasDatas.data_assinatura_contrato,
+          p_datas_originais: datasOriginais,
+        }
+      );
+      if (error) throw new Error(error.message);
+      const resposta = data as { sucesso?: boolean; mensagem?: string } | null;
+      if (resposta?.sucesso !== true) {
+        throw new Error('O banco não confirmou a atualização das datas.');
+      }
+      await carregarCatalogo(modeloSelecionadoId || undefined);
+      setUnidadeEdicaoDatas(null);
+      setSucesso(resposta.mensagem ?? 'Datas da unidade salvas com sucesso.');
+    } catch (e: any) {
+      setErro(e?.message ?? 'Não foi possível salvar as datas da unidade.');
+    } finally {
+      setSalvando(false);
+    }
+  }
+
   // GARANTIAS
 
   async function selecionarModelo(id: string) {
@@ -1315,6 +1682,28 @@ export default function ClientesImoveisFuncionarioScreen() {
       unidade.empreendimento_id === empreendimentoSelecionadoId
   );
 
+  // Mesma fonte de vínculos da aba Clientes e imóveis. Somente leitura:
+  // não transfere a casa e não altera seu cliente, empreendimento ou manual.
+  const vinculosPorUnidade = useMemo(() => {
+    const mapa = new Map<string, {
+      nome: string;
+      acessoAtivado: boolean;
+      cadastroAtivo: boolean;
+    }>();
+    for (const cliente of clientes) {
+      for (const casa of cliente.unidades) {
+        if (!mapa.has(casa.unidade_id)) {
+          mapa.set(casa.unidade_id, {
+            nome: cliente.nome_completo,
+            acessoAtivado: cliente.acesso_ativado,
+            cadastroAtivo: cliente.ativo,
+          });
+        }
+      }
+    }
+    return mapa;
+  }, [clientes]);
+
   const modeloSelecionado = catalogo.modelos.find(
     (modelo) => modelo.id === modeloSelecionadoId
   );
@@ -1341,34 +1730,10 @@ export default function ClientesImoveisFuncionarioScreen() {
 
   // TELA CLIENTES
 
-  function renderClientes() {
+  // O cadastro novo abre sob o botão superior; a edição abre no próprio cartão.
+  function renderFormularioCliente() {
     return (
-      <>
-        <View style={styles.cabecalhoSecao}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.tituloSecao}>Clientes e imóveis</Text>
-            <Text style={styles.subtitulo}>
-              Cadastre clientes, vincule suas unidades e acompanhe
-              a ativação do acesso ao aplicativo EMAFE.
-            </Text>
-          </View>
 
-          <TouchableOpacity
-            style={styles.botaoAzul}
-            onPress={abrirNovoCliente}
-          >
-            <Ionicons
-              name="person-add-outline"
-              size={18}
-              color="#FFFFFF"
-            />
-            <Text style={styles.botaoAzulTexto}>
-              Cadastrar cliente
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {mostrarFormularioCliente ? (
           <View style={styles.cartao}>
             <View style={styles.cabecalhoFormulario}>
               <Text style={styles.tituloFormulario}>
@@ -1424,8 +1789,15 @@ export default function ClientesImoveisFuncionarioScreen() {
               teclado="email-address"
             />
 
+            {!editandoId ? (
+              <>
             <Text style={styles.tituloMenor}>
-              UNIDADE DO CLIENTE *
+              VINCULAR IMÓVEL (OPCIONAL)
+            </Text>
+            <Text style={styles.textoAuxiliar}>
+              Você pode cadastrar ou editar o cliente sem imóvel.
+              Para adicionar uma casa posteriormente, use Vincular imóvel no cartão do cliente.
+              Imóveis já associados a outros clientes não são oferecidos.
             </Text>
 
             {unidadeSelecionadaId ? (
@@ -1509,6 +1881,9 @@ export default function ClientesImoveisFuncionarioScreen() {
               </>
             )}
 
+              </>
+            ) : null}
+
             <View style={styles.acoes}>
               <TouchableOpacity
                 style={styles.botaoContorno}
@@ -1529,7 +1904,37 @@ export default function ClientesImoveisFuncionarioScreen() {
               />
             </View>
           </View>
-        ) : null}
+    );
+  }
+
+  function renderClientes() {
+    return (
+      <>
+        <View style={styles.cabecalhoSecao}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.tituloSecao}>Clientes e imóveis</Text>
+            <Text style={styles.subtitulo}>
+              Cadastre clientes, vincule suas unidades e acompanhe
+              a ativação do acesso ao aplicativo EMAFE.
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.botaoAzul}
+            onPress={abrirNovoCliente}
+          >
+            <Ionicons
+              name="person-add-outline"
+              size={18}
+              color="#FFFFFF"
+            />
+            <Text style={styles.botaoAzulTexto}>
+              Cadastrar cliente
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {mostrarFormularioCliente && !editandoId ? renderFormularioCliente() : null}
 
         <View style={styles.cabecalhoLista}>
           <View>
@@ -1675,7 +2080,22 @@ export default function ClientesImoveisFuncionarioScreen() {
                     color="#0B5EA8"
                   />
                   <Text style={styles.botaoContornoTexto}>
-                    Editar dados / vincular outra unidade
+                    {mostrarFormularioCliente && editandoId === cliente.pre_cadastro_id
+                      ? 'Fechar edição'
+                      : 'Editar dados'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.botaoContornoLargo, styles.botaoEditarCliente]}
+                  onPress={() => abrirVinculoCliente(cliente)}
+                  disabled={salvando}
+                >
+                  <Ionicons name="link-outline" size={18} color="#0B5EA8" />
+                  <Text style={styles.botaoContornoTexto}>
+                    {clienteVinculoId === cliente.pre_cadastro_id
+                      ? 'Fechar vínculo'
+                      : 'Vincular imóvel'}
                   </Text>
                 </TouchableOpacity>
 
@@ -1701,6 +2121,94 @@ export default function ClientesImoveisFuncionarioScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
+
+              {mostrarFormularioCliente && editandoId === cliente.pre_cadastro_id ? renderFormularioCliente() : null}
+
+              {clienteVinculoId === cliente.pre_cadastro_id ? (
+                <View style={styles.formularioInterno}>
+                  <Text style={styles.tituloMenor}>
+                    Vincular imóvel a {cliente.nome_completo}
+                  </Text>
+                  <Text style={styles.textoAuxiliar}>
+                    Escolha uma casa já cadastrada e disponível, de qualquer empreendimento.
+                    A garantia segue o manual associado à própria casa.
+                  </Text>
+
+                  {unidadeVinculoSelecionadaId ? (
+                    <View style={styles.caixaSelecionada}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>IMÓVEL SELECIONADO</Text>
+                        <Text style={styles.textoForte}>
+                          {unidades.find((u) => u.unidade_id === unidadeVinculoSelecionadaId)?.empreendimento_nome ?? 'Empreendimento'}
+                        </Text>
+                        <Text style={styles.textoAuxiliar}>
+                          Unidade {unidades.find((u) => u.unidade_id === unidadeVinculoSelecionadaId)?.identificacao ?? ''}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.botaoContorno}
+                        onPress={() => {
+                          setUnidadeVinculoSelecionadaId('');
+                          setBuscaUnidadeVinculo('');
+                        }}
+                      >
+                        <Text style={styles.botaoContornoTexto}>Trocar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <>
+                      <Campo
+                        titulo="BUSCAR EMPREENDIMENTO OU CASA"
+                        valor={buscaUnidadeVinculo}
+                        alterar={setBuscaUnidadeVinculo}
+                        placeholder="Digite empreendimento, cidade ou número da casa"
+                      />
+                      {unidadesDisponiveisVinculo.map((unidade) => (
+                        <TouchableOpacity
+                          key={unidade.unidade_id}
+                          style={styles.opcao}
+                          onPress={() => {
+                            setUnidadeVinculoSelecionadaId(unidade.unidade_id);
+                            setBuscaUnidadeVinculo('');
+                          }}
+                        >
+                          <Ionicons name="home-outline" size={20} color="#0B2447" />
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.opcaoTitulo}>{unidade.empreendimento_nome}</Text>
+                            <Text style={styles.opcaoDescricao}>
+                              Unidade {unidade.identificacao}
+                              {unidade.cidade ? ` • ${unidade.cidade}` : ''}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                      {buscaUnidadeVinculo.trim() && unidadesDisponiveisVinculo.length === 0 ? (
+                        <Text style={styles.textoAuxiliar}>
+                          Nenhuma casa disponível encontrada para essa busca.
+                        </Text>
+                      ) : null}
+                    </>
+                  )}
+
+                  <View style={styles.acoes}>
+                    <TouchableOpacity
+                      style={styles.botaoContorno}
+                      onPress={() => {
+                        setClienteVinculoId(null);
+                        setUnidadeVinculoSelecionadaId('');
+                        setBuscaUnidadeVinculo('');
+                      }}
+                    >
+                      <Text style={styles.botaoContornoTexto}>Cancelar</Text>
+                    </TouchableOpacity>
+                    <BotaoSalvar
+                      titulo="Confirmar vínculo"
+                      salvando={salvando}
+                      onPress={() => vincularUnidadeCliente(cliente.pre_cadastro_id)}
+                    />
+                  </View>
+                </View>
+              ) : null}
             </View>
           ))
         )}
@@ -1716,6 +2224,8 @@ export default function ClientesImoveisFuncionarioScreen() {
             “Primeiro acesso” no aplicativo e informa
             o mesmo CPF/CNPJ e e-mail cadastrados.
             A senha é criada pelo próprio cliente.
+            É possível ativar o acesso sem imóvel, mas as garantias
+            só aparecerão depois da vinculação de uma casa.
           </Text>
         </View>
       </>
@@ -1724,35 +2234,9 @@ export default function ClientesImoveisFuncionarioScreen() {
 
   // TELA EMPREENDIMENTOS
 
-  function renderFuncionarios() {
+  function renderFormularioFuncionario() {
     return (
-      <>
-        <View style={styles.cabecalhoSecao}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.tituloSecao}>
-              Funcionários
-            </Text>
-            <Text style={styles.subtitulo}>
-              Pré-cadastre os funcionários que poderão acessar a Área do Funcionário da EMAFE.
-            </Text>
-          </View>
 
-          <TouchableOpacity
-            style={styles.botaoAzul}
-            onPress={abrirNovoFuncionario}
-          >
-            <Ionicons
-              name="person-add-outline"
-              size={18}
-              color="#FFFFFF"
-            />
-            <Text style={styles.botaoAzulTexto}>
-              Cadastrar funcionário
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {mostrarFormularioFuncionario ? (
           <View style={styles.cartao}>
             <View style={styles.cabecalhoFormulario}>
               <Text style={styles.tituloFormulario}>
@@ -1820,7 +2304,38 @@ export default function ClientesImoveisFuncionarioScreen() {
               onPress={salvarFuncionario}
             />
           </View>
-        ) : null}
+    );
+  }
+
+  function renderFuncionarios() {
+    return (
+      <>
+        <View style={styles.cabecalhoSecao}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.tituloSecao}>
+              Funcionários
+            </Text>
+            <Text style={styles.subtitulo}>
+              Pré-cadastre os funcionários que poderão acessar a Área do Funcionário da EMAFE.
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.botaoAzul}
+            onPress={abrirNovoFuncionario}
+          >
+            <Ionicons
+              name="person-add-outline"
+              size={18}
+              color="#FFFFFF"
+            />
+            <Text style={styles.botaoAzulTexto}>
+              Cadastrar funcionário
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {mostrarFormularioFuncionario && !editandoFuncionarioId ? renderFormularioFuncionario() : null}
 
         <View style={styles.cabecalhoLista}>
           <View>
@@ -1929,7 +2444,9 @@ export default function ClientesImoveisFuncionarioScreen() {
                       color="#0B5EA8"
                     />
                     <Text style={styles.botaoContornoTexto}>
-                      Editar funcionário
+                      {mostrarFormularioFuncionario && editandoFuncionarioId === funcionario.pre_cadastro_id
+                        ? 'Fechar edição'
+                        : 'Editar funcionário'}
                     </Text>
                   </TouchableOpacity>
 
@@ -1970,10 +2487,384 @@ export default function ClientesImoveisFuncionarioScreen() {
                   Este funcionário já concluiu o primeiro acesso e possui perfil ativo no sistema.
                 </Text>
               )}
+              {mostrarFormularioFuncionario && editandoFuncionarioId === funcionario.pre_cadastro_id
+                ? renderFormularioFuncionario()
+                : null}
             </View>
           ))
         )}
       </>
+    );
+  }
+
+  // O empreendimento selecionado expande imediatamente após sua opção na lista.
+  function renderDetalhesEmpreendimento() {
+    if (!empreendimentoSelecionado) return null;
+    return (
+          <View style={styles.cartaoDestaque}>
+            <View style={styles.cabecalhoLista}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.tituloFormulario}>
+                  {empreendimentoSelecionado.nome}
+                </Text>
+                <Text style={styles.textoAuxiliar}>
+                  {empreendimentoSelecionado.cidade || ''}
+                </Text>
+              </View>
+
+              <View style={styles.acoesCabecalho}>
+                <TouchableOpacity
+                  style={styles.botaoExcluir}
+                  disabled={excluindoId === empreendimentoSelecionado.id}
+                  onPress={() =>
+                    excluirEmpreendimento(empreendimentoSelecionado)
+                  }
+                >
+                  {excluindoId === empreendimentoSelecionado.id ? (
+                    <ActivityIndicator size="small" color="#A52828" />
+                  ) : (
+                    <Ionicons
+                      name="trash-outline"
+                      size={17}
+                      color="#A52828"
+                    />
+                  )}
+                  <Text style={styles.botaoExcluirTexto}>
+                    {excluindoId === empreendimentoSelecionado.id
+                      ? 'Excluindo...'
+                      : 'Excluir'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.botaoAzul}
+                  onPress={() => {
+                    setUnidadeEdicaoDatas(null);
+                    setFormUnidade(!formUnidade);
+                  }}
+                >
+                  <Ionicons
+                    name="home-outline"
+                    size={17}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.botaoAzulTexto}>
+                    Nova unidade
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {formUnidade ? (
+              <View style={styles.formularioInterno}>
+                <Text style={styles.tituloMenor}>
+                  Cadastrar unidade
+                </Text>
+
+                <Campo
+                  titulo="IDENTIFICAÇÃO DA UNIDADE *"
+                  valor={novaUnidadeIdentificacao}
+                  alterar={setNovaUnidadeIdentificacao}
+                  placeholder="Ex.: Casa 01, 1A, 8B"
+                />
+
+                <Text style={styles.label}>
+                  MODELO DE GARANTIA
+                </Text>
+                <Text style={styles.textoAuxiliar}>
+                  Escolha qualquer manual ativo do catálogo, mesmo que
+                  já seja utilizado por casas de outros empreendimentos.
+                  Você também pode deixar esta unidade sem modelo e
+                  vinculá-lo depois na aba Garantias.
+                </Text>
+
+                <BotaoOpcao
+                  titulo="Sem modelo por enquanto"
+                  selecionado={!novaUnidadeModeloId}
+                  onPress={() => setNovaUnidadeModeloId('')}
+                />
+
+                {catalogo.modelos
+                  .filter(
+                    (modelo) =>
+                      modelo.ativo &&
+                      modelo.quantidade_itens > 0
+                  )
+                  .map((modelo) => (
+                    <BotaoOpcao
+                      key={modelo.id}
+                      titulo={modelo.nome}
+                      descricao={`${modelo.quantidade_itens} itens • Manual reutilizável`}
+                      selecionado={
+                        novaUnidadeModeloId === modelo.id
+                      }
+                      onPress={() =>
+                        setNovaUnidadeModeloId(modelo.id)
+                      }
+                    />
+                  ))}
+
+                <Text style={styles.tituloMenor}>
+                  Datas da unidade
+                </Text>
+                <Text style={styles.textoAuxiliar}>
+                  Preencha somente as datas confirmadas.
+                  Formato: DD/MM/AAAA.
+                </Text>
+
+                <Campo
+                  titulo="DATA DO HABITE-SE"
+                  valor={dataHabiteSe}
+                  alterar={setDataHabiteSe}
+                  placeholder="10/08/2026"
+                  teclado="numeric"
+                />
+
+                <Campo
+                  titulo="DATA DA ENTREGA DAS CHAVES"
+                  valor={dataChaves}
+                  alterar={setDataChaves}
+                  placeholder="DD/MM/AAAA"
+                  teclado="numeric"
+                />
+
+                <Campo
+                  titulo="DATA DA ENTREGA DA OBRA"
+                  valor={dataObra}
+                  alterar={setDataObra}
+                  placeholder="DD/MM/AAAA"
+                  teclado="numeric"
+                />
+
+                <Campo
+                  titulo="DATA DA ASSINATURA DO CONTRATO"
+                  valor={dataContrato}
+                  alterar={setDataContrato}
+                  placeholder="DD/MM/AAAA"
+                  teclado="numeric"
+                />
+
+                {novaUnidadeModeloId ? (
+                  <View style={styles.aviso}>
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={20}
+                      color="#0B5EA8"
+                    />
+                    <View style={{ flex: 1 }}>
+                      {carregandoRegrasDataUnidade ? (
+                        <Text style={styles.avisoTexto}>
+                          Conferindo as datas-base do manual selecionado...
+                        </Text>
+                      ) : erroRegrasDataUnidade ? (
+                        <Text style={styles.avisoTexto}>
+                          {erroRegrasDataUnidade}
+                        </Text>
+                      ) : avisosDatasGarantia.length > 0 ? (
+                        <>
+                          <Text style={styles.avisoTexto}>
+                            Algumas datas importantes para calcular os prazos deste manual ainda não foram informadas:
+                          </Text>
+                          {avisosDatasGarantia.map((aviso) => (
+                            <Text key={aviso} style={styles.avisoTexto}>
+                              • {aviso}
+                            </Text>
+                          ))}
+                          <Text style={styles.avisoTexto}>
+                            Você pode cadastrar a casa sem essas datas, mas os prazos correspondentes ficarão pendentes.
+                            Depois você poderá preencher ou corrigir essas datas em Editar datas, na unidade cadastrada.
+                          </Text>
+                        </>
+                      ) : (
+                        <Text style={styles.avisoTexto}>
+                          As datas informadas atendem às regras conhecidas deste manual.
+                          O sistema usará as datas da casa para calcular as garantias.
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                ) : null}
+
+                <BotaoSalvar
+                  titulo="Salvar unidade"
+                  salvando={salvando}
+                  onPress={salvarUnidade}
+                />
+              </View>
+            ) : null}
+
+            <Text style={styles.tituloMenor}>
+              Unidades deste empreendimento
+            </Text>
+            <Text style={styles.textoAuxiliar}>
+              {unidadesDoEmpreendimento.filter((unidade) => vinculosPorUnidade.has(unidade.id)).length} com cliente vinculado •{' '}
+              {unidadesDoEmpreendimento.filter((unidade) => !vinculosPorUnidade.has(unidade.id)).length} sem vínculo de cliente
+            </Text>
+
+            {unidadesDoEmpreendimento.length === 0 ? (
+              <Text style={styles.textoAuxiliar}>
+                Nenhuma unidade cadastrada.
+              </Text>
+            ) : (
+              unidadesDoEmpreendimento.map((unidade) => {
+                const clienteVinculado = vinculosPorUnidade.get(unidade.id);
+                return (
+                <View key={unidade.id}>
+                  <View style={styles.linhaUnidade}>
+                    <Ionicons name="home-outline" size={19} color="#0B2447" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.textoForte}>Unidade {unidade.identificacao}</Text>
+                      <View style={styles.dadosClienteUnidade}>
+                        <Ionicons
+                          name={clienteVinculado ? 'person-circle-outline' : 'person-add-outline'}
+                          size={17}
+                          color={clienteVinculado ? '#0B5EA8' : '#697789'}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.nomeClienteUnidade}>
+                            {clienteVinculado
+                              ? `Cliente vinculado: ${clienteVinculado.nome}`
+                              : 'Nenhum cliente vinculado'}
+                          </Text>
+                          <Text style={styles.situacaoClienteUnidade}>
+                            {!clienteVinculado
+                              ? unidade.ativo
+                                ? 'Sem vínculo • Disponível para vinculação'
+                                : 'Sem vínculo • Imóvel inativo, não disponível'
+                              : !unidade.ativo
+                              ? 'Vínculo preservado • Imóvel inativo'
+                              : !clienteVinculado.cadastroAtivo
+                              ? 'Vínculo preservado • Cadastro do cliente inativo'
+                              : clienteVinculado.acessoAtivado
+                              ? 'Vínculo confirmado • Acesso ao aplicativo ativado'
+                              : 'Vínculo confirmado • Aguardando primeiro acesso'}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.textoAuxiliar}>
+                        Manual de garantia: {nomeModelo(unidade.modelo_garantia_id)}
+                      </Text>
+                      <Text style={styles.textoAuxiliar}>
+                        Habite-se: {formatarDataBrasileira(unidade.data_habite_se)} • Chaves: {formatarDataBrasileira(unidade.data_entrega_chaves)}
+                      </Text>
+                      <Text style={styles.textoAuxiliar}>
+                        Entrega da obra: {formatarDataBrasileira(unidade.data_entrega_obra)} • Contrato: {formatarDataBrasileira(unidade.data_assinatura_contrato)}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.botaoContorno}
+                      onPress={() => abrirEdicaoDatasUnidade(unidade)}
+                      disabled={salvando}
+                    >
+                      <Text style={styles.botaoContornoTexto}>
+                        {unidadeEdicaoDatas?.id === unidade.id ? 'Fechar' : 'Editar datas'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {unidadeEdicaoDatas?.id === unidade.id ? (
+                    <View style={styles.formularioInterno}>
+                      <Text style={styles.tituloMenor}>
+                        Editar datas da unidade {unidade.identificacao}
+                      </Text>
+                      <Text style={styles.textoAuxiliar}>
+                        Somente as datas desta casa serão alteradas. O cliente,
+                        o empreendimento e o manual permanecem vinculados.
+                        Utilize datas confirmadas no formato DD/MM/AAAA.
+                      </Text>
+                      <Campo
+                        titulo="DATA DO HABITE-SE"
+                        valor={edicaoHabiteSe}
+                        alterar={setEdicaoHabiteSe}
+                        placeholder="DD/MM/AAAA"
+                        teclado="numeric"
+                      />
+                      <Campo
+                        titulo="DATA DA ENTREGA DAS CHAVES"
+                        valor={edicaoEntregaChaves}
+                        alterar={setEdicaoEntregaChaves}
+                        placeholder="DD/MM/AAAA"
+                        teclado="numeric"
+                      />
+                      <Campo
+                        titulo="DATA DA ENTREGA DA OBRA"
+                        valor={edicaoEntregaObra}
+                        alterar={setEdicaoEntregaObra}
+                        placeholder="DD/MM/AAAA"
+                        teclado="numeric"
+                      />
+                      <Campo
+                        titulo="DATA DA ASSINATURA DO CONTRATO"
+                        valor={edicaoAssinaturaContrato}
+                        alterar={setEdicaoAssinaturaContrato}
+                        placeholder="DD/MM/AAAA"
+                        teclado="numeric"
+                      />
+
+                      {unidade.modelo_garantia_id ? (
+                        <View style={styles.aviso}>
+                          <Ionicons name="information-circle-outline" size={20} color="#0B5EA8" />
+                          <View style={{ flex: 1 }}>
+                            {carregandoRegrasEdicao ? (
+                              <Text style={styles.avisoTexto}>
+                                Conferindo as datas-base do manual desta casa...
+                              </Text>
+                            ) : erroRegrasEdicao ? (
+                              <Text style={styles.avisoTexto}>{erroRegrasEdicao}</Text>
+                            ) : avisosDatasEdicao.length > 0 ? (
+                              <>
+                                <Text style={styles.avisoTexto}>
+                                  Datas ainda necessárias para calcular alguns prazos:
+                                </Text>
+                                {avisosDatasEdicao.map((aviso) => (
+                                  <Text key={aviso} style={styles.avisoTexto}>• {aviso}</Text>
+                                ))}
+                                <Text style={styles.avisoTexto}>
+                                  É possível salvar sem essas datas; o prazo ficará sem cálculo até o preenchimento.
+                                </Text>
+                              </>
+                            ) : (
+                              <Text style={styles.avisoTexto}>
+                                As datas disponíveis atendem às regras conhecidas deste manual.
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                      ) : (
+                        <Text style={styles.textoAuxiliar}>
+                          Esta casa ainda não possui manual de garantia vinculado.
+                        </Text>
+                      )}
+
+                      <View style={styles.aviso}>
+                        <Ionicons name="alert-circle-outline" size={20} color="#0B5EA8" />
+                        <Text style={styles.avisoTexto}>
+                          A mudança das datas pode recalcular o início ou o vencimento das garantias.
+                          O sistema guardará um registro das datas anteriores e novas.
+                        </Text>
+                      </View>
+                      <View style={styles.acoes}>
+                        <TouchableOpacity
+                          style={styles.botaoContorno}
+                          onPress={() => setUnidadeEdicaoDatas(null)}
+                          disabled={salvando}
+                        >
+                          <Text style={styles.botaoContornoTexto}>Cancelar</Text>
+                        </TouchableOpacity>
+                        <BotaoSalvar
+                          titulo="Salvar datas"
+                          salvando={salvando}
+                          onPress={salvarEdicaoDatasUnidade}
+                        />
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+                );
+              })
+            )}
+          </View>
+
     );
   }
 
@@ -1986,8 +2877,8 @@ export default function ClientesImoveisFuncionarioScreen() {
               Empreendimentos
             </Text>
             <Text style={styles.subtitulo}>
-              Cadastre empreendimentos, suas unidades e
-              associe o modelo de garantia de cada casa.
+              Cadastre empreendimentos e casas. Qualquer manual
+              ativo do catálogo pode ser reutilizado em novas unidades.
             </Text>
           </View>
 
@@ -2078,212 +2969,24 @@ export default function ClientesImoveisFuncionarioScreen() {
         </View>
 
         {catalogo.empreendimentos.map((emp) => (
-          <BotaoOpcao
-            key={emp.id}
-            titulo={emp.nome}
-            descricao={`${emp.cidade || 'Cidade não informada'} • ${
-              emp.quantidade_unidades
-            } unidade(s)`}
-            selecionado={
-              empreendimentoSelecionadoId === emp.id
-            }
-            onPress={() => {
-              setEmpreendimentoSelecionadoId(emp.id);
-              setFormUnidade(false);
-              setErro('');
-              setSucesso('');
-            }}
-          />
+          <View key={emp.id}>
+            <BotaoOpcao
+              titulo={emp.nome}
+              descricao={`${emp.cidade || 'Cidade não informada'} • ${emp.quantidade_unidades} unidade(s)`}
+              selecionado={empreendimentoSelecionadoId === emp.id}
+              onPress={() => {
+                setEmpreendimentoSelecionadoId(emp.id);
+                setFormUnidade(false);
+                setUnidadeEdicaoDatas(null);
+                setErro('');
+                setSucesso('');
+              }}
+            />
+            {empreendimentoSelecionadoId === emp.id ? renderDetalhesEmpreendimento() : null}
+          </View>
         ))}
 
-        {empreendimentoSelecionado ? (
-          <View style={styles.cartaoDestaque}>
-            <View style={styles.cabecalhoLista}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.tituloFormulario}>
-                  {empreendimentoSelecionado.nome}
-                </Text>
-                <Text style={styles.textoAuxiliar}>
-                  {empreendimentoSelecionado.cidade || ''}
-                </Text>
-              </View>
-
-              <View style={styles.acoesCabecalho}>
-                <TouchableOpacity
-                  style={styles.botaoExcluir}
-                  disabled={excluindoId === empreendimentoSelecionado.id}
-                  onPress={() =>
-                    excluirEmpreendimento(empreendimentoSelecionado)
-                  }
-                >
-                  {excluindoId === empreendimentoSelecionado.id ? (
-                    <ActivityIndicator size="small" color="#A52828" />
-                  ) : (
-                    <Ionicons
-                      name="trash-outline"
-                      size={17}
-                      color="#A52828"
-                    />
-                  )}
-                  <Text style={styles.botaoExcluirTexto}>
-                    {excluindoId === empreendimentoSelecionado.id
-                      ? 'Excluindo...'
-                      : 'Excluir'}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.botaoAzul}
-                  onPress={() => setFormUnidade(!formUnidade)}
-                >
-                  <Ionicons
-                    name="home-outline"
-                    size={17}
-                    color="#FFFFFF"
-                  />
-                  <Text style={styles.botaoAzulTexto}>
-                    Nova unidade
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {formUnidade ? (
-              <View style={styles.formularioInterno}>
-                <Text style={styles.tituloMenor}>
-                  Cadastrar unidade
-                </Text>
-
-                <Campo
-                  titulo="IDENTIFICAÇÃO DA UNIDADE *"
-                  valor={novaUnidadeIdentificacao}
-                  alterar={setNovaUnidadeIdentificacao}
-                  placeholder="Ex.: Casa 01, 1A, 8B"
-                />
-
-                <Text style={styles.label}>
-                  MODELO DE GARANTIA
-                </Text>
-                <Text style={styles.textoAuxiliar}>
-                  Você pode deixar sem modelo e vincular
-                  depois na aba Garantias.
-                </Text>
-
-                <BotaoOpcao
-                  titulo="Sem modelo por enquanto"
-                  selecionado={!novaUnidadeModeloId}
-                  onPress={() => setNovaUnidadeModeloId('')}
-                />
-
-                {catalogo.modelos
-                  .filter(
-                    (modelo) =>
-                      modelo.ativo &&
-                      modelo.quantidade_itens > 0
-                  )
-                  .map((modelo) => (
-                    <BotaoOpcao
-                      key={modelo.id}
-                      titulo={modelo.nome}
-                      descricao={`${modelo.quantidade_itens} itens`}
-                      selecionado={
-                        novaUnidadeModeloId === modelo.id
-                      }
-                      onPress={() =>
-                        setNovaUnidadeModeloId(modelo.id)
-                      }
-                    />
-                  ))}
-
-                <Text style={styles.tituloMenor}>
-                  Datas da unidade
-                </Text>
-                <Text style={styles.textoAuxiliar}>
-                  Preencha somente as datas confirmadas.
-                  Formato: DD/MM/AAAA.
-                </Text>
-
-                <Campo
-                  titulo="DATA DO HABITE-SE"
-                  valor={dataHabiteSe}
-                  alterar={setDataHabiteSe}
-                  placeholder="10/08/2026"
-                  teclado="numeric"
-                />
-
-                <Campo
-                  titulo="DATA DA ENTREGA DAS CHAVES"
-                  valor={dataChaves}
-                  alterar={setDataChaves}
-                  placeholder="DD/MM/AAAA"
-                  teclado="numeric"
-                />
-
-                <Campo
-                  titulo="DATA DA ENTREGA DA OBRA"
-                  valor={dataObra}
-                  alterar={setDataObra}
-                  placeholder="DD/MM/AAAA"
-                  teclado="numeric"
-                />
-
-                <Campo
-                  titulo="DATA DA ASSINATURA DO CONTRATO"
-                  valor={dataContrato}
-                  alterar={setDataContrato}
-                  placeholder="DD/MM/AAAA"
-                  teclado="numeric"
-                />
-
-                <BotaoSalvar
-                  titulo="Salvar unidade"
-                  salvando={salvando}
-                  onPress={salvarUnidade}
-                />
-              </View>
-            ) : null}
-
-            <Text style={styles.tituloMenor}>
-              Unidades deste empreendimento
-            </Text>
-
-            {unidadesDoEmpreendimento.length === 0 ? (
-              <Text style={styles.textoAuxiliar}>
-                Nenhuma unidade cadastrada.
-              </Text>
-            ) : (
-              unidadesDoEmpreendimento.map((unidade) => (
-                <View
-                  key={unidade.id}
-                  style={styles.linhaUnidade}
-                >
-                  <Ionicons
-                    name="home-outline"
-                    size={19}
-                    color="#0B2447"
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.textoForte}>
-                      Unidade {unidade.identificacao}
-                    </Text>
-                    <Text style={styles.textoAuxiliar}>
-                      {nomeModelo(
-                        unidade.modelo_garantia_id
-                      )}
-                    </Text>
-                    {unidade.data_habite_se ? (
-                      <Text style={styles.textoAuxiliar}>
-                        Habite-se: {formatarDataBrasileira(
-                          unidade.data_habite_se
-                        )}
-                      </Text>
-                    ) : null}
-                  </View>
-                </View>
-              ))
-            )}
-          </View>
-        ) : (
+        {!empreendimentoSelecionado ? (
           <View style={styles.aviso}>
             <Ionicons
               name="information-circle-outline"
@@ -2295,118 +2998,17 @@ export default function ClientesImoveisFuncionarioScreen() {
               visualizar e cadastrar suas unidades.
             </Text>
           </View>
-        )}
+        ) : null}
       </>
     );
   }
 
   // TELA GARANTIAS
 
-  function renderGarantias() {
+  // O manual selecionado expande imediatamente após sua opção na lista.
+  function renderDetalhesModelo() {
+    if (!modeloSelecionado) return null;
     return (
-      <>
-        <View style={styles.cabecalhoSecao}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.tituloSecao}>
-              Garantias
-            </Text>
-            <Text style={styles.subtitulo}>
-              Crie modelos de garantia, cadastre seus itens
-              e vincule os modelos às unidades.
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.botaoAzul}
-            onPress={() => {
-              setFormModelo(!formModelo);
-              setFormItem(false);
-              setErro('');
-            }}
-          >
-            <Ionicons
-              name="add-circle-outline"
-              size={18}
-              color="#FFFFFF"
-            />
-            <Text style={styles.botaoAzulTexto}>
-              Novo modelo
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {formModelo ? (
-          <View style={styles.cartao}>
-            <Text style={styles.tituloFormulario}>
-              Criar modelo de garantia
-            </Text>
-
-            <Campo
-              titulo="NOME DO MODELO *"
-              valor={novoModeloNome}
-              alterar={setNovoModeloNome}
-              placeholder="Ex.: Garantia Residencial 2026"
-            />
-
-            <Campo
-              titulo="VERSÃO"
-              valor={novoModeloVersao}
-              alterar={setNovoModeloVersao}
-              placeholder="Ex.: 1.0"
-            />
-
-            <Campo
-              titulo="DESCRIÇÃO"
-              valor={novoModeloDescricao}
-              alterar={setNovoModeloDescricao}
-              placeholder="Observações sobre este modelo"
-              multiline
-            />
-
-            <BotaoSalvar
-              titulo="Criar modelo"
-              salvando={salvando}
-              onPress={salvarModelo}
-            />
-          </View>
-        ) : null}
-
-        <View style={styles.cabecalhoLista}>
-          <View>
-            <Text style={styles.tituloMenor}>
-              Modelos cadastrados
-            </Text>
-            <Text style={styles.textoAuxiliar}>
-              {catalogo.modelos.length} modelos
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            onPress={atualizar}
-            style={styles.botaoAtualizar}
-          >
-            <Ionicons
-              name="refresh-outline"
-              size={18}
-              color="#0B5EA8"
-            />
-            <Text style={styles.botaoContornoTexto}>
-              Atualizar
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {catalogo.modelos.map((modelo) => (
-          <BotaoOpcao
-            key={modelo.id}
-            titulo={modelo.nome}
-            descricao={`${modelo.quantidade_itens} itens • ${modelo.quantidade_unidades} unidades vinculadas`}
-            selecionado={modeloSelecionadoId === modelo.id}
-            onPress={() => selecionarModelo(modelo.id)}
-          />
-        ))}
-
-        {modeloSelecionado ? (
           <View style={styles.cartaoDestaque}>
             <View style={styles.cabecalhoLista}>
               <View style={{ flex: 1 }}>
@@ -2454,15 +3056,17 @@ export default function ClientesImoveisFuncionarioScreen() {
             {modeloSelecionado.quantidade_unidades > 0 ? (
               <View style={styles.aviso}>
                 <Ionicons
-                  name="lock-closed-outline"
+                  name="shield-checkmark-outline"
                   size={20}
                   color="#0B5EA8"
                 />
                 <Text style={styles.avisoTexto}>
-                  Este modelo já está vinculado a unidades.
-                  Para preservar as garantias existentes,
-                  não é permitido acrescentar itens nele.
-                  Crie um novo modelo para regras diferentes.
+                  Modelo disponível para reutilização. Você pode vinculá-lo
+                  a novas casas em qualquer empreendimento, mesmo que ele
+                  já esteja sendo utilizado em outras unidades. Apenas
+                  a inclusão ou alteração de suas regras fica protegida
+                  para preservar as garantias existentes. Para regras
+                  diferentes, crie uma nova versão do manual.
                 </Text>
               </View>
             ) : (
@@ -2604,6 +3208,32 @@ export default function ClientesImoveisFuncionarioScreen() {
               </View>
             ) : null}
 
+            {modeloSelecionado.ativo && modeloSelecionado.quantidade_itens > 0 ? (
+              <TouchableOpacity
+                style={styles.botaoAzul}
+                onPress={() => {
+                  setNovaUnidadeModeloId(modeloSelecionado.id);
+                  setFormEmpreendimento(false);
+                  setFormUnidade(Boolean(empreendimentoSelecionadoId));
+                  trocarAba('empreendimentos');
+                  setSucesso(
+                    empreendimentoSelecionadoId
+                      ? 'Manual selecionado para a nova unidade. Confira o empreendimento, informe a identificação da casa e salve.'
+                      : 'Manual selecionado. Escolha um empreendimento e toque em Nova unidade para cadastrar a casa com este manual.'
+                  );
+                }}
+              >
+                <Ionicons
+                  name="home-outline"
+                  size={18}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.botaoAzulTexto}>
+                  Usar este manual em outra casa
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+
             <Text style={styles.tituloMenor}>
               Itens deste modelo
             </Text>
@@ -2663,13 +3293,19 @@ export default function ClientesImoveisFuncionarioScreen() {
                 </Text>
 
                 <Text style={styles.textoAuxiliar}>
-                  Apenas unidades que ainda não possuem
-                  modelo de garantia podem ser vinculadas.
+                  Este manual pode ser usado em qualquer empreendimento.
+                  A lista abaixo mostra casas já cadastradas que ainda
+                  estão sem modelo. Para criar uma nova casa com este
+                  manual, utilize "Usar este manual em outra casa" acima.
+                  Para trocar o modelo de uma unidade que já possui
+                  garantia, é necessária uma revisão específica para
+                  preservar seu histórico.
                 </Text>
 
                 {unidadesSemModelo.length === 0 ? (
                   <Text style={styles.textoAuxiliar}>
-                    Não há unidades sem modelo.
+                    Não há casas já cadastradas sem modelo.
+                    Você ainda pode usar este manual em uma nova casa.
                   </Text>
                 ) : (
                   unidadesSemModelo.map((unidade) => (
@@ -2714,7 +3350,118 @@ export default function ClientesImoveisFuncionarioScreen() {
               </>
             ) : null}
           </View>
-        ) : (
+
+    );
+  }
+
+  function renderGarantias() {
+    return (
+      <>
+        <View style={styles.cabecalhoSecao}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.tituloSecao}>
+              Garantias
+            </Text>
+            <Text style={styles.subtitulo}>
+              Os manuais cadastrados podem ser usados em casas de
+              qualquer empreendimento. Consulte seus itens e vincule-os
+              a novas unidades.
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.botaoAzul}
+            onPress={() => {
+              setFormModelo(!formModelo);
+              setFormItem(false);
+              setErro('');
+            }}
+          >
+            <Ionicons
+              name="add-circle-outline"
+              size={18}
+              color="#FFFFFF"
+            />
+            <Text style={styles.botaoAzulTexto}>
+              Novo modelo
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {formModelo ? (
+          <View style={styles.cartao}>
+            <Text style={styles.tituloFormulario}>
+              Criar modelo de garantia
+            </Text>
+
+            <Campo
+              titulo="NOME DO MODELO *"
+              valor={novoModeloNome}
+              alterar={setNovoModeloNome}
+              placeholder="Ex.: Garantia Residencial 2026"
+            />
+
+            <Campo
+              titulo="VERSÃO"
+              valor={novoModeloVersao}
+              alterar={setNovoModeloVersao}
+              placeholder="Ex.: 1.0"
+            />
+
+            <Campo
+              titulo="DESCRIÇÃO"
+              valor={novoModeloDescricao}
+              alterar={setNovoModeloDescricao}
+              placeholder="Observações sobre este modelo"
+              multiline
+            />
+
+            <BotaoSalvar
+              titulo="Criar modelo"
+              salvando={salvando}
+              onPress={salvarModelo}
+            />
+          </View>
+        ) : null}
+
+        <View style={styles.cabecalhoLista}>
+          <View>
+            <Text style={styles.tituloMenor}>
+              Modelos cadastrados
+            </Text>
+            <Text style={styles.textoAuxiliar}>
+              {catalogo.modelos.length} modelos
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            onPress={atualizar}
+            style={styles.botaoAtualizar}
+          >
+            <Ionicons
+              name="refresh-outline"
+              size={18}
+              color="#0B5EA8"
+            />
+            <Text style={styles.botaoContornoTexto}>
+              Atualizar
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {catalogo.modelos.map((modelo) => (
+          <View key={modelo.id}>
+            <BotaoOpcao
+              titulo={modelo.nome}
+              descricao={`${modelo.quantidade_itens} itens • ${modelo.quantidade_unidades} unidades vinculadas • Reutilizável em outros empreendimentos`}
+              selecionado={modeloSelecionadoId === modelo.id}
+              onPress={() => selecionarModelo(modelo.id)}
+            />
+            {modeloSelecionadoId === modelo.id ? renderDetalhesModelo() : null}
+          </View>
+        ))}
+
+        {!modeloSelecionado ? (
           <View style={styles.aviso}>
             <Ionicons
               name="information-circle-outline"
@@ -2726,7 +3473,7 @@ export default function ClientesImoveisFuncionarioScreen() {
               seus itens e vincular unidades.
             </Text>
           </View>
-        )}
+        ) : null}
 
         <View style={styles.aviso}>
           <Ionicons
@@ -2735,9 +3482,9 @@ export default function ClientesImoveisFuncionarioScreen() {
             color="#0B5EA8"
           />
           <Text style={styles.avisoTexto}>
-            As garantias já cadastradas são preservadas.
-            Para um empreendimento com regras diferentes,
-            crie um novo modelo e cadastre seus itens.
+            Os modelos cadastrados podem ser reutilizados em novos
+            empreendimentos sem alterar suas regras. Para condições
+            de garantia diferentes, crie outro modelo ou uma nova versão.
           </Text>
         </View>
       </>
@@ -2772,7 +3519,10 @@ export default function ClientesImoveisFuncionarioScreen() {
         <View style={styles.conteudo}>
           <TouchableOpacity
             style={styles.voltar}
-            onPress={() => router.back()}
+            onPress={() => {
+              if (router.canGoBack()) router.back();
+              else router.replace('/dashboard-funcionario');
+            }}
           >
             <Ionicons
               name="chevron-back"
@@ -3376,6 +4126,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  dadosClienteUnidade: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 7,
+    marginTop: 8,
+    marginBottom: 3,
+  },
+  nomeClienteUnidade: {
+    color: '#0B2447',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 19,
+  },
+  situacaoClienteUnidade: {
+    color: '#697789',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 2,
   },
   cartaoItem: {
     borderWidth: 1,

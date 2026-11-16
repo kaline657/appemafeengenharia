@@ -19,8 +19,7 @@ import {
 
 import { supabase } from '../lib/supabase';
 
-const MINIMO_FOTOS = 3;
-const MAXIMO_FOTOS = 10;
+const MAXIMO_FOTOS = 2; // Fotos opcionais: de 0 a 2 por problema.
 
 const CIDADES = [
   'São Luís',
@@ -1623,12 +1622,6 @@ export default function NovaSolicitacaoScreen() {
     );
   }
 
-  const quantidadeFaltando =
-    Math.max(
-      0,
-      MINIMO_FOTOS -
-        fotos.length
-    );
 
   const problemasAdicionaisValidos =
     problemasAdicionais.every(
@@ -1639,8 +1632,7 @@ export default function NovaSolicitacaoScreen() {
         problema.descricaoProblema
           .trim()
           .length > 0 &&
-        problema.fotos.length >=
-          MINIMO_FOTOS
+        problema.fotos.length <= MAXIMO_FOTOS
     );
 
   const podeEnviar =
@@ -1650,8 +1642,7 @@ export default function NovaSolicitacaoScreen() {
     descricaoProblema
       .trim()
       .length > 0 &&
-    fotos.length >=
-      MINIMO_FOTOS &&
+    fotos.length <= MAXIMO_FOTOS &&
     problemasAdicionaisValidos &&
     telefoneContato
       .trim()
@@ -1706,14 +1697,8 @@ export default function NovaSolicitacaoScreen() {
       return;
     }
 
-    if (
-      fotos.length <
-      MINIMO_FOTOS
-    ) {
-      setErro(
-        `Adicione pelo menos ${MINIMO_FOTOS} fotos do problema.`
-      );
-
+    if (fotos.length > MAXIMO_FOTOS) {
+      setErro(`O limite é de ${MAXIMO_FOTOS} fotos por problema.`);
       return;
     }
 
@@ -1753,14 +1738,8 @@ export default function NovaSolicitacaoScreen() {
         return;
       }
 
-      if (
-        problema.fotos.length <
-        MINIMO_FOTOS
-      ) {
-        setErro(
-          `Adicione pelo menos ${MINIMO_FOTOS} fotos do problema ${numeroProblema}.`
-        );
-
+      if (problema.fotos.length > MAXIMO_FOTOS) {
+        setErro(`O problema ${numeroProblema} pode ter no máximo ${MAXIMO_FOTOS} fotos.`);
         return;
       }
     }
@@ -1909,6 +1888,16 @@ export default function NovaSolicitacaoScreen() {
           'Não foi possível registrar a solicitação.'
         );
 
+        return;
+      }
+
+      // Fotos são opcionais. Sem anexos, não é necessário consultar o Storage
+      // nem localizar os IDs dos problemas apenas para enviar arquivos.
+      const existemFotosParaEnviar = fotos.length > 0 ||
+        problemasAdicionais.some((p) => p.fotos.length > 0);
+      if (!existemFotosParaEnviar) {
+        await notificarEmpresa(novaSolicitacao.solicitacao_id);
+        setSolicitacaoCriada(novaSolicitacao);
         return;
       }
 
@@ -2072,32 +2061,7 @@ export default function NovaSolicitacaoScreen() {
       setQuantidadeFotosEnviadas(
         enviadas
       );
-
-      // ------------------------------------------------------
-      // 4. VERIFICA SE TEM AS 3 FOTOS OBRIGATÓRIAS
-      // ------------------------------------------------------
-
-      const minimoTotalFotos =
-        MINIMO_FOTOS *
-        (
-          1 +
-          problemasAdicionais.length
-        );
-
-      if (
-        enviadas <
-        minimoTotalFotos
-      ) {
-        setAvisoFotos(
-          `O protocolo foi criado, mas apenas ${enviadas} foto(s) foram enviadas. A notificação automática ainda não foi enviada porque cada problema precisa de pelo menos ${MINIMO_FOTOS} fotos.`
-        );
-
-        setSolicitacaoCriada(
-          novaSolicitacao
-        );
-
-        return;
-      }
+      // 4. Fotos opcionais: falha de um anexo não bloqueia a notificação.
 
       if (
         errosFotos.length > 0
@@ -2110,8 +2074,7 @@ export default function NovaSolicitacaoScreen() {
       // ------------------------------------------------------
       // 5. NOTIFICA AUTOMATICAMENTE A EMAFE
       //
-      // Só chegamos aqui se pelo menos 3 fotos
-      // foram registradas.
+      // Fotos são opcionais; o protocolo deve ser notificado mesmo sem anexos.
       // ------------------------------------------------------
 
       await notificarEmpresa(
@@ -3131,7 +3094,7 @@ export default function NovaSolicitacaoScreen() {
                   styles.helperText
                 }
               >
-                Adicione pelo menos 3 fotos que mostrem claramente o problema.
+                Você pode adicionar até 2 fotos para ilustrar o problema (opcional).
               </Text>
 
               <View
@@ -3140,16 +3103,10 @@ export default function NovaSolicitacaoScreen() {
                 }
               >
                 <Text
-                  style={
-                    fotos.length >=
-                    MINIMO_FOTOS
-                      ? styles.photoCounterSuccess
-                      : styles.photoCounterPending
-                  }
+                  style={fotos.length >= MAXIMO_FOTOS ? styles.photoCounterSuccess : styles.photoCounterPending}
                 >
-                  {fotos.length}/
-                  {MINIMO_FOTOS}{' '}
-                  fotos obrigatórias
+                  {fotos.length}/{MAXIMO_FOTOS}{' '}
+                  fotos (opcionais)
                 </Text>
 
                 <Text
@@ -3164,53 +3121,18 @@ export default function NovaSolicitacaoScreen() {
                 </Text>
               </View>
 
-              {quantidadeFaltando >
-              0 ? (
-                <View
-                  style={
-                    styles.photoRequirementBox
-                  }
-                >
-                  <Ionicons
-                    name="information-circle-outline"
-                    size={18}
-                    color="#7B5A12"
-                  />
-
-                  <Text
-                    style={
-                      styles.photoRequirementText
-                    }
-                  >
-                    Faltam{' '}
-                    {
-                      quantidadeFaltando
-                    }{' '}
-                    {quantidadeFaltando ===
-                    1
-                      ? 'foto'
-                      : 'fotos'}{' '}
-                    para liberar o envio.
+              {fotos.length >= MAXIMO_FOTOS ? (
+                <View style={styles.photoReadyBox}>
+                  <Ionicons name="checkmark-circle-outline" size={18} color="#357A4F" />
+                  <Text style={styles.photoReadyText}>
+                    Limite de 2 fotos atingido. Remova uma foto para substituir.
                   </Text>
                 </View>
               ) : (
-                <View
-                  style={
-                    styles.photoReadyBox
-                  }
-                >
-                  <Ionicons
-                    name="checkmark-circle-outline"
-                    size={18}
-                    color="#357A4F"
-                  />
-
-                  <Text
-                    style={
-                      styles.photoReadyText
-                    }
-                  >
-                    Quantidade mínima de fotos adicionada.
+                <View style={styles.photoRequirementBox}>
+                  <Ionicons name="information-circle-outline" size={18} color="#7B5A12" />
+                  <Text style={styles.photoRequirementText}>
+                    As fotos são opcionais. Você pode adicionar mais {MAXIMO_FOTOS - fotos.length}.
                   </Text>
                 </View>
               )}
@@ -3231,7 +3153,7 @@ export default function NovaSolicitacaoScreen() {
                     0.8
                   }
                   disabled={
-                    enviando
+                    enviando || fotos.length >= MAXIMO_FOTOS
                   }
                 >
                   <View
@@ -3280,7 +3202,7 @@ export default function NovaSolicitacaoScreen() {
                     0.8
                   }
                   disabled={
-                    enviando
+                    enviando || fotos.length >= MAXIMO_FOTOS
                   }
                 >
                   <View
@@ -3460,15 +3382,6 @@ export default function NovaSolicitacaoScreen() {
                   const numeroProblema =
                     indiceProblema +
                     2;
-
-                  const faltamFotos =
-                    Math.max(
-                      0,
-                      MINIMO_FOTOS -
-                        problema
-                          .fotos
-                          .length
-                    );
 
                   return (
                     <View
@@ -3714,51 +3627,18 @@ export default function NovaSolicitacaoScreen() {
                       </Text>
 
                       <Text
-                        style={
-                          problema
-                            .fotos
-                            .length >=
-                          MINIMO_FOTOS
-                            ? styles.photoCounterSuccess
-                            : styles.photoCounterPending
-                        }
+                        style={problema.fotos.length >= MAXIMO_FOTOS ? styles.photoCounterSuccess : styles.photoCounterPending}
                       >
-                        {
-                          problema
-                            .fotos
-                            .length
-                        }
-                        /
-                        {
-                          MINIMO_FOTOS
-                        }{' '}
-                        fotos obrigatórias
+                        {problema.fotos.length}/{MAXIMO_FOTOS}{' '}fotos (opcionais)
                       </Text>
 
-                      {faltamFotos >
-                      0 ? (
-                        <Text
-                          style={
-                            styles.additionalPhotoHint
-                          }
-                        >
-                          Faltam{' '}
-                          {
-                            faltamFotos
-                          }{' '}
-                          {faltamFotos ===
-                          1
-                            ? 'foto'
-                            : 'fotos'}{' '}
-                          neste problema.
+                      {problema.fotos.length >= MAXIMO_FOTOS ? (
+                        <Text style={styles.additionalPhotoReady}>
+                          Limite de 2 fotos atingido. Remova uma para substituir.
                         </Text>
                       ) : (
-                        <Text
-                          style={
-                            styles.additionalPhotoReady
-                          }
-                        >
-                          Fotos mínimas adicionadas.
+                        <Text style={styles.additionalPhotoHint}>
+                          Opcional: você pode adicionar mais {MAXIMO_FOTOS - problema.fotos.length} foto(s).
                         </Text>
                       )}
 
@@ -3777,7 +3657,7 @@ export default function NovaSolicitacaoScreen() {
                             )
                           }
                           disabled={
-                            enviando
+                            enviando || problema.fotos.length >= MAXIMO_FOTOS
                           }
                         >
                           <View
@@ -3825,7 +3705,7 @@ export default function NovaSolicitacaoScreen() {
                             )
                           }
                           disabled={
-                            enviando
+                            enviando || problema.fotos.length >= MAXIMO_FOTOS
                           }
                         >
                           <View
@@ -4537,7 +4417,7 @@ export default function NovaSolicitacaoScreen() {
                     styles.requiredInfo
                   }
                 >
-                  Preencha todos os campos, adicione pelo menos 3 fotos e escolha a data e o horário da vistoria para liberar o envio.
+                  Preencha os campos obrigatórios e escolha a data e o horário da vistoria. As fotos são opcionais (até 2 por problema).
                 </Text>
               ) : null}
             </>
