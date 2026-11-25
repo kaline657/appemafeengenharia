@@ -1150,6 +1150,48 @@ export default function DetalhesSolicitacaoScreen() {
       ['aguardando_cliente', 'confirmada'].includes(item.agendamento_status ?? '')
   );
 
+  // Os avisos são derivados do histórico real de agendamentos no Supabase.
+  // Uma alteração anterior não deve aparecer se o cliente já fez novo agendamento.
+  const ultimoCancelamentoDaVistoria = [...historicoVistoria]
+    .filter((registro) => registro.status === 'cancelada' && Boolean(registro.cancelado_em))
+    .sort((a, b) =>
+      new Date(b.cancelado_em!).getTime() - new Date(a.cancelado_em!).getTime()
+    )[0];
+
+  const vistoriaCanceladaPelaEmpresa = Boolean(
+    !agendamento &&
+      ultimoCancelamentoDaVistoria?.cancelado_por_tipo === 'funcionario' &&
+      ultimoCancelamentoDaVistoria?.motivo_cancelamento !== 'Reagendamento de vistoria' &&
+      !ultimoCancelamentoDaVistoria?.motivo_cancelamento?.startsWith('Reagendamento de vistoria:')
+  );
+
+  // O reagendamento pela EMAFE cancela a reserva anterior e abre outra
+  // na mesma transação. O intervalo evita interpretar reservas futuras
+  // independentes como se fossem um reagendamento.
+  const diferencaReagendamentoMs =
+    agendamento?.agendado_em && ultimoCancelamentoDaVistoria?.cancelado_em
+      ? new Date(agendamento.agendado_em).getTime() -
+        new Date(ultimoCancelamentoDaVistoria.cancelado_em).getTime()
+      : -1;
+  const vistoriaReagendadaPelaEmpresa = Boolean(
+    agendamento?.status === 'agendada' &&
+      agendamento.agendado_por_tipo === 'funcionario' &&
+      ultimoCancelamentoDaVistoria?.cancelado_por_tipo === 'funcionario' &&
+      (ultimoCancelamentoDaVistoria?.motivo_cancelamento === 'Reagendamento de vistoria' ||
+        ultimoCancelamentoDaVistoria?.motivo_cancelamento?.startsWith('Reagendamento de vistoria:')) &&
+      diferencaReagendamentoMs >= 0 &&
+      diferencaReagendamentoMs <= 5 * 60 * 1000
+  );
+
+  const motivoAlteracaoVistoria = (() => {
+    const motivo = ultimoCancelamentoDaVistoria?.motivo_cancelamento?.trim() || '';
+    if (!motivo) return 'Motivo não informado pela equipe da EMAFE.';
+    if (motivo === 'Reagendamento de vistoria') {
+      return 'A alteração de data foi registrada pela EMAFE, sem justificativa específica.';
+    }
+    return motivo.replace(/^Reagendamento de vistoria:\s*/i, '');
+  })();
+
   const [
     garantiaSolicitacao,
     setGarantiaSolicitacao,
@@ -3905,6 +3947,202 @@ export default function DetalhesSolicitacaoScreen() {
                 </View>
               </View>
 
+              {solicitacao.status ===
+              'encerrada_ausencia' ? (
+                <View
+                  style={
+                    styles.ausenciaClienteCard
+                  }
+                >
+                  <View
+                    style={
+                      styles.ausenciaClienteHeader
+                    }
+                  >
+                    <View
+                      style={
+                        styles.ausenciaClienteIcon
+                      }
+                    >
+                      <Ionicons
+                        name="person-remove-outline"
+                        size={23}
+                        color="#A76500"
+                      />
+                    </View>
+
+                    <View
+                      style={{
+                        flex: 1,
+                      }}
+                    >
+                      <Text
+                        style={
+                          styles.ausenciaClienteStatus
+                        }
+                      >
+                        ATENDIMENTO ENCERRADO
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.ausenciaClienteTitle
+                        }
+                      >
+                        Cliente ausente
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text
+                    style={
+                      styles.ausenciaClienteMensagem
+                    }
+                  >
+                    A equipe da EMAFE Engenharia compareceu ao imóvel na data e no horário agendados para a realização da vistoria. O atendimento não pôde ser realizado porque o cliente ou um responsável não estava presente.
+                  </Text>
+
+                  <View
+                    style={
+                      styles.ausenciaClienteAviso
+                    }
+                  >
+                    <Ionicons
+                      name="information-circle-outline"
+                      size={20}
+                      color="#0B5EA8"
+                    />
+
+                    <Text
+                      style={
+                        styles.ausenciaClienteAvisoText
+                      }
+                    >
+                      Este protocolo foi encerrado por ausência e não poderá ser retomado ou reagendado. Para solicitar uma nova vistoria, é necessário abrir um novo protocolo pelo aplicativo.
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={
+                      styles.ausenciaClienteFotosTitulo
+                    }
+                  >
+                    Registro fotográfico da visita
+                  </Text>
+
+                  {carregandoFotosAusencia ? (
+                    <View
+                      style={
+                        styles.ausenciaClienteLoading
+                      }
+                    >
+                      <ActivityIndicator
+                        color="#A76500"
+                      />
+
+                      <Text
+                        style={
+                          styles.ausenciaClienteLoadingText
+                        }
+                      >
+                        Carregando foto da visita...
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {erroFotosAusencia ? (
+                    <Text
+                      style={
+                        styles.ausenciaClienteErro
+                      }
+                    >
+                      {erroFotosAusencia}
+                    </Text>
+                  ) : null}
+
+                  {!carregandoFotosAusencia &&
+                  fotosAusenciaCliente.length >
+                    0 ? (
+                    <View
+                      style={
+                        styles.ausenciaClienteFotosGrid
+                      }
+                    >
+                      {fotosAusenciaCliente.map(
+                        (foto) => (
+                          <TouchableOpacity
+                            key={
+                              foto.foto_id
+                            }
+                            style={
+                              styles.ausenciaClienteFotoCard
+                            }
+                            activeOpacity={
+                              0.85
+                            }
+                            onPress={() =>
+                              setFotoAusenciaSelecionada(
+                                foto
+                              )
+                            }
+                          >
+                            <Image
+                              source={{
+                                uri: foto.url,
+                              }}
+                              style={
+                                styles.ausenciaClienteFoto
+                              }
+                              resizeMode="cover"
+                            />
+
+                            <View
+                              style={
+                                styles.ausenciaClienteFotoOverlay
+                              }
+                            >
+                              <Ionicons
+                                name="expand-outline"
+                                size={18}
+                                color="#FFFFFF"
+                              />
+                            </View>
+                          </TouchableOpacity>
+                        )
+                      )}
+                    </View>
+                  ) : null}
+
+                  <TouchableOpacity
+                    style={
+                      styles.ausenciaClienteNovaSolicitacaoButton
+                    }
+                    onPress={() =>
+                      router.push(
+                        '/nova-solicitacao'
+                      )
+                    }
+                  >
+                    <Ionicons
+                      name="add-circle-outline"
+                      size={20}
+                      color="#FFFFFF"
+                    />
+
+                    <Text
+                      style={
+                        styles.ausenciaClienteNovaSolicitacaoButtonText
+                      }
+                    >
+                      Abrir nova solicitação
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              {solicitacao.status !== 'encerrada_ausencia' ? (
+                <>
+
               {/* IMÓVEL */}
 
               <Text
@@ -4805,199 +5043,6 @@ export default function DetalhesSolicitacaoScreen() {
                 </View>
               ) : null}
 
-              {solicitacao.status ===
-              'encerrada_ausencia' ? (
-                <View
-                  style={
-                    styles.ausenciaClienteCard
-                  }
-                >
-                  <View
-                    style={
-                      styles.ausenciaClienteHeader
-                    }
-                  >
-                    <View
-                      style={
-                        styles.ausenciaClienteIcon
-                      }
-                    >
-                      <Ionicons
-                        name="person-remove-outline"
-                        size={23}
-                        color="#A76500"
-                      />
-                    </View>
-
-                    <View
-                      style={{
-                        flex: 1,
-                      }}
-                    >
-                      <Text
-                        style={
-                          styles.ausenciaClienteStatus
-                        }
-                      >
-                        CHAMADO ENCERRADO
-                      </Text>
-
-                      <Text
-                        style={
-                          styles.ausenciaClienteTitle
-                        }
-                      >
-                        Encerrado por ausência
-                      </Text>
-                    </View>
-                  </View>
-
-                  <Text
-                    style={
-                      styles.ausenciaClienteMensagem
-                    }
-                  >
-                    Nossa equipe compareceu ao local no horário agendado, mas não havia responsável presente no imóvel. Para um novo atendimento, abra uma nova solicitação.
-                  </Text>
-
-                  <View
-                    style={
-                      styles.ausenciaClienteAviso
-                    }
-                  >
-                    <Ionicons
-                      name="information-circle-outline"
-                      size={20}
-                      color="#0B5EA8"
-                    />
-
-                    <Text
-                      style={
-                        styles.ausenciaClienteAvisoText
-                      }
-                    >
-                      Este protocolo permanece disponível para consulta como registro da visita realizada.
-                    </Text>
-                  </View>
-
-                  <Text
-                    style={
-                      styles.ausenciaClienteFotosTitulo
-                    }
-                  >
-                    Comprovação da visita
-                  </Text>
-
-                  {carregandoFotosAusencia ? (
-                    <View
-                      style={
-                        styles.ausenciaClienteLoading
-                      }
-                    >
-                      <ActivityIndicator
-                        color="#A76500"
-                      />
-
-                      <Text
-                        style={
-                          styles.ausenciaClienteLoadingText
-                        }
-                      >
-                        Carregando foto da visita...
-                      </Text>
-                    </View>
-                  ) : null}
-
-                  {erroFotosAusencia ? (
-                    <Text
-                      style={
-                        styles.ausenciaClienteErro
-                      }
-                    >
-                      {erroFotosAusencia}
-                    </Text>
-                  ) : null}
-
-                  {!carregandoFotosAusencia &&
-                  fotosAusenciaCliente.length >
-                    0 ? (
-                    <View
-                      style={
-                        styles.ausenciaClienteFotosGrid
-                      }
-                    >
-                      {fotosAusenciaCliente.map(
-                        (foto) => (
-                          <TouchableOpacity
-                            key={
-                              foto.foto_id
-                            }
-                            style={
-                              styles.ausenciaClienteFotoCard
-                            }
-                            activeOpacity={
-                              0.85
-                            }
-                            onPress={() =>
-                              setFotoAusenciaSelecionada(
-                                foto
-                              )
-                            }
-                          >
-                            <Image
-                              source={{
-                                uri: foto.url,
-                              }}
-                              style={
-                                styles.ausenciaClienteFoto
-                              }
-                              resizeMode="cover"
-                            />
-
-                            <View
-                              style={
-                                styles.ausenciaClienteFotoOverlay
-                              }
-                            >
-                              <Ionicons
-                                name="expand-outline"
-                                size={18}
-                                color="#FFFFFF"
-                              />
-                            </View>
-                          </TouchableOpacity>
-                        )
-                      )}
-                    </View>
-                  ) : null}
-
-                  <TouchableOpacity
-                    style={
-                      styles.ausenciaClienteNovaSolicitacaoButton
-                    }
-                    onPress={() =>
-                      router.push(
-                        '/nova-solicitacao'
-                      )
-                    }
-                  >
-                    <Ionicons
-                      name="add-circle-outline"
-                      size={20}
-                      color="#FFFFFF"
-                    />
-
-                    <Text
-                      style={
-                        styles.ausenciaClienteNovaSolicitacaoButtonText
-                      }
-                    >
-                      Abrir nova solicitação
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-
               {/* VISTORIA */}
 
               <Text
@@ -5007,6 +5052,51 @@ export default function DetalhesSolicitacaoScreen() {
               >
                 Vistoria
               </Text>
+
+              {!carregandoAgendamento &&
+              !erroAgendamento &&
+              ['aberta', 'em_analise', 'vistoria_agendada'].includes(solicitacao.status) &&
+              (vistoriaCanceladaPelaEmpresa || vistoriaReagendadaPelaEmpresa) ? (
+                <View
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#C7DAE9',
+                    backgroundColor: '#F2F7FB',
+                    borderRadius: 12,
+                    padding: 14,
+                    marginBottom: 14,
+                    flexDirection: 'row',
+                    alignItems: 'flex-start',
+                  }}
+                >
+                  <Ionicons
+                    name={vistoriaCanceladaPelaEmpresa ? 'alert-circle-outline' : 'calendar-outline'}
+                    size={21}
+                    color="#0B5EA8"
+                  />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#0B2447', marginBottom: 5 }}>
+                      {vistoriaCanceladaPelaEmpresa
+                        ? 'Vistoria cancelada — reagendamento necessário'
+                        : 'Vistoria reagendada pela EMAFE'}
+                    </Text>
+                    <Text style={{ fontSize: 13, lineHeight: 19, color: '#334155' }}>
+                      {vistoriaCanceladaPelaEmpresa
+                        ? 'A vistoria agendada foi cancelada pela equipe da EMAFE.'
+                        : `A EMAFE alterou a vistoria para ${formatarData(agendamento?.data_vistoria)}, das ${formatarHora(agendamento?.hora_inicio)} às ${formatarHora(agendamento?.hora_fim)}.`}
+                    </Text>
+                    <Text style={{ fontSize: 13, lineHeight: 19, color: '#334155', marginTop: 6 }}>
+                      <Text style={{ fontWeight: '700' }}>Motivo: </Text>
+                      {motivoAlteracaoVistoria}
+                    </Text>
+                    <Text style={{ fontSize: 13, lineHeight: 19, color: '#334155', marginTop: 6 }}>
+                      {vistoriaCanceladaPelaEmpresa
+                        ? 'Este protocolo permanece aberto. Escolha uma nova data em “Agendar vistoria”, logo abaixo.'
+                        : 'A nova data está registrada neste protocolo. Se necessário, use “Reagendar vistoria” para escolher outra.'}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
 
               {carregandoAgendamento ? (
                 <View
@@ -6989,6 +7079,8 @@ export default function DetalhesSolicitacaoScreen() {
                       )}
                 </Text>
               </View>
+                </>
+              ) : null}
             </>
           ) : null}
 

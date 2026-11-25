@@ -103,6 +103,7 @@ type Solicitacao = {
 type FotoSolicitacao = {
   id: string;
   solicitacao_id: string;
+  problema_id: string | null;
   caminho_storage: string;
   nome_arquivo: string | null;
   tipo_mime: string | null;
@@ -1081,6 +1082,7 @@ type VistoriaTecnica = {
 type FotoVistoriaSalva = {
   id: string;
   vistoria_id: string;
+  problema_id: string | null;
   caminho_storage: string;
   nome_arquivo: string | null;
   descricao: string | null;
@@ -1319,6 +1321,8 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
 
 
+
+
   // ==========================================================
   // URGÊNCIA
   // ==========================================================
@@ -1524,6 +1528,10 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     setMotivoCancelamentoVistoria,
   ] = useState('');
 
+  // Justificativa informada ao cliente quando a EMAFE altera uma vistoria já agendada.
+  const [motivoReagendamentoVistoria, setMotivoReagendamentoVistoria] =
+    useState('');
+
 
   const [
     iniciandoVistoria,
@@ -1593,6 +1601,16 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   ] = useState<FotoVistoriaSalva[]>(
     []
   );
+
+  // Fotos técnicas da vistoria são separadas por problema.
+  // fotosVistoriaPendentes (acima) ficam reservadas à comprovação de cliente ausente.
+  const [fotosVistoriaPendentesPorProblema, setFotosVistoriaPendentesPorProblema] =
+    useState<Record<string, ImagePicker.ImagePickerAsset[]>>({});
+
+  const totalFotosVistoriaPendentesPorProblema = Object.values(
+    fotosVistoriaPendentesPorProblema
+  ).reduce((total, lista) => total + lista.length, 0);
+
 
 
   const [
@@ -2908,6 +2926,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         .select(`
           id,
           solicitacao_id,
+          problema_id,
           caminho_storage,
           nome_arquivo,
           tipo_mime,
@@ -3474,10 +3493,8 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   async function salvarAvaliacaoIndividual(problemaId: string) {
     const problema = problemasSolicitacao.find((p) => p.id === problemaId);
     const dados = rascunhosAvaliacao[problemaId] ?? rascunhoVazio();
-    if (!problema || !['dentro_da_garantia', 'dentro_garantia'].includes(
-      problema.status_garantia ?? ''
-    )) {
-      setErroAvaliacaoIndividual('Somente problemas cobertos podem receber avaliação de garantia.');
+    if (!problema) {
+      setErroAvaliacaoIndividual('Problema não encontrado para avaliação técnica.');
       return;
     }
     if (!dados.resultado || dados.problemaConstatado === null || !dados.parecer.trim()) {
@@ -3503,6 +3520,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_resultado: dados.resultado,
           p_problema_constatado: dados.problemaConstatado,
           p_parecer_tecnico: dados.parecer.trim(),
+          // O serviço será definido na etapa posterior de execução; na vistoria basta o parecer.
           p_servico_necessario: null,
           p_justificativa_improcedencia: dados.resultado === 'improcedente'
             ? dados.justificativa.trim() : null,
@@ -3679,9 +3697,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   );
 
 
-  const problemaEmVistoria = problemasCobertos.find(
+  const problemaEmVistoria = problemasSolicitacao.find(
     (item) => item.id === problemaEmVistoriaId
-  ) ?? problemasCobertos[0] ?? null;
+  ) ?? problemasSolicitacao[0] ?? null;
 
 
   const avaliacaoAtual = problemaEmVistoria
@@ -3695,8 +3713,8 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
 
   const todosProblemasCobertosAvaliados =
-    avaliacoesCarregadas && problemasCobertos.length > 0 &&
-    problemasCobertos.every((p) =>
+    avaliacoesCarregadas && problemasSolicitacao.length > 0 &&
+    problemasSolicitacao.every((p) =>
       avaliacoesIndividuais.some((a) => a.problema_id === p.id)
     );
 
@@ -4152,6 +4170,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
     setNovaDataVistoria('');
     setNovoHorarioVistoriaId('');
+    setMotivoReagendamentoVistoria('');
 
 
     await carregarAgendaVistoria();
@@ -4161,26 +4180,6 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   async function salvarAgendamentoVistoria() {
     setErroVistoria('');
     setSucessoVistoria('');
-
-
-    if (!todosProblemasAnalisados) {
-      setErroVistoria(
-        'Confirme a análise técnica de todos os problemas antes de alterar a vistoria.'
-      );
-
-
-      return;
-    }
-
-
-    if (!algumProblemaDentroGarantia) {
-      setErroVistoria(
-        'Nenhum problema deste protocolo possui cobertura de garantia para seguir com a vistoria.'
-      );
-
-
-      return;
-    }
 
 
     if (
@@ -4196,6 +4195,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
 
 
+    if (agendamento && motivoReagendamentoVistoria.trim().length < 5) {
+      setErroVistoria(
+        'Informe o motivo do reagendamento (mínimo de 5 caracteres). O cliente verá essa justificativa.'
+      );
+      return;
+    }
+
+
     try {
       setSalvandoVistoria(true);
 
@@ -4205,7 +4212,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         error,
       } = await supabase.rpc(
         agendamento
-          ? 'reagendar_vistoria_funcionario'
+          ? 'reagendar_vistoria_funcionario_com_motivo'
           : 'reservar_horario_vistoria_funcionario',
         agendamento
           ? {
@@ -4219,6 +4226,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
               p_novo_horario_vistoria_id:
                 novoHorarioVistoriaId,
+
+              p_motivo:
+                motivoReagendamentoVistoria.trim(),
             }
           : {
               p_solicitacao_id:
@@ -4275,7 +4285,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
       setSucessoVistoria(
         agendamento
-          ? 'Vistoria reagendada com sucesso.'
+          ? 'Vistoria reagendada. A nova data e o motivo ficarão disponíveis no protocolo do cliente.'
           : 'Vistoria agendada com sucesso.'
       );
 
@@ -4287,6 +4297,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
       setNovaDataVistoria('');
       setNovoHorarioVistoriaId('');
+      setMotivoReagendamentoVistoria('');
 
 
       await carregarSolicitacao();
@@ -4689,7 +4700,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       } = await supabase
         .from('vistoria_fotos')
         .select(
-          'id, vistoria_id, caminho_storage, nome_arquivo, descricao, created_at'
+          'id, vistoria_id, problema_id, caminho_storage, nome_arquivo, descricao, created_at'
         )
         .eq(
           'vistoria_id',
@@ -4850,6 +4861,79 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   }
 
 
+
+  // Fotos por problema: mínimo 1 e máximo 2, considerando também as já salvas.
+  function quantidadeFotosDaVistoriaNoProblema(problemaId: string): number {
+    return fotosVistoriaSalvas.filter((foto) => foto.problema_id === problemaId).length +
+      (fotosVistoriaPendentesPorProblema[problemaId]?.length ?? 0);
+  }
+
+  async function selecionarFotosVistoriaProblema(problemaId: string) {
+    setErroFormularioVistoria('');
+    const faltantes = 2 - quantidadeFotosDaVistoriaNoProblema(problemaId);
+    if (faltantes <= 0) {
+      setErroFormularioVistoria('São permitidas no máximo 2 fotos por problema na vistoria.');
+      return;
+    }
+    try {
+      const resultado = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        selectionLimit: faltantes,
+        quality: 0.8,
+      });
+      if (resultado.canceled) return;
+      setFotosVistoriaPendentesPorProblema((antigas) => {
+        const anteriores = antigas[problemaId] ?? [];
+        const jaSalvas = fotosVistoriaSalvas.filter((f) => f.problema_id === problemaId).length;
+        const vagas = Math.max(0, 2 - jaSalvas - anteriores.length);
+        const novas = resultado.assets.filter(
+          (foto) => !anteriores.some((anterior) => anterior.uri === foto.uri)
+        ).slice(0, vagas);
+        return { ...antigas, [problemaId]: [...anteriores, ...novas] };
+      });
+    } catch (error) {
+      console.error('Não foi possível selecionar fotos para o problema:', error);
+      setErroFormularioVistoria('Não foi possível selecionar as fotos deste problema.');
+    }
+  }
+
+  async function tirarFotoVistoriaProblema(problemaId: string) {
+    setErroFormularioVistoria('');
+    if (quantidadeFotosDaVistoriaNoProblema(problemaId) >= 2) {
+      setErroFormularioVistoria('São permitidas no máximo 2 fotos por problema na vistoria.');
+      return;
+    }
+    try {
+      const permissao = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permissao.granted) {
+        setErroFormularioVistoria('Permita o acesso à câmera para fotografar este problema.');
+        return;
+      }
+      const resultado = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+      });
+      if (resultado.canceled || !resultado.assets?.[0]) return;
+      setFotosVistoriaPendentesPorProblema((antigas) => {
+        const anteriores = antigas[problemaId] ?? [];
+        const jaSalvas = fotosVistoriaSalvas.filter((f) => f.problema_id === problemaId).length;
+        if (anteriores.length + jaSalvas >= 2) return antigas;
+        return { ...antigas, [problemaId]: [...anteriores, resultado.assets[0]] };
+      });
+    } catch (error) {
+      console.error('Não foi possível fotografar o problema:', error);
+      setErroFormularioVistoria('Não foi possível abrir a câmera para este problema.');
+    }
+  }
+
+  function removerFotoVistoriaPendenteProblema(problemaId: string, uri: string) {
+    setFotosVistoriaPendentesPorProblema((antigas) => ({
+      ...antigas,
+      [problemaId]: (antigas[problemaId] ?? []).filter((foto) => foto.uri !== uri),
+    }));
+  }
+
   async function tirarFotoVistoria() {
     setErroFormularioVistoria('');
     setErroFinalizacaoVistoria('');
@@ -4976,195 +5060,80 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   }
 
 
-  async function enviarFotosVistoria() {
-    if (
-      fotosVistoriaPendentes.length ===
-      0
-    ) {
-      return true;
-    }
-
-
+  // 'apenasAusencia' mantém inalterado o envio da comprovação de cliente ausente.
+  // Para a vistoria técnica normal, cada arquivo recebe o UUID de seu problema.
+  async function enviarFotosVistoria(apenasAusencia = false) {
+    const pendentes: { foto: ImagePicker.ImagePickerAsset; problemaId: string | null }[] =
+      apenasAusencia
+        ? fotosVistoriaPendentes.map((foto) => ({ foto, problemaId: null }))
+        : Object.entries(fotosVistoriaPendentesPorProblema).flatMap(
+            ([problemaId, lista]) => lista.map((foto) => ({ foto, problemaId }))
+          );
+    if (pendentes.length === 0) return true;
     if (!vistoriaTecnica) {
-      setErroFormularioVistoria(
-        'A ficha da vistoria ainda não foi carregada.'
-      );
-
-
+      setErroFormularioVistoria('A ficha da vistoria ainda não foi carregada.');
+      return false;
+    }
+    const { data: usuarioData, error: usuarioError } = await supabase.auth.getUser();
+    if (usuarioError || !usuarioData.user) {
+      setErroFormularioVistoria('Não foi possível identificar o funcionário.');
       return false;
     }
 
-
-    const {
-      data: usuarioData,
-      error: usuarioError,
-    } =
-      await supabase.auth
-        .getUser();
-
-
-    if (
-      usuarioError ||
-      !usuarioData.user
-    ) {
-      setErroFormularioVistoria(
-        'Não foi possível identificar o funcionário.'
-      );
-
-
-      return false;
-    }
-
-
-    let pendentesRestantes = [
-      ...fotosVistoriaPendentes,
-    ];
-
-
-    for (
-      let indice = 0;
-      indice <
-      fotosVistoriaPendentes.length;
-      indice++
-    ) {
-      const foto =
-        fotosVistoriaPendentes[
-          indice
-        ];
-
-
-      try {
-        const resposta =
-          await fetch(
-            foto.uri
-          );
-
-
-        const blob =
-          await resposta.blob();
-
-
-        const extensao =
-          extensaoFoto(
-            foto
-          );
-
-
-        const nomeArquivo =
-          foto.fileName ??
-          `vistoria-${Date.now()}-${indice}.${extensao}`;
-
-
-        const caminho =
-          `${vistoriaTecnica.vistoria_id}/${usuarioData.user.id}/${Date.now()}-${indice}.${extensao}`;
-
-
-        const {
-          error:
-            uploadError,
-        } =
-          await supabase.storage
-            .from(
-              'vistorias-fotos'
-            )
-            .upload(
-              caminho,
-              blob,
-              {
-                contentType:
-                  foto.mimeType ??
-                  `image/${extensao === 'jpg' ? 'jpeg' : extensao}`,
-
-
-                upsert: false,
-              }
-            );
-
-
-        if (uploadError) {
-          throw uploadError;
+    // Verificação final no cliente. O banco também impede o excesso e vínculos incorretos.
+    if (!apenasAusencia) {
+      for (const problema of problemasSolicitacao) {
+        if (quantidadeFotosDaVistoriaNoProblema(problema.id) > 2) {
+          setErroFormularioVistoria(`Problema ${problema.numero}: máximo de 2 fotos por vistoria.`);
+          return false;
         }
-
-
-        const {
-          error:
-            insertError,
-        } =
-          await supabase
-            .from(
-              'vistoria_fotos'
-            )
-            .insert({
-              vistoria_id:
-                vistoriaTecnica.vistoria_id,
-
-
-              caminho_storage:
-                caminho,
-
-
-              nome_arquivo:
-                nomeArquivo,
-
-
-              funcionario_id:
-                usuarioData.user.id,
-            });
-
-
-        if (insertError) {
-          await supabase.storage
-            .from(
-              'vistorias-fotos'
-            )
-            .remove([
-              caminho,
-            ]);
-
-
-          throw insertError;
-        }
-
-
-        pendentesRestantes =
-          pendentesRestantes.filter(
-            (item) =>
-              item.uri !==
-              foto.uri
-          );
-
-
-        setFotosVistoriaPendentes(
-          pendentesRestantes
-        );
-      } catch (error: any) {
-        console.error(
-          'Erro ao enviar foto da vistoria:',
-          error
-        );
-
-
-        setErroFormularioVistoria(
-          error?.message ??
-            'Não foi possível enviar uma das fotos da vistoria.'
-        );
-
-
-        await carregarFotosVistoria(
-          vistoriaTecnica.vistoria_id
-        );
-
-
-        return false;
       }
     }
 
+    for (let indice = 0; indice < pendentes.length; indice++) {
+      const { foto, problemaId } = pendentes[indice];
+      try {
+        const resposta = await fetch(foto.uri);
+        const blob = await resposta.blob();
+        const extensao = extensaoFoto(foto);
+        const nomeArquivo = foto.fileName ?? `vistoria-${Date.now()}-${indice}.${extensao}`;
+        const caminho = `${vistoriaTecnica.vistoria_id}/${usuarioData.user.id}/${Date.now()}-${indice}-${Math.random().toString(36).slice(2, 9)}.${extensao}`;
+        const { error: uploadError } = await supabase.storage
+          .from('vistorias-fotos').upload(caminho, blob, {
+            contentType: foto.mimeType ?? `image/${extensao === 'jpg' ? 'jpeg' : extensao}`,
+            upsert: false,
+          });
+        if (uploadError) throw uploadError;
 
-    await carregarFotosVistoria(
-      vistoriaTecnica.vistoria_id
-    );
-
-
+        const { error: insertError } = await supabase.from('vistoria_fotos').insert({
+          vistoria_id: vistoriaTecnica.vistoria_id,
+          problema_id: problemaId,
+          caminho_storage: caminho,
+          nome_arquivo: nomeArquivo,
+          funcionario_id: usuarioData.user.id,
+        });
+        if (insertError) {
+          await supabase.storage.from('vistorias-fotos').remove([caminho]);
+          throw insertError;
+        }
+        if (problemaId) {
+          setFotosVistoriaPendentesPorProblema((atuais) => ({
+            ...atuais,
+            [problemaId]: (atuais[problemaId] ?? []).filter((item) => item.uri !== foto.uri),
+          }));
+        } else {
+          setFotosVistoriaPendentes((atuais) => atuais.filter((item) => item.uri !== foto.uri));
+        }
+      } catch (error: any) {
+        console.error('Erro ao salvar foto da vistoria:', error);
+        const mensagem = error?.message ?? 'Não foi possível salvar uma das fotos da vistoria.';
+        if (apenasAusencia) setErroFinalizacaoVistoria(mensagem);
+        else setErroFormularioVistoria(mensagem);
+        await carregarFotosVistoria(vistoriaTecnica.vistoria_id);
+        return false;
+      }
+    }
+    await carregarFotosVistoria(vistoriaTecnica.vistoria_id);
     return true;
   }
 
@@ -5296,19 +5265,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       }
 
 
-      const fotosEnviadas =
-        await enviarFotosVistoria();
-
-
-      if (!fotosEnviadas) {
-        return;
-      }
-
+      const enviandoFotos = totalFotosVistoriaPendentesPorProblema > 0;
+      const fotosEnviadas = await enviarFotosVistoria();
+      if (!fotosEnviadas) return;
 
       setSucessoFormularioVistoria(
-        fotosVistoriaPendentes.length >
-        0
-          ? 'Dados e fotos da vistoria salvos com sucesso.'
+        enviandoFotos
+          ? 'Dados e fotos da vistoria salvos por problema.'
           : 'Dados da vistoria salvos com sucesso.'
       );
 
@@ -8490,7 +8453,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
 
       setJustificativaResultado(
-        'Cliente não estava presente no imóvel no horário agendado.'
+        'A equipe da EMAFE compareceu ao imóvel na data e no horário agendados, porém não encontrou o cliente ou um responsável disponível para acompanhar a vistoria.'
       );
 
 
@@ -8539,7 +8502,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
     const quantidadeFotos =
       fotosVistoriaPendentes.length +
-      fotosVistoriaSalvas.length;
+      fotosVistoriaSalvas.filter((foto) => !foto.problema_id).length;
 
 
     if (quantidadeFotos < 1) {
@@ -8567,7 +8530,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
 
       const fotosEnviadas =
-        await enviarFotosVistoria();
+        await enviarFotosVistoria(true);
 
 
       if (!fotosEnviadas) {
@@ -8624,7 +8587,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
 
       setSucessoFinalizacaoVistoria(
-        'Chamado encerrado por ausência do cliente.'
+        'Protocolo encerrado por ausência. O cliente poderá consultar o registro e a foto no aplicativo. Para solicitar outra visita, deverá abrir um novo protocolo.'
       );
 
 
@@ -8656,218 +8619,151 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   // ==========================================================
 
 
+  // ==========================================================
+  // ETAPA 1: CONCLUIR A VISITA TÉCNICA, SEM CALCULAR GARANTIA
+  // ==========================================================
   async function finalizarVistoria() {
     setErroFinalizacaoVistoria('');
     setSucessoFinalizacaoVistoria('');
 
+    if (!avaliacoesCarregadas || !todosProblemasCobertosAvaliados) {
+      setErroFinalizacaoVistoria('Avalie e salve todos os problemas antes de concluir a visita.');
+      return;
+    }
 
-    if (!avaliacoesCarregadas) {
-      setErroFinalizacaoVistoria('As avaliações individuais ainda não foram carregadas.');
+    for (const problema of problemasSolicitacao) {
+      const quantidade = quantidadeFotosDaVistoriaNoProblema(problema.id);
+      if (quantidade < 1 || quantidade > 2) {
+        setErroFinalizacaoVistoria(
+          `Problema ${problema.numero} (${problema.comodo || 'sem ambiente'}): registre pelo menos 1 foto e no máximo 2 antes de concluir a visita.`
+        );
+        return;
+      }
+    }
+
+    const erroResponsavel = validarResponsavelVistoria();
+    if (erroResponsavel) {
+      setErroFinalizacaoVistoria(erroResponsavel);
+      return;
+    }
+
+    const parecerGeral = avaliacoesIndividuais.map((avaliacao) => {
+      const item = problemasSolicitacao.find((p) => p.id === avaliacao.problema_id);
+      return `Problema ${item?.numero ?? '-'}: ${avaliacao.parecer_tecnico}`;
+    }).join('\n\n');
+    const servicosIndicados = avaliacoesIndividuais
+      .filter((avaliacao) => avaliacao.resultado === 'procedente')
+      .map((avaliacao) => {
+        const item = problemasSolicitacao.find((p) => p.id === avaliacao.problema_id);
+        return `Problema ${item?.numero ?? '-'}: ${avaliacao.servico_necessario || 'A definir após avaliação da garantia'}`;
+      }).join('\n');
+
+    try {
+      setFinalizandoVistoria(true);
+      const erroResponsavelSalvo = await salvarResponsavelVistoria();
+      if (erroResponsavelSalvo) {
+        setErroFinalizacaoVistoria(erroResponsavelSalvo);
+        return;
+      }
+      const { error: erroFicha } = await supabase.rpc('salvar_vistoria_funcionario', {
+        p_solicitacao_id: solicitacaoId,
+        p_problema_constatado: avaliacoesIndividuais.some((a) => a.problema_constatado),
+        p_parecer_tecnico: parecerGeral,
+        p_servico_necessario: servicosIndicados || 'Não se aplica',
+        p_observacoes: observacoesTecnicas.trim() || null,
+      });
+      if (erroFicha) {
+        setErroFinalizacaoVistoria(erroFicha.message || 'Não foi possível salvar os dados da vistoria.');
+        return;
+      }
+      if (!await enviarFotosVistoria()) {
+        setErroFinalizacaoVistoria('Há fotos pendentes que não foram enviadas. A visita não foi encerrada.');
+        return;
+      }
+      const { data, error } = await supabase.rpc('concluir_visita_tecnica_funcionario', {
+        p_solicitacao_id: solicitacaoId,
+      });
+      if (error) {
+        setErroFinalizacaoVistoria(error.message || 'Não foi possível concluir a visita.');
+        return;
+      }
+      if (!data?.sucesso) {
+        setErroFinalizacaoVistoria('A conclusão da visita não foi confirmada pelo sistema.');
+        return;
+      }
+      setSucessoFinalizacaoVistoria('Vistoria realizada! Agora calcule a garantia de cada problema e conclua a análise para decidir sobre a execução.');
+      await carregarSolicitacao();
+      await carregarVistoriaTecnica();
+      await carregarProblemasSolicitacao();
+      await carregarAvaliacoesIndividuais();
+    } catch (error: any) {
+      console.error('Erro ao encerrar visita técnica:', error);
+      setErroFinalizacaoVistoria(error?.message || 'Não foi possível concluir a visita.');
+    } finally {
+      setFinalizandoVistoria(false);
+    }
+  }
+
+  // ==========================================================
+  // ETAPA 2: DECISÃO DE GARANTIA SOMENTE APÓS A VISITA
+  // ==========================================================
+  async function finalizarAnaliseAposVistoria() {
+    setErroAnalise('');
+    setSucessoAnalise('');
+    if (solicitacao?.status !== 'em_analise' || !vistoriaTecnica?.finalizada_em) {
+      setErroAnalise('Conclua a vistoria no imóvel antes de finalizar a análise da garantia.');
+      return;
+    }
+    if (!todosProblemasAnalisados) {
+      setErroAnalise('Calcule e confirme a garantia de todos os problemas antes de finalizar.');
       return;
     }
     if (!todosProblemasCobertosAvaliados) {
-      setErroFinalizacaoVistoria('Salve a avaliação de cada problema coberto antes de finalizar a vistoria.');
+      setErroAnalise('A avaliação técnica de todos os problemas precisa estar completa.');
       return;
     }
 
-
-    // O resultado do protocolo depende do conjunto dos problemas cobertos.
-    // Um problema improcedente não bloqueia outro procedente.
-    const resultadoFinalCalculado = existeProblemaProcedente
-      ? 'aprovada' as const : 'nao_aprovada' as const;
-    const avaliacoesCobertas = avaliacoesIndividuais.filter((a) =>
-      problemasCobertos.some((p) => p.id === a.problema_id)
+    const aprovados = problemasSolicitacao.filter((problema) =>
+      ['dentro_da_garantia', 'dentro_garantia'].includes(problema.status_garantia ?? '') &&
+      avaliacoesIndividuais.some((a) => a.problema_id === problema.id && a.resultado === 'procedente')
     );
-    const parecerFinalCalculado = avaliacoesCobertas.map((a) => {
-      const item = problemasCobertos.find((p) => p.id === a.problema_id);
-      return `Problema ${item?.numero ?? '-'}: ${a.parecer_tecnico}`;
-    }).join('\n\n');
-    const justificativaFinalCalculada = avaliacoesCobertas
-      .filter((a) => a.resultado === 'improcedente')
-      .map((a) => {
-        const item = problemasCobertos.find((p) => p.id === a.problema_id);
-        return `Problema ${item?.numero ?? '-'}: ${a.justificativa_improcedencia ?? ''}`;
-      }).join('\n');
-    const servicoGeralCalculado = avaliacoesCobertas
-      .filter((a) => a.resultado === 'procedente')
-      .map((a) => {
-        const item = problemasCobertos.find((p) => p.id === a.problema_id);
-        return `Problema ${item?.numero ?? '-'}: ${a.servico_necessario ?? ''}`;
-      }).join('\n');
-
-
-    const erroResponsavel =
-      validarResponsavelVistoria();
-
-
-    if (erroResponsavel) {
-      setErroFinalizacaoVistoria(
-        erroResponsavel
-      );
-
-
-      return;
-    }
-
-
+    const resultado = aprovados.length > 0 ? 'aprovada' : 'nao_aprovada';
+    const justificativa = resultado === 'nao_aprovada'
+      ? problemasSolicitacao.map((problema) => {
+          const avaliacao = avaliacoesIndividuais.find((a) => a.problema_id === problema.id);
+          return `Problema ${problema.numero}: ${
+            ['dentro_da_garantia', 'dentro_garantia'].includes(problema.status_garantia ?? '')
+              ? (avaliacao?.justificativa_improcedencia || 'O problema não foi considerado procedente na vistoria.')
+              : `sem cobertura de garantia (${problema.status_garantia || 'não classificado'})`
+          }`;
+        }).join('\n')
+      : null;
     try {
-      setFinalizandoVistoria(
-        true
-      );
-
-
-      const erroAoSalvarResponsavel =
-        await salvarResponsavelVistoria();
-
-
-      if (erroAoSalvarResponsavel) {
-        setErroFinalizacaoVistoria(
-          erroAoSalvarResponsavel
-        );
-
-
-        return;
-      }
-
-
-      // Salva os dados atuais antes de finalizar.
-      const {
-        error: salvarError,
-      } = await supabase.rpc(
-        'salvar_vistoria_funcionario',
-        {
-          p_solicitacao_id:
-            solicitacaoId,
-
-
-          p_problema_constatado:
-            avaliacoesCobertas.some((a) => a.problema_constatado),
-
-
-          p_parecer_tecnico:
-            parecerFinalCalculado,
-
-
-          p_servico_necessario:
-            servicoGeralCalculado || 'Não se aplica',
-
-
-          p_observacoes:
-            observacoesTecnicas.trim() ||
-            null,
-        }
-      );
-
-
-      if (salvarError) {
-        console.error(
-          'Erro ao salvar antes de finalizar:',
-          salvarError
-        );
-
-
-        setErroFinalizacaoVistoria(
-          salvarError.message ||
-            'Não foi possível salvar os dados da vistoria.'
-        );
-
-
-        return;
-      }
-
-
-      // Envia eventuais fotos que ainda estejam pendentes.
-      const fotosEnviadas =
-        await enviarFotosVistoria();
-
-
-      if (!fotosEnviadas) {
-        setErroFinalizacaoVistoria(
-          'Não foi possível concluir porque existem fotos que não foram enviadas.'
-        );
-
-
-        return;
-      }
-
-
-      const {
-        data,
-        error,
-      } = await supabase.rpc(
-        'finalizar_vistoria_funcionario',
-        {
-          p_solicitacao_id:
-            solicitacaoId,
-
-
-          p_resultado:
-            resultadoFinalCalculado,
-
-
-          p_justificativa_resultado:
-            resultadoFinalCalculado === 'nao_aprovada'
-              ? justificativaFinalCalculada || 'Nenhum problema coberto foi considerado procedente.'
-              : null,
-        }
-      );
-
-
+      setFinalizandoVistoria(true);
+      const { data, error } = await supabase.rpc('finalizar_vistoria_funcionario', {
+        p_solicitacao_id: solicitacaoId,
+        p_resultado: resultado,
+        p_justificativa_resultado: justificativa,
+      });
       if (error) {
-        console.error(
-          'Erro ao finalizar vistoria:',
-          error
-        );
-
-
-        setErroFinalizacaoVistoria(
-          error.message ||
-            'Não foi possível finalizar a vistoria.'
-        );
-
-
+        setErroAnalise(error.message || 'Não foi possível finalizar a análise pós-vistoria.');
         return;
       }
-
-
-      if (
-        !data ||
-        data.length === 0
-      ) {
-        setErroFinalizacaoVistoria(
-          'A vistoria não retornou confirmação de finalização.'
-        );
-
-
+      if (!data?.length) {
+        setErroAnalise('O sistema não confirmou a decisão sobre a garantia.');
         return;
       }
-
-
-      setSucessoFinalizacaoVistoria(
-        resultadoFinalCalculado === 'aprovada'
-          ? 'Vistoria concluída. Os problemas procedentes podem seguir para execução.'
-          : 'Vistoria concluída sem problemas procedentes.'
-      );
-
-
+      setSucessoAnalise(resultado === 'aprovada'
+        ? 'Análise concluída: os serviços procedentes e cobertos estão liberados para agendamento.'
+        : 'Análise concluída: não há serviços autorizados para execução.');
       await carregarSolicitacao();
       await carregarVistoriaTecnica();
-      await carregarExecucaoServico();
-      await carregarAgendamentoExecucao();
-    } catch (error) {
-      console.error(
-        'Erro inesperado ao finalizar vistoria:',
-        error
-      );
-
-
-      setErroFinalizacaoVistoria(
-        'Ocorreu um erro ao finalizar a vistoria.'
-      );
+      await carregarServicosIndividuais();
+    } catch (error: any) {
+      console.error('Erro na decisão de garantia:', error);
+      setErroAnalise(error?.message || 'Não foi possível concluir a análise de garantia.');
     } finally {
-      setFinalizandoVistoria(
-        false
-      );
+      setFinalizandoVistoria(false);
     }
   }
 
@@ -9425,10 +9321,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
 
                   <InfoItem
-                    label="Local do problema"
+                    label="Locais dos problemas"
                     value={
-                      solicitacao.comodo ||
-                      '-'
+                      problemasSolicitacao.length
+                        ? problemasSolicitacao.map((problema) => problema.comodo || 'Não informado').join(' • ')
+                        : (solicitacao.comodo || '-')
                     }
                   />
                 </View>
@@ -9436,410 +9333,101 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
 
               {/* ==============================================
-                  PROBLEMA
+                  PROBLEMAS DO PROTOCOLO (COM SUAS PRÓPRIAS FOTOS)
               ============================================== */}
-
-
-              <Text
-                style={
-                  styles.sectionTitle
-                }
-              >
-                Problema relatado
-              </Text>
-
-
-              <View
-                style={styles.card}
-              >
-                <Text
-                  style={
-                    styles.descriptionText
-                  }
-                >
-                  {
-                    solicitacao
-                      .descricao_problema
-                  }
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitleSemMargem}>
+                  Problemas relatados
+                </Text>
+                <Text style={styles.photoCount}>
+                  {problemasSolicitacao.length || 1} problema(s) • {fotos.length} foto(s)
                 </Text>
               </View>
 
-
-              {/* ==============================================
-                  FOTOS
-              ============================================== */}
-
-
-              <View
-                style={
-                  styles.sectionHeader
-                }
-              >
-                <Text
-                  style={
-                    styles.sectionTitleSemMargem
-                  }
-                >
-                  Fotos enviadas
-                </Text>
-
-
-                <Text
-                  style={
-                    styles.photoCount
-                  }
-                >
-                  {fotos.length}{' '}
-                  {fotos.length === 1
-                    ? 'foto'
-                    : 'fotos'}
-                </Text>
-              </View>
-
-
-              {carregandoFotos ? (
-                <View
-                  style={
-                    styles.loadingInline
-                  }
-                >
-                  <ActivityIndicator
-                    color="#0B2447"
-                  />
-
-
-                  <Text
-                    style={
-                      styles.loadingInlineText
-                    }
-                  >
-                    Carregando fotos...
-                  </Text>
+              {carregandoProblemasSolicitacao || carregandoFotos ? (
+                <View style={styles.loadingInline}>
+                  <ActivityIndicator color="#0B2447" />
+                  <Text style={styles.loadingInlineText}>Carregando problemas e fotos...</Text>
                 </View>
               ) : null}
-
-
               {erroFotos ? (
-                <View
-                  style={
-                    styles.messageError
-                  }
-                >
-                  <Text
-                    style={
-                      styles.messageErrorText
-                    }
-                  >
-                    {erroFotos}
-                  </Text>
+                <View style={styles.messageError}>
+                  <Text style={styles.messageErrorText}>{erroFotos}</Text>
                 </View>
               ) : null}
 
-
-              <View
-                style={
-                  styles.photoGrid
-                }
-              >
-                {fotos.map(
-                  (
-                    foto,
-                    indice
-                  ) => (
-                    <TouchableOpacity
-                      key={foto.id}
-                      style={
-                        styles.photoContainer
-                      }
-                      onPress={() =>
-                        setFotoSelecionada(
-                          foto
-                        )
-                      }
-                    >
-                      <Image
-                        source={{
-                          uri:
-                            foto.url,
-                        }}
-                        style={
-                          styles.photo
-                        }
-                      />
-
-
-                      <View
-                        style={
-                          styles.photoOverlay
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.photoNumber
-                          }
-                        >
-                          Foto{' '}
-                          {indice + 1}
-                        </Text>
-
-
-                        <Ionicons
-                          name="expand-outline"
-                          size={17}
-                          color="#FFFFFF"
-                        />
-                      </View>
-                    </TouchableOpacity>
-                  )
-                )}
-              </View>
-
-
-              {/* ==============================================
-                  ANÁLISE TÉCNICA
-              ============================================== */}
-
-
-              <Text
-                style={
-                  styles.sectionTitle
-                }
-              >
-                Análise técnica
-              </Text>
-
-
-              <View
-                style={
-                  styles.analysisCard
-                }
-              >
-                <View
-                  style={
-                    styles.analysisIntro
-                  }
-                >
-                  <Ionicons
-                    name="construct-outline"
-                    size={22}
-                    color="#0B2447"
-                  />
-
-
-                  <View
-                    style={{
-                      flex: 1,
-                    }}
-                  >
-                    <Text
-                      style={
-                        styles.analysisIntroTitle
-                      }
-                    >
-                      Classificação técnica
+              {(problemasSolicitacao.length > 0 ? problemasSolicitacao : [{
+                id: 'problema-original',
+                numero: 1,
+                comodo: solicitacao.comodo,
+                descricao_problema: solicitacao.descricao_problema,
+              }]).map((problema) => {
+                const fotosDoProblema = problemasSolicitacao.length > 0
+                  ? fotos.filter((foto) => foto.problema_id === problema.id)
+                  : fotos;
+                return (
+                  <View key={problema.id} style={[styles.card, { marginBottom: 14 }]}>
+                    <Text style={[styles.protocolProblemTitle, { marginBottom: 10 }]}>
+                      Problema {problema.numero}{problema.comodo ? ` • ${problema.comodo}` : ''}
                     </Text>
-
-
-                    <Text
-                      style={
-                        styles.analysisIntroText
-                      }
-                    >
-                      {problemasSolicitacao.length > 1
-                        ? 'Analise cada problema individualmente. Todos permanecem vinculados ao mesmo protocolo.'
-                        : analiseConfirmada
-                        ? 'A análise técnica deste problema já foi confirmada.'
-                        : 'Classifique o problema utilizando o modelo de garantia vinculado ao imóvel.'}
+                    <Text style={styles.descriptionText}>{problema.descricao_problema}</Text>
+                    <Text style={[styles.photoCount, { marginTop: 13, marginBottom: 8 }]}>
+                      {fotosDoProblema.length} foto(s) deste problema
                     </Text>
+                    <View style={styles.photoGrid}>
+
+                                {fotosDoProblema.map((foto, indice) => (
+                                  <TouchableOpacity
+                                    key={foto.id}
+                                    style={styles.photoContainer}
+                                    onPress={() => setFotoSelecionada(foto)}
+                                  >
+                                    <Image source={{ uri: foto.url }} style={styles.photo} />
+                                    <View style={styles.photoOverlay}>
+                                      <Text style={styles.photoNumber}>Foto {indice + 1}</Text>
+                                      <Ionicons name="expand-outline" size={17} color="#FFFFFF" />
+                                    </View>
+                                  </TouchableOpacity>
+                                ))}
+                    </View>
                   </View>
-                </View>
+                );
+              })}
 
-
-                {/* PROBLEMA DO PROTOCOLO */}
-
-
-                <Text
-                  style={
-                    styles.fieldNumber
-                  }
-                >
-                  Problema do protocolo
-                </Text>
-
-
-                {carregandoProblemasSolicitacao ? (
-                  <View
-                    style={
-                      styles.loadingInline
-                    }
-                  >
-                    <ActivityIndicator
-                      size="small"
-                      color="#0B2447"
-                    />
-                    <Text
-                      style={
-                        styles.loadingInlineText
-                      }
-                    >
-                      Carregando problemas...
+              {problemasSolicitacao.length > 0 && (() => {
+                const fotosSemProblema = fotos.filter((foto) =>
+                  !foto.problema_id || !problemasSolicitacao.some((p) => p.id === foto.problema_id)
+                );
+                if (fotosSemProblema.length === 0) return null;
+                return (
+                  <View style={[styles.card, { marginBottom: 14 }]}>
+                    <Text style={styles.protocolProblemTitle}>Outras fotos do protocolo</Text>
+                    <Text style={[styles.photoCount, { marginVertical: 8 }]}>
+                      Fotos antigas sem problema individual identificado
                     </Text>
+                    <View style={styles.photoGrid}>
+
+                                {fotosSemProblema.map((foto, indice) => (
+                                  <TouchableOpacity
+                                    key={foto.id}
+                                    style={styles.photoContainer}
+                                    onPress={() => setFotoSelecionada(foto)}
+                                  >
+                                    <Image source={{ uri: foto.url }} style={styles.photo} />
+                                    <View style={styles.photoOverlay}>
+                                      <Text style={styles.photoNumber}>Foto {indice + 1}</Text>
+                                      <Ionicons name="expand-outline" size={17} color="#FFFFFF" />
+                                    </View>
+                                  </TouchableOpacity>
+                                ))}
+                    </View>
                   </View>
-                ) : (
-                  <View
-                    style={
-                      styles.protocolProblemsList
-                    }
-                  >
-                    {problemasSolicitacao.map(
-                      (problema) => {
-                        const ativo =
-                          problema.id ===
-                          problemaSelecionadoId;
-                        const analisado =
-                          !!problema.item_garantia_id;
+                );
+              })()}
 
-
-                        return (
-                          <TouchableOpacity
-                            key={problema.id}
-                            activeOpacity={0.85}
-                            onPress={() =>
-                              selecionarProblemaDoProtocolo(
-                                problema
-                              )
-                            }
-                            style={[
-                              styles.protocolProblemCard,
-                              ativo &&
-                                styles.protocolProblemCardActive,
-                            ]}
-                          >
-                            <View
-                              style={[
-                                styles.protocolProblemNumber,
-                                ativo &&
-                                  styles.protocolProblemNumberActive,
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.protocolProblemNumberText,
-                                  ativo &&
-                                    styles.protocolProblemNumberTextActive,
-                                ]}
-                              >
-                                {problema.numero}
-                              </Text>
-                            </View>
-
-
-                            <View
-                              style={{
-                                flex: 1,
-                              }}
-                            >
-                              <Text
-                                style={[
-                                  styles.protocolProblemTitle,
-                                  ativo &&
-                                    styles.protocolProblemTitleActive,
-                                ]}
-                              >
-                                Problema {problema.numero}
-                                {problema.comodo
-                                  ? ` • ${problema.comodo}`
-                                  : ''}
-                              </Text>
-
-
-                              <Text
-                                numberOfLines={2}
-                                style={[
-                                  styles.protocolProblemDescription,
-                                  ativo &&
-                                    styles.protocolProblemDescriptionActive,
-                                ]}
-                              >
-                                {problema.descricao_problema}
-                              </Text>
-
-
-                              <Text
-                                style={[
-                                  styles.protocolProblemStatus,
-                                  analisado &&
-                                    styles.protocolProblemStatusDone,
-                                ]}
-                              >
-                                {analisado
-                                  ? `Garantia: ${textoGarantia(
-                                      problema.status_garantia
-                                    )}`
-                                  : 'Garantia: aguardando análise'}
-                              </Text>
-                            </View>
-
-
-                            <Ionicons
-                              name={
-                                ativo
-                                  ? 'checkmark-circle'
-                                  : analisado
-                                  ? 'shield-checkmark-outline'
-                                  : 'chevron-forward'
-                              }
-                              size={21}
-                              color={
-                                ativo
-                                  ? '#FFFFFF'
-                                  : analisado
-                                  ? '#287A46'
-                                  : '#8995A5'
-                              }
-                            />
-                          </TouchableOpacity>
-                        );
-                      }
-                    )}
-                  </View>
-                )}
-
-
-                {problemaSelecionado ? (
-                  <View
-                    style={
-                      styles.selectedProblemSummary
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.selectedProblemSummaryLabel
-                      }
-                    >
-                      PROBLEMA SELECIONADO
-                    </Text>
-                    <Text
-                      style={
-                        styles.selectedProblemSummaryTitle
-                      }
-                    >
-                      Problema {problemaSelecionado.numero}
-                      {problemaSelecionado.comodo
-                        ? ` • ${problemaSelecionado.comodo}`
-                        : ''}
-                    </Text>
-                    <Text
-                      style={
-                        styles.selectedProblemSummaryText
-                      }
-                    >
-                      {problemaSelecionado.descricao_problema}
-                    </Text>
-                  </View>
-                ) : null}
-
-
+              {/* Triagem de urgência antes da visita. Não depende da garantia. */}
+              <Text style={styles.sectionTitle}>Triagem do atendimento</Text>
+              <View style={styles.analysisCard}>
                 {/* URGÊNCIA */}
 
 
@@ -10032,6 +9620,2454 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                       }
                     >
                       {erroUrgencia}
+                    </Text>
+                  </View>
+                ) : null}
+
+
+              </View>
+
+              {/* =================================================
+                  VISTORIA
+              ================================================= */}
+
+
+              {true ? (
+                <>
+                  <Text
+                    style={
+                      styles.sectionTitle
+                    }
+                  >
+                    Vistoria
+                  </Text>
+
+
+                  <View
+                    style={
+                      styles.vistoriaCard
+                    }
+                  >
+                    {/* ===========================================
+                        AGENDAMENTO ATUAL
+                    =========================================== */}
+
+
+                    {agendamento ? (
+                      <View
+                        style={
+                          styles.agendamentoAtual
+                        }
+                      >
+                        <View
+                          style={
+                            styles.agendamentoTituloLinha
+                          }
+                        >
+                          <View
+                            style={
+                              styles.agendamentoCheckIcon
+                            }
+                          >
+                            <Ionicons
+                              name="checkmark"
+                              size={18}
+                              color="#FFFFFF"
+                            />
+                          </View>
+
+
+                          <View
+                            style={{
+                              flex: 1,
+                            }}
+                          >
+                            <Text
+                              style={
+                                styles.agendamentoTitulo
+                              }
+                            >
+                              Vistoria agendada
+                            </Text>
+
+
+                            <Text
+                              style={
+                                styles.agendamentoSubtitulo
+                              }
+                            >
+                              Este agendamento já está registrado no protocolo.
+                            </Text>
+                          </View>
+                        </View>
+
+
+                        <View
+                          style={
+                            styles.agendamentoInfoGrid
+                          }
+                        >
+                          <WarrantyInfo
+                            label="Data"
+                            value={
+                              formatarData(
+                                agendamento.data_vistoria
+                              )
+                            }
+                          />
+
+
+                          <WarrantyInfo
+                            label="Horário"
+                            value={`${formatarHora(
+                              agendamento.hora_inicio
+                            )} às ${formatarHora(
+                              agendamento.hora_fim
+                            )}`}
+                          />
+
+
+                          <WarrantyInfo
+                            label="Agendado por"
+                            value={
+                              agendamento.agendado_por_nome ||
+                              agendamento.agendado_por_tipo ||
+                              '-'
+                            }
+                          />
+                        </View>
+
+
+                        <TouchableOpacity
+                          style={
+                            styles.whatsAppVistoriaButton
+                          }
+                          onPress={
+                            avisarClienteWhatsAppVistoria
+                          }
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons
+                            name="logo-whatsapp"
+                            size={20}
+                            color="#FFFFFF"
+                          />
+
+
+                          <View
+                            style={{
+                              flex: 1,
+                            }}
+                          >
+                            <Text
+                              style={
+                                styles.whatsAppVistoriaButtonText
+                              }
+                            >
+                              Avisar cliente no WhatsApp
+                            </Text>
+
+
+                            <Text
+                              style={
+                                styles.whatsAppVistoriaButtonSubtext
+                              }
+                            >
+                              Abre a conversa com a mensagem da vistoria pronta para enviar.
+                            </Text>
+                          </View>
+
+
+                          <Ionicons
+                            name="open-outline"
+                            size={18}
+                            color="#FFFFFF"
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
+
+
+                    {/* ===========================================
+                        INICIAR VISTORIA
+                    =========================================== */}
+
+
+                    {['vistoria_agendada', 'em_analise'].includes(solicitacao.status) &&
+                    !vistoriaTecnica?.finalizada_em && agendamento ? (
+                      <View
+                        style={
+                          styles.iniciarVistoriaBox
+                        }
+                      >
+                        <View
+                          style={
+                            styles.iniciarVistoriaHeader
+                          }
+                        >
+                          <Ionicons
+                            name="clipboard-outline"
+                            size={22}
+                            color="#0B2447"
+                          />
+
+
+                          <View
+                            style={{
+                              flex: 1,
+                            }}
+                          >
+                            <Text
+                              style={
+                                styles.iniciarVistoriaTitle
+                              }
+                            >
+                              Realizar vistoria
+                            </Text>
+
+
+                            <Text
+                              style={
+                                styles.iniciarVistoriaText
+                              }
+                            >
+                              Quando a equipe estiver no imóvel, inicie a vistoria para registrar a avaliação técnica.
+                            </Text>
+                          </View>
+                        </View>
+
+
+                        {erroInicioVistoria ? (
+                          <View
+                            style={
+                              styles.messageError
+                            }
+                          >
+                            <Ionicons
+                              name="alert-circle-outline"
+                              size={19}
+                              color="#9A3232"
+                            />
+
+
+                            <Text
+                              style={
+                                styles.messageErrorText
+                              }
+                            >
+                              {
+                                erroInicioVistoria
+                              }
+                            </Text>
+                          </View>
+                        ) : null}
+
+
+                        <View
+                          style={
+                            styles.iniciarVistoriaAcoes
+                          }
+                        >
+                          <TouchableOpacity
+                            style={[
+                              styles.iniciarVistoriaButton,
+
+
+                              (iniciandoVistoria ||
+                                preparandoAusenciaCliente ||
+                                ausenciaClienteAberta) &&
+                                styles.buttonDisabled,
+                            ]}
+                            disabled={
+                              iniciandoVistoria ||
+                              preparandoAusenciaCliente ||
+                              ausenciaClienteAberta
+                            }
+                            onPress={
+                              iniciarVistoria
+                            }
+                          >
+                            {iniciandoVistoria ? (
+                              <ActivityIndicator
+                                size="small"
+                                color="#FFFFFF"
+                              />
+                            ) : (
+                              <Ionicons
+                                name="play-circle-outline"
+                                size={22}
+                                color="#FFFFFF"
+                              />
+                            )}
+
+
+                            <Text
+                              style={
+                                styles.iniciarVistoriaButtonText
+                              }
+                            >
+                              {iniciandoVistoria
+                                ? 'Iniciando...'
+                                : 'Iniciar vistoria'}
+                            </Text>
+                          </TouchableOpacity>
+
+
+                          <TouchableOpacity
+                            style={[
+                              styles.clienteAusenteAntesButton,
+
+
+                              preparandoAusenciaCliente &&
+                                styles.buttonDisabled,
+                            ]}
+                            disabled={
+                              iniciandoVistoria ||
+                              preparandoAusenciaCliente ||
+                              ausenciaClienteAberta
+                            }
+                            onPress={
+                              abrirAusenciaCliente
+                            }
+                          >
+                            {preparandoAusenciaCliente ? (
+                              <ActivityIndicator
+                                size="small"
+                                color="#A76500"
+                              />
+                            ) : (
+                              <Ionicons
+                                name="person-remove-outline"
+                                size={21}
+                                color="#A76500"
+                              />
+                            )}
+
+
+                            <Text
+                              style={
+                                styles.clienteAusenteAntesButtonText
+                              }
+                            >
+                              {preparandoAusenciaCliente
+                                ? 'Preparando...'
+                                : 'Cliente ausente'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+
+                        {ausenciaClienteAberta ? (
+                          <View
+                            style={
+                              styles.ausenciaClienteBox
+                            }
+                          >
+                            <View
+                              style={
+                                styles.ausenciaClienteHeader
+                              }
+                            >
+                              <Ionicons
+                                name="warning-outline"
+                                size={22}
+                                color="#A76500"
+                              />
+
+
+                              <View
+                                style={{
+                                  flex: 1,
+                                }}
+                              >
+                                <Text
+                                  style={
+                                    styles.ausenciaClienteTitle
+                                  }
+                                >
+                                  Comprovação da visita
+                                </Text>
+
+
+                                <Text
+                                  style={
+                                    styles.ausenciaClienteText
+                                  }
+                                >
+                                  Registre uma foto da entrada do imóvel e uma observação sobre a visita não realizada. O encerramento por ausência é definitivo para este protocolo; um novo atendimento exigirá outra solicitação.
+                                </Text>
+                              </View>
+                            </View>
+
+
+                            <View
+                              style={
+                                styles.ausenciaClienteAcoes
+                              }
+                            >
+                              <TouchableOpacity
+                                style={
+                                  styles.ausenciaClienteFotoButton
+                                }
+                                onPress={
+                                  tirarFotoVistoria
+                                }
+                                disabled={
+                                  finalizandoVistoria
+                                }
+                              >
+                                <Ionicons
+                                  name="camera-outline"
+                                  size={20}
+                                  color="#0B5EA8"
+                                />
+
+
+                                <Text
+                                  style={
+                                    styles.ausenciaClienteFotoButtonText
+                                  }
+                                >
+                                  Tirar foto
+                                </Text>
+                              </TouchableOpacity>
+
+
+                              <TouchableOpacity
+                                style={
+                                  styles.ausenciaClienteFotoButton
+                                }
+                                onPress={
+                                  selecionarFotosVistoria
+                                }
+                                disabled={
+                                  finalizandoVistoria
+                                }
+                              >
+                                <Ionicons
+                                  name="images-outline"
+                                  size={20}
+                                  color="#0B5EA8"
+                                />
+
+
+                                <Text
+                                  style={
+                                    styles.ausenciaClienteFotoButtonText
+                                  }
+                                >
+                                  Anexar foto
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+
+
+                            <Text
+                              style={
+                                styles.ausenciaClienteContagem
+                              }
+                            >
+                              Fotos registradas: {
+                                fotosVistoriaSalvas.length +
+                                fotosVistoriaPendentes.length
+                              }
+                            </Text>
+
+
+                            {fotosVistoriaPendentes.length >
+                            0 ? (
+                              <View
+                                style={
+                                  styles.fotosVistoriaGrid
+                                }
+                              >
+                                {fotosVistoriaPendentes.map(
+                                  (foto) => (
+                                    <View
+                                      key={
+                                        foto.uri
+                                      }
+                                      style={
+                                        styles.fotoVistoriaCard
+                                      }
+                                    >
+                                      <Image
+                                        source={{
+                                          uri:
+                                            foto.uri,
+                                        }}
+                                        style={
+                                          styles.fotoVistoriaImagem
+                                        }
+                                        resizeMode="cover"
+                                      />
+
+
+                                      <TouchableOpacity
+                                        style={
+                                          styles.removerFotoVistoriaButton
+                                        }
+                                        onPress={() =>
+                                          removerFotoVistoriaPendente(
+                                            foto.uri
+                                          )
+                                        }
+                                      >
+                                        <Ionicons
+                                          name="close"
+                                          size={17}
+                                          color="#FFFFFF"
+                                        />
+                                      </TouchableOpacity>
+                                    </View>
+                                  )
+                                )}
+                              </View>
+                            ) : null}
+
+
+                            <Text
+                              style={
+                                styles.inputLabel
+                              }
+                            >
+                              OBSERVAÇÃO *
+                            </Text>
+
+
+                            <TextInput
+                              style={[
+                                styles.input,
+                                styles.textArea,
+                              ]}
+                              value={
+                                justificativaResultado
+                              }
+                              placeholder="Informe que o cliente não estava presente no local."
+                              placeholderTextColor="#9AA6B4"
+                              multiline
+                              numberOfLines={4}
+                              textAlignVertical="top"
+                              onChangeText={(
+                                texto
+                              ) => {
+                                setJustificativaResultado(
+                                  texto
+                                );
+
+
+                                setErroFinalizacaoVistoria(
+                                  ''
+                                );
+                              }}
+                            />
+
+
+                            {erroFinalizacaoVistoria ? (
+                              <View
+                                style={
+                                  styles.messageError
+                                }
+                              >
+                                <Ionicons
+                                  name="alert-circle-outline"
+                                  size={19}
+                                  color="#9A3232"
+                                />
+
+
+                                <Text
+                                  style={
+                                    styles.messageErrorText
+                                  }
+                                >
+                                  {
+                                    erroFinalizacaoVistoria
+                                  }
+                                </Text>
+                              </View>
+                            ) : null}
+
+
+                            <TouchableOpacity
+                              style={[
+                                styles.encerrarAusenciaButton,
+
+
+                                finalizandoVistoria &&
+                                  styles.buttonDisabled,
+                              ]}
+                              disabled={
+                                finalizandoVistoria
+                              }
+                              onPress={
+                                encerrarPorAusenciaCliente
+                              }
+                            >
+                              {finalizandoVistoria ? (
+                                <ActivityIndicator
+                                  size="small"
+                                  color="#FFFFFF"
+                                />
+                              ) : (
+                                <Ionicons
+                                  name="close-circle-outline"
+                                  size={21}
+                                  color="#FFFFFF"
+                                />
+                              )}
+
+
+                              <Text
+                                style={
+                                  styles.encerrarAusenciaButtonText
+                                }
+                              >
+                                {finalizandoVistoria
+                                  ? 'Encerrando...'
+                                  : 'Encerrar chamado por ausência'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : null}
+                      </View>
+                    ) : null}
+
+
+                    {/* ===========================================
+                        FORMULÁRIO DA VISTORIA EM ANDAMENTO
+                    =========================================== */}
+
+
+                    {solicitacao.status ===
+                    'em_vistoria' ? (
+                      <View
+                        style={
+                          styles.formularioVistoriaBox
+                        }
+                      >
+                        <View
+                          style={
+                            styles.formularioVistoriaHeader
+                          }
+                        >
+                          <View
+                            style={
+                              styles.formularioVistoriaIcon
+                            }
+                          >
+                            <Ionicons
+                              name="clipboard-outline"
+                              size={22}
+                              color="#FFFFFF"
+                            />
+                          </View>
+
+
+                          <View
+                            style={{
+                              flex: 1,
+                            }}
+                          >
+                            <Text
+                              style={
+                                styles.formularioVistoriaTitle
+                              }
+                            >
+                              Vistoria em andamento
+                            </Text>
+
+
+                            <Text
+                              style={
+                                styles.formularioVistoriaText
+                              }
+                            >
+                              Registre abaixo o que foi constatado durante a visita técnica.
+                            </Text>
+
+
+                            {vistoriaTecnica ? (
+                              <Text
+                                style={
+                                  styles.formularioVistoriaMeta
+                                }
+                              >
+                                Iniciada em{' '}
+                                {formatarDataHora(
+                                  vistoriaTecnica.iniciada_em
+                                )}
+                                {' • Registrada por '}
+                                {
+                                  vistoriaTecnica.funcionario_nome
+                                }
+                              </Text>
+                            ) : null}
+                          </View>
+                        </View>
+
+
+                        {/* Cliente ausente também fica acessível no início da vistoria já aberta.
+                            Não altera a avaliação técnica nem a galeria por problema. */}
+                        {!ausenciaClienteAberta && avaliacoesIndividuais.length === 0 &&
+                         !fotosVistoriaSalvas.some((foto) => !!foto.problema_id) ? (
+                          <View style={{ marginBottom: 14, alignItems: 'flex-start' }}>
+                            <TouchableOpacity
+                              style={[styles.clienteAusenteCompactButton,
+                                (preparandoAusenciaCliente || iniciandoVistoria) && styles.buttonDisabled]}
+                              disabled={preparandoAusenciaCliente || iniciandoVistoria}
+                              onPress={abrirAusenciaCliente}
+                            >
+                              {preparandoAusenciaCliente ? (
+                                <ActivityIndicator size="small" color="#A76500" />
+                              ) : (
+                                <Ionicons name="person-remove-outline" size={21} color="#A76500" />
+                              )}
+                              <Text style={styles.clienteAusenteAntesButtonText}>
+                                {preparandoAusenciaCliente ? 'Preparando...' : 'Cliente ausente'}
+                              </Text>
+                            </TouchableOpacity>
+                            {erroInicioVistoria ? (
+                              <Text style={{ color: '#9A3232', marginTop: 8 }}>
+                                {erroInicioVistoria}
+                              </Text>
+                            ) : null}
+                          </View>
+                        ) : null}
+
+                        {ausenciaClienteAberta ? (
+                          <View
+                            style={
+                              styles.ausenciaClienteBox
+                            }
+                          >
+                            <View
+                              style={
+                                styles.ausenciaClienteHeader
+                              }
+                            >
+                              <Ionicons
+                                name="warning-outline"
+                                size={22}
+                                color="#A76500"
+                              />
+
+
+                              <View
+                                style={{
+                                  flex: 1,
+                                }}
+                              >
+                                <Text
+                                  style={
+                                    styles.ausenciaClienteTitle
+                                  }
+                                >
+                                  Comprovação da visita
+                                </Text>
+
+
+                                <Text
+                                  style={
+                                    styles.ausenciaClienteText
+                                  }
+                                >
+                                  Anexe uma foto da entrada do imóvel e registre a ocorrência. Ao confirmar, este protocolo será encerrado por ausência. Para solicitar outra visita, o cliente precisará abrir um novo protocolo pelo aplicativo.
+                                </Text>
+                              </View>
+                            </View>
+
+
+                            <View
+                              style={
+                                styles.ausenciaClienteAcoes
+                              }
+                            >
+                              <TouchableOpacity
+                                style={
+                                  styles.ausenciaClienteFotoButton
+                                }
+                                onPress={
+                                  tirarFotoVistoria
+                                }
+                                disabled={
+                                  finalizandoVistoria
+                                }
+                              >
+                                <Ionicons
+                                  name="camera-outline"
+                                  size={20}
+                                  color="#0B5EA8"
+                                />
+
+
+                                <Text
+                                  style={
+                                    styles.ausenciaClienteFotoButtonText
+                                  }
+                                >
+                                  Tirar foto
+                                </Text>
+                              </TouchableOpacity>
+
+
+                              <TouchableOpacity
+                                style={
+                                  styles.ausenciaClienteFotoButton
+                                }
+                                onPress={
+                                  selecionarFotosVistoria
+                                }
+                                disabled={
+                                  finalizandoVistoria
+                                }
+                              >
+                                <Ionicons
+                                  name="images-outline"
+                                  size={20}
+                                  color="#0B5EA8"
+                                />
+
+
+                                <Text
+                                  style={
+                                    styles.ausenciaClienteFotoButtonText
+                                  }
+                                >
+                                  Anexar foto
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+
+
+                            <Text
+                              style={
+                                styles.ausenciaClienteContagem
+                              }
+                            >
+                              Fotos registradas: {
+                                fotosVistoriaSalvas.length +
+                                fotosVistoriaPendentes.length
+                              }
+                            </Text>
+
+
+                            {fotosVistoriaPendentes.length >
+                            0 ? (
+                              <View
+                                style={
+                                  styles.fotosVistoriaGrid
+                                }
+                              >
+                                {fotosVistoriaPendentes.map(
+                                  (foto) => (
+                                    <View
+                                      key={
+                                        foto.uri
+                                      }
+                                      style={
+                                        styles.fotoVistoriaCard
+                                      }
+                                    >
+                                      <Image
+                                        source={{
+                                          uri:
+                                            foto.uri,
+                                        }}
+                                        style={
+                                          styles.fotoVistoriaImagem
+                                        }
+                                        resizeMode="cover"
+                                      />
+
+
+                                      <TouchableOpacity
+                                        style={
+                                          styles.removerFotoVistoriaButton
+                                        }
+                                        onPress={() =>
+                                          removerFotoVistoriaPendente(
+                                            foto.uri
+                                          )
+                                        }
+                                      >
+                                        <Ionicons
+                                          name="close"
+                                          size={17}
+                                          color="#FFFFFF"
+                                        />
+                                      </TouchableOpacity>
+                                    </View>
+                                  )
+                                )}
+                              </View>
+                            ) : null}
+
+
+                            <Text
+                              style={
+                                styles.inputLabel
+                              }
+                            >
+                              OBSERVAÇÃO *
+                            </Text>
+
+
+                            <TextInput
+                              style={[
+                                styles.input,
+                                styles.textArea,
+                              ]}
+                              value={
+                                justificativaResultado
+                              }
+                              placeholder="Informe que o cliente não estava presente no local."
+                              placeholderTextColor="#9AA6B4"
+                              multiline
+                              numberOfLines={4}
+                              textAlignVertical="top"
+                              onChangeText={(
+                                texto
+                              ) => {
+                                setJustificativaResultado(
+                                  texto
+                                );
+
+
+                                setErroFinalizacaoVistoria(
+                                  ''
+                                );
+                              }}
+                            />
+
+
+                            {erroFinalizacaoVistoria ? (
+                              <View
+                                style={
+                                  styles.messageError
+                                }
+                              >
+                                <Ionicons
+                                  name="alert-circle-outline"
+                                  size={19}
+                                  color="#9A3232"
+                                />
+
+
+                                <Text
+                                  style={
+                                    styles.messageErrorText
+                                  }
+                                >
+                                  {
+                                    erroFinalizacaoVistoria
+                                  }
+                                </Text>
+                              </View>
+                            ) : null}
+
+
+                            <TouchableOpacity
+                              style={[
+                                styles.encerrarAusenciaButton,
+
+
+                                finalizandoVistoria &&
+                                  styles.buttonDisabled,
+                              ]}
+                              disabled={
+                                finalizandoVistoria
+                              }
+                              onPress={
+                                encerrarPorAusenciaCliente
+                              }
+                            >
+                              {finalizandoVistoria ? (
+                                <ActivityIndicator
+                                  size="small"
+                                  color="#FFFFFF"
+                                />
+                              ) : (
+                                <Ionicons
+                                  name="close-circle-outline"
+                                  size={21}
+                                  color="#FFFFFF"
+                                />
+                              )}
+
+
+                              <Text
+                                style={
+                                  styles.encerrarAusenciaButtonText
+                                }
+                              >
+                                {finalizandoVistoria
+                                  ? 'Encerrando...'
+                                  : 'Encerrar chamado por ausência'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : null}
+
+                        {ausenciaClienteAberta ? (
+                          <TouchableOpacity onPress={() => {
+                            setAusenciaClienteAberta(false);
+                            setErroFinalizacaoVistoria('');
+                            setErroInicioVistoria('');
+                          }} style={{ alignSelf: 'flex-end', marginBottom: 12, padding: 8 }}>
+                            <Text style={{ color: '#0B5EA8', fontWeight: '700' }}>Voltar à vistoria sem encerrar</Text>
+                          </TouchableOpacity>
+                        ) : null}
+
+                        {/* =================================================
+                            AVALIAÇÃO INDIVIDUAL POR PROBLEMA
+                        ================================================= */}
+                        <View style={{ borderWidth: 1, borderColor: '#D4DFEA', borderRadius: 12, padding: 14, marginBottom: 20, backgroundColor: '#F7FAFD' }}>
+                          <Text style={{ fontSize: 18, fontWeight: '700', color: '#0B2447', marginBottom: 8 }}>
+                            Avaliação técnica de cada problema
+                          </Text>
+                          <Text style={{ color: '#42566D', marginBottom: 14 }}>
+                            Registre o que foi constatado em cada problema. O cálculo da garantia será realizado após a conclusão desta vistoria.
+                          </Text>
+
+
+                          {problemasSolicitacao.map((item) => {
+                            const salvo = avaliacoesIndividuais.find((a) => a.problema_id === item.id);
+                            const selecionado = problemaEmVistoria?.id === item.id;
+                            return (
+                              <TouchableOpacity
+                                key={item.id}
+                                onPress={() => {
+                                  setProblemaEmVistoriaId(item.id);
+                                  setErroAvaliacaoIndividual('');
+                                  setSucessoAvaliacaoIndividual('');
+                                }}
+                                style={{ borderWidth: selecionado ? 2 : 1, borderColor: selecionado ? '#0B5EA8' : '#D4DFEA', borderRadius: 10, padding: 12, marginBottom: 9, backgroundColor: selecionado ? '#EDF5FF' : '#FFFFFF' }}
+                              >
+                                <Text style={{ color: '#0B2447', fontWeight: '700' }}>
+                                  Problema {item.numero}{item.comodo ? ` • ${item.comodo}` : ''}
+                                </Text>
+                                <Text style={{ color: '#42566D', marginTop: 4 }}>
+                                  {item.descricao_problema}
+                                </Text>
+                                <Text style={{ color: salvo?.resultado === 'procedente' ? '#287A46' : salvo?.resultado === 'improcedente' ? '#9A3232' : '#0B5EA8', fontWeight: '700', marginTop: 6 }}>
+                                  {salvo?.resultado === 'procedente' ? '● Procedente na vistoria' : salvo?.resultado === 'improcedente' ? '● Improcedente na vistoria' : 'Aguardando avaliação técnica'}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+
+
+                          {problemaEmVistoria ? (
+                            <View style={{ marginTop: 10 }}>
+                              <Text style={{ fontSize: 16, fontWeight: '700', color: '#0B2447', marginBottom: 12 }}>
+                                Avaliar problema {problemaEmVistoria.numero}
+                              </Text>
+                              <Text style={styles.inputLabel}>O PROBLEMA FOI CONSTATADO? *</Text>
+                              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                                {([true, false] as const).map((valor) => (
+                                  <TouchableOpacity
+                                    key={String(valor)}
+                                    onPress={() => atualizarRascunhoAvaliacao(problemaEmVistoria.id, { problemaConstatado: valor, ...(valor ? {} : { resultado: 'improcedente' as const }) })}
+                                    style={{ flex: 1, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: rascunhoAtual.problemaConstatado === valor ? '#0B5EA8' : '#D4DFEA', backgroundColor: rascunhoAtual.problemaConstatado === valor ? '#E6F1FF' : '#FFFFFF', alignItems: 'center' }}
+                                  >
+                                    <Text style={{ color: '#0B2447', fontWeight: '600' }}>{valor ? 'Sim' : 'Não'}</Text>
+                                  </TouchableOpacity>
+                                ))}
+                              </View>
+                              <Text style={styles.inputLabel}>CLASSIFICAÇÃO *</Text>
+                              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                                {(['procedente', 'improcedente'] as const).map((resultado) => {
+                                  const ativo = rascunhoAtual.resultado === resultado;
+                                  const verde = resultado === 'procedente';
+                                  return (
+                                    <TouchableOpacity
+                                      key={resultado}
+                                      disabled={verde && rascunhoAtual.problemaConstatado !== true}
+                                      onPress={() => atualizarRascunhoAvaliacao(problemaEmVistoria.id, { resultado })}
+                                      style={{ flex: 1, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: verde ? '#287A46' : '#9A3232', backgroundColor: ativo ? (verde ? '#287A46' : '#9A3232') : '#FFFFFF', opacity: verde && rascunhoAtual.problemaConstatado !== true ? 0.45 : 1, alignItems: 'center' }}
+                                    >
+                                      <Text style={{ color: ativo ? '#FFFFFF' : verde ? '#287A46' : '#9A3232', fontWeight: '700' }}>
+                                        {verde ? 'Procedente' : 'Improcedente'}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </View>
+                              <Text style={styles.inputLabel}>PARECER TÉCNICO INDIVIDUAL *</Text>
+                              <TextInput
+                                style={[styles.input, styles.textArea]}
+                                value={rascunhoAtual.parecer}
+                                placeholder="Descreva a avaliação técnica deste problema"
+                                placeholderTextColor="#9AA6B4"
+                                multiline
+                                onChangeText={(parecer) => atualizarRascunhoAvaliacao(problemaEmVistoria.id, { parecer })}
+                              />
+                              {rascunhoAtual.resultado === 'improcedente' ? (
+                                <>
+                                  <Text style={styles.inputLabel}>JUSTIFICATIVA DA IMPROCEDÊNCIA *</Text>
+                                  <TextInput
+                                    style={[styles.input, styles.textArea]}
+                                    value={rascunhoAtual.justificativa}
+                                    placeholder="Explique por que este problema não é procedente"
+                                    placeholderTextColor="#9AA6B4"
+                                    multiline
+                                    onChangeText={(justificativa) => atualizarRascunhoAvaliacao(problemaEmVistoria.id, { justificativa })}
+                                  />
+                                </>
+                              ) : null}
+                              {erroAvaliacaoIndividual ? (
+                                <Text style={{ color: '#9A3232', marginBottom: 10 }}>{erroAvaliacaoIndividual}</Text>
+                              ) : null}
+                              {sucessoAvaliacaoIndividual ? (
+                                <Text style={{ color: '#287A46', marginBottom: 10 }}>{sucessoAvaliacaoIndividual}</Text>
+                              ) : null}
+                              <TouchableOpacity
+                                style={[styles.salvarFormularioVistoriaButton, salvandoAvaliacaoIndividual && styles.buttonDisabled]}
+                                disabled={salvandoAvaliacaoIndividual || !avaliacoesCarregadas}
+                                onPress={() => salvarAvaliacaoIndividual(problemaEmVistoria.id)}
+                              >
+                                {salvandoAvaliacaoIndividual ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons name="save-outline" size={20} color="#FFFFFF" />}
+                                <Text style={styles.salvarFormularioVistoriaButtonText}>
+                                  {salvandoAvaliacaoIndividual ? 'Salvando...' : avaliacaoAtual ? 'Atualizar avaliação deste problema' : 'Salvar avaliação deste problema'}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          ) : null}
+                          <Text style={{ color: todosProblemasCobertosAvaliados ? '#287A46' : '#9A6320', fontWeight: '600', marginTop: 14 }}>
+                            {todosProblemasCobertosAvaliados ? 'Todos os problemas já possuem avaliação técnica.' : 'Registre a avaliação técnica de todos os problemas antes de concluir a visita.'}
+                          </Text>
+                        </View>
+
+
+                        <Text
+                          style={
+                            styles.inputLabel
+                          }
+                        >
+                          RESPONSÁVEL PELA VISTORIA *
+                        </Text>
+
+
+                        <View
+                          style={
+                            styles.responsavelModoRow
+                          }
+                        >
+                          <TouchableOpacity
+                            style={[
+                              styles.responsavelModoButton,
+
+
+                              modoResponsavelVistoria ===
+                                'funcionario' &&
+                                styles.responsavelModoButtonActive,
+                            ]}
+                            onPress={() => {
+                              setModoResponsavelVistoria(
+                                'funcionario'
+                              );
+
+
+                              setResponsavelVistoriaNomeManual(
+                                ''
+                              );
+
+
+                              setDropdownResponsavelVistoriaAberto(
+                                false
+                              );
+
+
+                              setErroFormularioVistoria(
+                                ''
+                              );
+                            }}
+                          >
+                            <Ionicons
+                              name="person-outline"
+                              size={17}
+                              color={
+                                modoResponsavelVistoria ===
+                                'funcionario'
+                                  ? '#FFFFFF'
+                                  : '#0B5EA8'
+                              }
+                            />
+
+
+                            <Text
+                              style={[
+                                styles.responsavelModoText,
+
+
+                                modoResponsavelVistoria ===
+                                  'funcionario' &&
+                                  styles.responsavelModoTextActive,
+                              ]}
+                            >
+                              Funcionário cadastrado
+                            </Text>
+                          </TouchableOpacity>
+
+
+                          <TouchableOpacity
+                            style={[
+                              styles.responsavelModoButton,
+
+
+                              modoResponsavelVistoria ===
+                                'outro' &&
+                                styles.responsavelModoButtonActive,
+                            ]}
+                            onPress={() => {
+                              setModoResponsavelVistoria(
+                                'outro'
+                              );
+
+
+                              setResponsavelVistoriaId(
+                                ''
+                              );
+
+
+                              setDropdownResponsavelVistoriaAberto(
+                                false
+                              );
+
+
+                              setErroFormularioVistoria(
+                                ''
+                              );
+                            }}
+                          >
+                            <Ionicons
+                              name="create-outline"
+                              size={17}
+                              color={
+                                modoResponsavelVistoria ===
+                                'outro'
+                                  ? '#FFFFFF'
+                                  : '#0B5EA8'
+                              }
+                            />
+
+
+                            <Text
+                              style={[
+                                styles.responsavelModoText,
+
+
+                                modoResponsavelVistoria ===
+                                  'outro' &&
+                                  styles.responsavelModoTextActive,
+                              ]}
+                            >
+                              Outro responsável
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+
+                        {modoResponsavelVistoria ===
+                        'funcionario' ? (
+                          <>
+                            <TouchableOpacity
+                              activeOpacity={
+                                0.85
+                              }
+                              onPress={() =>
+                                setDropdownResponsavelVistoriaAberto(
+                                  (aberto) =>
+                                    !aberto
+                                )
+                              }
+                              style={
+                                styles.categorySelectButton
+                              }
+                            >
+                              <Text
+                                style={[
+                                  styles.categorySelectText,
+
+
+                                  !responsavelVistoriaId &&
+                                    styles.categoryPlaceholder,
+                                ]}
+                                numberOfLines={
+                                  1
+                                }
+                              >
+                                {responsaveisFuncionarios.find(
+                                  (item) =>
+                                    item.responsavel_id ===
+                                    responsavelVistoriaId
+                                )?.nome ||
+                                  'Selecione o funcionário'}
+                              </Text>
+
+
+                              <Ionicons
+                                name={
+                                  dropdownResponsavelVistoriaAberto
+                                    ? 'chevron-up'
+                                    : 'chevron-down'
+                                }
+                                size={20}
+                                color="#42566D"
+                              />
+                            </TouchableOpacity>
+
+
+                            {dropdownResponsavelVistoriaAberto ? (
+                              <View
+                                style={
+                                  styles.categoryDropdownPanel
+                                }
+                              >
+                                {responsaveisFuncionarios.length >
+                                0 ? (
+                                  responsaveisFuncionarios.map(
+                                    (item) => {
+                                      const ativo =
+                                        responsavelVistoriaId ===
+                                        item.responsavel_id;
+
+
+                                      return (
+                                        <TouchableOpacity
+                                          key={
+                                            item.responsavel_id
+                                          }
+                                          activeOpacity={
+                                            0.8
+                                          }
+                                          onPress={() => {
+                                            setResponsavelVistoriaId(
+                                              item.responsavel_id
+                                            );
+
+
+                                            setResponsavelVistoriaNomeManual(
+                                              ''
+                                            );
+
+
+                                            setDropdownResponsavelVistoriaAberto(
+                                              false
+                                            );
+
+
+                                            setErroFormularioVistoria(
+                                              ''
+                                            );
+                                          }}
+                                          style={[
+                                            styles.categoryOption,
+
+
+                                            ativo &&
+                                              styles.categoryOptionActive,
+                                          ]}
+                                        >
+                                          <Text
+                                            style={[
+                                              styles.categoryOptionText,
+
+
+                                              ativo &&
+                                                styles.categoryOptionTextActive,
+                                            ]}
+                                          >
+                                            {
+                                              item.nome
+                                            }
+                                          </Text>
+
+
+                                          {ativo ? (
+                                            <Ionicons
+                                              name="checkmark"
+                                              size={18}
+                                              color="#FFFFFF"
+                                            />
+                                          ) : null}
+                                        </TouchableOpacity>
+                                      );
+                                    }
+                                  )
+                                ) : (
+                                  <Text
+                                    style={
+                                      styles.categoryEmptyText
+                                    }
+                                  >
+                                    Nenhum funcionário cadastrado disponível.
+                                  </Text>
+                                )}
+                              </View>
+                            ) : null}
+                          </>
+                        ) : (
+                          <TextInput
+                            style={
+                              styles.input
+                            }
+                            value={
+                              responsavelVistoriaNomeManual
+                            }
+                            onChangeText={(
+                              texto
+                            ) => {
+                              setResponsavelVistoriaNomeManual(
+                                texto
+                              );
+
+
+                              setErroFormularioVistoria(
+                                ''
+                              );
+                            }}
+                            placeholder="Digite o nome do responsável pela vistoria"
+                            placeholderTextColor="#8995A5"
+                          />
+                        )}
+
+
+                        <Text
+                          style={
+                            styles.inputLabel
+                          }
+                        >
+                          O PROBLEMA RELATADO FOI CONSTATADO?
+                        </Text>
+
+
+                        <View
+                          style={
+                            styles.constatacaoRow
+                          }
+                        >
+                          <TouchableOpacity
+                            style={[
+                              styles.constatacaoButton,
+
+
+                              problemaConstatado ===
+                                true &&
+                                styles.constatacaoButtonActive,
+                            ]}
+                            onPress={() => {
+                              setProblemaConstatado(
+                                true
+                              );
+
+
+                              setErroFormularioVistoria(
+                                ''
+                              );
+
+
+                              setSucessoFormularioVistoria(
+                                ''
+                              );
+                            }}
+                          >
+                            <Ionicons
+                              name="checkmark-circle-outline"
+                              size={19}
+                              color={
+                                problemaConstatado ===
+                                true
+                                  ? '#FFFFFF'
+                                  : '#287A46'
+                              }
+                            />
+
+
+                            <Text
+                              style={[
+                                styles.constatacaoButtonText,
+
+
+                                problemaConstatado ===
+                                  true &&
+                                  styles.constatacaoButtonTextActive,
+                              ]}
+                            >
+                              Sim
+                            </Text>
+                          </TouchableOpacity>
+
+
+                          <TouchableOpacity
+                            style={[
+                              styles.constatacaoButton,
+
+
+                              problemaConstatado ===
+                                false &&
+                                styles.constatacaoButtonActive,
+                            ]}
+                            onPress={() => {
+                              setProblemaConstatado(
+                                false
+                              );
+
+
+                              setErroFormularioVistoria(
+                                ''
+                              );
+
+
+                              setSucessoFormularioVistoria(
+                                ''
+                              );
+                            }}
+                          >
+                            <Ionicons
+                              name="close-circle-outline"
+                              size={19}
+                              color={
+                                problemaConstatado ===
+                                false
+                                  ? '#FFFFFF'
+                                  : '#9A3232'
+                              }
+                            />
+
+
+                            <Text
+                              style={[
+                                styles.constatacaoButtonText,
+
+
+                                problemaConstatado ===
+                                  false &&
+                                  styles.constatacaoButtonTextActive,
+                              ]}
+                            >
+                              Não
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
+
+                        <Text
+                          style={
+                            styles.inputLabel
+                          }
+                        >
+                          OBSERVAÇÕES DA VISTORIA
+                        </Text>
+
+
+                        <TextInput
+                          style={[
+                            styles.input,
+                            styles.textArea,
+                          ]}
+                          value={
+                            observacoesTecnicas
+                          }
+                          placeholder="Inclua informações adicionais, se necessário."
+                          placeholderTextColor="#9AA6B4"
+                          multiline
+                          numberOfLines={4}
+                          textAlignVertical="top"
+                          onChangeText={(
+                            texto
+                          ) => {
+                            setObservacoesTecnicas(
+                              texto
+                            );
+
+
+                            setErroFormularioVistoria(
+                              ''
+                            );
+
+
+                            setSucessoFormularioVistoria(
+                              ''
+                            );
+                          }}
+                        />
+
+
+                        <Text style={styles.inputLabel}>
+                          FOTOS DA VISTORIA — POR PROBLEMA *
+                        </Text>
+                        <Text style={styles.fotosVistoriaAjuda}>
+                          Anexe 1 ou 2 fotos da vistoria para cada problema. Cada foto ficará vinculada ao problema correspondente e será utilizada na análise posterior da garantia.
+                        </Text>
+
+                        {problemasSolicitacao.map((problema) => {
+                          const pendentes = fotosVistoriaPendentesPorProblema[problema.id] ?? [];
+                          const salvas = fotosVistoriaSalvas.filter((foto) => foto.problema_id === problema.id);
+                          const quantidade = pendentes.length + salvas.length;
+                          return (
+                            <View key={problema.id} style={[
+                              styles.fotosVistoriaSection,
+                              { backgroundColor: '#FFFFFF', borderColor: '#D4DFEA', borderWidth: 1,
+                                padding: 13, borderRadius: 12, marginBottom: 13 },
+                            ]}>
+                              <Text style={[styles.fotosVistoriaSubtitulo, { color: '#0B2447' }]}>
+                                Problema {problema.numero} — {problema.comodo || 'Ambiente não informado'}
+                              </Text>
+                              <Text style={{ color: '#506278', marginBottom: 10 }}>
+                                {problema.descricao_problema}
+                              </Text>
+                              <Text style={{ color: quantidade >= 1 && quantidade <= 2 ? '#287A46' : '#9A6320',
+                                fontWeight: '600', marginBottom: 10 }}>
+                                Fotos da vistoria: {quantidade}/2 {quantidade === 0 ? '• falta pelo menos 1 foto' : '• quantidade válida'}
+                              </Text>
+                              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+                                <TouchableOpacity
+                                  style={[styles.adicionarFotosVistoriaButton, { flex: 1, minWidth: 145 },
+                                    quantidade >= 2 && styles.buttonDisabled]}
+                                  onPress={() => selecionarFotosVistoriaProblema(problema.id)}
+                                  disabled={salvandoFormularioVistoria || quantidade >= 2}
+                                >
+                                  <Ionicons name="images-outline" size={19} color="#0B5EA8" />
+                                  <Text style={styles.adicionarFotosVistoriaButtonText}>+ Adicionar fotos</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={[styles.adicionarFotosVistoriaButton, { flex: 1, minWidth: 130 },
+                                    quantidade >= 2 && styles.buttonDisabled]}
+                                  onPress={() => tirarFotoVistoriaProblema(problema.id)}
+                                  disabled={salvandoFormularioVistoria || quantidade >= 2}
+                                >
+                                  <Ionicons name="camera-outline" size={19} color="#0B5EA8" />
+                                  <Text style={styles.adicionarFotosVistoriaButtonText}>Tirar foto</Text>
+                                </TouchableOpacity>
+                              </View>
+                              {pendentes.length > 0 || salvas.length > 0 ? (
+                                <View style={styles.fotosVistoriaGrid}>
+                                  {salvas.map((foto) => (
+                                    <View key={foto.id} style={styles.fotoVistoriaCard}>
+                                      {foto.url ? (
+                                        <Image source={{ uri: foto.url }} style={styles.fotoVistoriaImagem} resizeMode="cover" />
+                                      ) : (
+                                        <View style={styles.fotoVistoriaSemImagem}>
+                                          <Ionicons name="image-outline" size={26} color="#8995A5" />
+                                        </View>
+                                      )}
+                                      <View style={styles.fotoVistoriaSalvaBadge}>
+                                        <Ionicons name="checkmark-circle" size={13} color="#287A46" />
+                                        <Text style={styles.fotoVistoriaSalvaText}>Salva</Text>
+                                      </View>
+                                    </View>
+                                  ))}
+                                  {pendentes.map((foto, indice) => (
+                                    <View key={`${foto.uri}-${indice}`} style={styles.fotoVistoriaCard}>
+                                      <Image source={{ uri: foto.uri }} style={styles.fotoVistoriaImagem} resizeMode="cover" />
+                                      <TouchableOpacity style={styles.removerFotoVistoriaButton}
+                                        onPress={() => removerFotoVistoriaPendenteProblema(problema.id, foto.uri)}>
+                                        <Ionicons name="close" size={17} color="#FFFFFF" />
+                                      </TouchableOpacity>
+                                      <View style={styles.fotoVistoriaPendenteBadge}>
+                                        <Text style={styles.fotoVistoriaPendenteText}>Aguardando salvar</Text>
+                                      </View>
+                                    </View>
+                                  ))}
+                                </View>
+                              ) : null}
+                            </View>
+                          );
+                        })}
+
+                        {/* Fotos antigas sem problema vinculado continuam disponíveis para consulta,
+                            mas não são contabilizadas nas novas exigências de 1 a 2 por problema. */}
+                        {fotosVistoriaSalvas.some((foto) => !foto.problema_id) ? (
+                          <Text style={{ color: '#687B90', marginBottom: 12 }}>
+                            Há fotos anteriores sem vínculo individual; elas permanecem no histórico da vistoria.
+                          </Text>
+                        ) : null}
+                        {carregandoFotosVistoria ? (
+                          <View style={styles.fotosVistoriaLoading}>
+                            <ActivityIndicator size="small" color="#0B5EA8" />
+                            <Text style={styles.fotosVistoriaLoadingText}>Carregando fotos...</Text>
+                          </View>
+                        ) : null}
+
+
+                        {erroFormularioVistoria ? (
+                          <View
+                            style={
+                              styles.messageError
+                            }
+                          >
+                            <Ionicons
+                              name="alert-circle-outline"
+                              size={19}
+                              color="#9A3232"
+                            />
+
+
+                            <Text
+                              style={
+                                styles.messageErrorText
+                              }
+                            >
+                              {
+                                erroFormularioVistoria
+                              }
+                            </Text>
+                          </View>
+                        ) : null}
+
+
+                        {sucessoFormularioVistoria ? (
+                          <View
+                            style={
+                              styles.messageSuccess
+                            }
+                          >
+                            <Ionicons
+                              name="checkmark-circle-outline"
+                              size={20}
+                              color="#287A46"
+                            />
+
+
+                            <Text
+                              style={
+                                styles.messageSuccessText
+                              }
+                            >
+                              {
+                                sucessoFormularioVistoria
+                              }
+                            </Text>
+                          </View>
+                        ) : null}
+
+
+                        <TouchableOpacity
+                          style={[
+                            styles.salvarFormularioVistoriaButton,
+
+
+                            salvandoFormularioVistoria &&
+                              styles.buttonDisabled,
+                          ]}
+                          disabled={
+                            salvandoFormularioVistoria
+                          }
+                          onPress={
+                            salvarFormularioVistoria
+                          }
+                        >
+                          {salvandoFormularioVistoria ? (
+                            <ActivityIndicator
+                              size="small"
+                              color="#FFFFFF"
+                            />
+                          ) : (
+                            <Ionicons
+                              name="save-outline"
+                              size={20}
+                              color="#FFFFFF"
+                            />
+                          )}
+
+
+                          <Text
+                            style={
+                              styles.salvarFormularioVistoriaButtonText
+                            }
+                          >
+                            {salvandoFormularioVistoria
+                              ? 'Salvando...'
+                              : totalFotosVistoriaPendentesPorProblema > 0
+                                ? 'Salvar vistoria e fotos'
+                                : 'Salvar vistoria'}
+                          </Text>
+                        </TouchableOpacity>
+
+
+                        <View
+                          style={
+                            styles.finalizarVistoriaBox
+                          }
+                        >
+                          <View
+                            style={
+                              styles.finalizarVistoriaHeader
+                            }
+                          >
+                            <Ionicons
+                              name="flag-outline"
+                              size={22}
+                              color="#0B2447"
+                            />
+
+
+                            <View
+                              style={{
+                                flex: 1,
+                              }}
+                            >
+                              <Text
+                                style={
+                                  styles.finalizarVistoriaTitle
+                                }
+                              >
+                                Concluir vistoria técnica
+                              </Text>
+
+
+                              <Text
+                                style={
+                                  styles.finalizarVistoriaText
+                                }
+                              >
+                                Ao concluir a visita, os dados e fotos serão salvos. A garantia será calculada somente depois.
+                              </Text>
+                            </View>
+                          </View>
+
+
+                          <View style={{ padding: 12, backgroundColor: '#F0F5FA', borderRadius: 9, marginBottom: 12 }}>
+                            <Text style={{ color: '#0B2447', fontWeight: '700', marginBottom: 6 }}>
+                              Conclusão da visita técnica
+                            </Text>
+                            <Text style={{ color: '#42566D' }}>
+                              {todosProblemasCobertosAvaliados
+                                ? 'Avaliações técnicas registradas. Conclua a visita para liberar o cálculo posterior da garantia.'
+                                : 'Pendente: avalie todos os problemas, independentemente da cobertura de garantia.'}
+                            </Text>
+                            <Text style={{ color: '#42566D', marginTop: 6 }}>
+                              A conclusão da visita não aprova a execução. O cálculo de garantia será feito na etapa seguinte.
+                            </Text>
+                          </View>
+
+
+                          {erroFinalizacaoVistoria ? (
+                            <View
+                              style={
+                                styles.messageError
+                              }
+                            >
+                              <Ionicons
+                                name="alert-circle-outline"
+                                size={19}
+                                color="#9A3232"
+                              />
+
+
+                              <Text
+                                style={
+                                  styles.messageErrorText
+                                }
+                              >
+                                {
+                                  erroFinalizacaoVistoria
+                                }
+                              </Text>
+                            </View>
+                          ) : null}
+
+
+                          <TouchableOpacity
+                            style={[
+                              styles.finalizarVistoriaButton,
+
+
+                              finalizandoVistoria &&
+                                styles.buttonDisabled,
+                            ]}
+                            disabled={
+                              finalizandoVistoria
+                            }
+                            onPress={
+                              finalizarVistoria
+                            }
+                          >
+                            {finalizandoVistoria ? (
+                              <ActivityIndicator
+                                size="small"
+                                color="#FFFFFF"
+                              />
+                            ) : (
+                              <Ionicons
+                                name="checkmark-done-outline"
+                                size={21}
+                                color="#FFFFFF"
+                              />
+                            )}
+
+
+                            <Text
+                              style={
+                                styles.finalizarVistoriaButtonText
+                              }
+                            >
+                              {finalizandoVistoria
+                                ? 'Finalizando...'
+                                : 'Concluir visita técnica'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : null}
+
+
+                    {solicitacao.status === 'encerrada_ausencia' ? (
+                      <View style={{
+                        borderWidth: 1, borderColor: '#E7CD9B', backgroundColor: '#FFF9EF',
+                        borderRadius: 12, padding: 16, marginBottom: 14,
+                      }}>
+                        <Text style={{ fontSize: 15, fontWeight: '800', color: '#8A5700', marginBottom: 7 }}>
+                          Atendimento encerrado — cliente ausente
+                        </Text>
+                        <Text style={{ fontSize: 13, color: '#42566D', lineHeight: 20 }}>
+                          A equipe da EMAFE compareceu ao imóvel na data e no horário agendados,
+                          porém não encontrou o cliente ou um responsável para acompanhar a vistoria.
+                          Este protocolo está encerrado e não poderá ser reagendado.
+                          Para solicitar outra visita, o cliente deverá abrir um novo protocolo pelo aplicativo.
+                        </Text>
+                        {vistoriaTecnica?.finalizada_em && fotosVistoriaSalvas.some((foto) => !foto.problema_id) ? (
+                          <View style={{ marginTop: 14 }}>
+                            <Text style={{ color: '#0B2447', fontWeight: '700', marginBottom: 9 }}>
+                              Comprovação da visita
+                            </Text>
+                            <View style={styles.fotosVistoriaGrid}>
+                              {fotosVistoriaSalvas.filter((foto) => !foto.problema_id).map((foto) => (
+                                <View key={foto.id} style={styles.fotoVistoriaCard}>
+                                  {foto.url ? (
+                                    <Image source={{ uri: foto.url }} style={styles.fotoVistoriaImagem} resizeMode="cover" />
+                                  ) : (
+                                    <View style={styles.fotoVistoriaSemImagem}>
+                                      <Ionicons name="image-outline" size={26} color="#8995A5" />
+                                    </View>
+                                  )}
+                                </View>
+                              ))}
+                            </View>
+                          </View>
+                        ) : null}
+                      </View>
+                    ) : null}
+
+                    {vistoriaTecnica?.finalizada_em && solicitacao.status !== 'encerrada_ausencia' ? (
+                      <View
+                        style={
+                          styles.vistoriaHistoricoWrapper
+                        }
+                      >
+                        <TouchableOpacity
+                          activeOpacity={
+                            0.85
+                          }
+                          onPress={() =>
+                            setMostrarDetalhesVistoriaFinalizada(
+                              (aberto) =>
+                                !aberto
+                            )
+                          }
+                          style={[
+                            styles.vistoriaFinalizadaBox,
+
+
+                            solicitacao.status ===
+                              'nao_aprovada'
+                              ? styles.vistoriaFinalizadaNaoAprovada
+                              : styles.vistoriaFinalizadaAprovada,
+                          ]}
+                        >
+                          <Ionicons
+                            name={
+                              solicitacao.status ===
+                              'nao_aprovada'
+                                ? 'close-circle'
+                                : 'checkmark-circle'
+                            }
+                            size={24}
+                            color={
+                              solicitacao.status ===
+                              'nao_aprovada'
+                                ? '#9A3232'
+                                : '#287A46'
+                            }
+                          />
+
+
+                          <View
+                            style={{
+                              flex: 1,
+                            }}
+                          >
+                            <Text
+                              style={
+                                styles.vistoriaFinalizadaTitle
+                              }
+                            >
+                              Vistoria finalizada
+                            </Text>
+
+
+                            <Text
+                              style={
+                                styles.vistoriaFinalizadaText
+                              }
+                            >
+                              {mostrarDetalhesVistoriaFinalizada
+                                ? 'Clique para minimizar os dados da vistoria.'
+                                : 'Clique para visualizar os dados preenchidos na vistoria.'}
+                            </Text>
+                          </View>
+
+
+                          <Ionicons
+                            name={
+                              mostrarDetalhesVistoriaFinalizada
+                                ? 'chevron-up'
+                                : 'chevron-down'
+                            }
+                            size={21}
+                            color="#42566D"
+                          />
+                        </TouchableOpacity>
+
+
+                        {mostrarDetalhesVistoriaFinalizada ? (
+                          <View
+                            style={
+                              styles.vistoriaHistoricoConteudo
+                            }
+                          >
+                            <View
+                              style={
+                                styles.vistoriaHistoricoGrid
+                              }
+                            >
+                              <WarrantyInfo
+                                label="Responsável pela vistoria"
+                                value={
+                                  nomeResponsavelVistoriaExibicao
+                                }
+                              />
+
+
+                              <WarrantyInfo
+                                label="Registrada por"
+                                value={
+                                  vistoriaTecnica.funcionario_nome ||
+                                  '-'
+                                }
+                              />
+
+
+                              <WarrantyInfo
+                                label="Início"
+                                value={
+                                  formatarDataHora(
+                                    vistoriaTecnica.iniciada_em
+                                  )
+                                }
+                              />
+
+
+                              <WarrantyInfo
+                                label="Finalização"
+                                value={
+                                  formatarDataHora(
+                                    vistoriaTecnica.finalizada_em
+                                  )
+                                }
+                              />
+
+
+                              <WarrantyInfo
+                                label="Problema constatado"
+                                value={
+                                  vistoriaTecnica.problema_constatado ===
+                                  true
+                                    ? 'Sim'
+                                    : vistoriaTecnica.problema_constatado ===
+                                        false
+                                      ? 'Não'
+                                      : '-'
+                                }
+                              />
+
+
+                              <WarrantyInfo
+                                label="Resultado"
+                                value={
+                                  solicitacao.status ===
+                                  'encerrada_ausencia'
+                                    ? 'Encerrada por ausência do cliente'
+                                    : solicitacao.status ===
+                                        'nao_aprovada'
+                                      ? 'Não aprovada'
+                                      : 'Aprovada para execução'
+                                }
+                              />
+                            </View>
+
+
+                            <View
+                              style={
+                                styles.vistoriaHistoricoBloco
+                              }
+                            >
+                              <Text
+                                style={
+                                  styles.vistoriaHistoricoLabel
+                                }
+                              >
+                                PARECER TÉCNICO
+                              </Text>
+
+
+                              <Text
+                                style={
+                                  styles.vistoriaHistoricoTexto
+                                }
+                              >
+                                {vistoriaTecnica.parecer_tecnico ||
+                                  '-'}
+                              </Text>
+                            </View>
+
+
+                            {vistoriaTecnica.observacoes ? (
+                              <View
+                                style={
+                                  styles.vistoriaHistoricoBloco
+                                }
+                              >
+                                <Text
+                                  style={
+                                    styles.vistoriaHistoricoLabel
+                                  }
+                                >
+                                  OBSERVAÇÕES DA VISTORIA
+                                </Text>
+
+
+                                <Text
+                                  style={
+                                    styles.vistoriaHistoricoTexto
+                                  }
+                                >
+                                  {
+                                    vistoriaTecnica.observacoes
+                                  }
+                                </Text>
+                              </View>
+                            ) : null}
+
+
+                            {fotosVistoriaSalvas.length > 0 ? (
+                              <View style={styles.vistoriaHistoricoBloco}>
+                                <Text style={styles.vistoriaHistoricoLabel}>FOTOS DA VISTORIA POR PROBLEMA</Text>
+                                {problemasSolicitacao.map((problema) => {
+                                  const fotosProblema = fotosVistoriaSalvas.filter((foto) => foto.problema_id === problema.id);
+                                  if (fotosProblema.length === 0) return null;
+                                  return (
+                                    <View key={problema.id} style={{ marginBottom: 14 }}>
+                                      <Text style={{ color: '#0B2447', fontWeight: '700', marginBottom: 8 }}>
+                                        Problema {problema.numero} — {problema.comodo || 'Ambiente não informado'} ({fotosProblema.length} foto(s))
+                                      </Text>
+                                      <View style={styles.fotosVistoriaGrid}>
+                                        {fotosProblema.map((foto) => (
+                                          <View key={foto.id} style={styles.fotoVistoriaCard}>
+                                            {foto.url ? (
+                                              <Image source={{ uri: foto.url }} style={styles.fotoVistoriaImagem} resizeMode="cover" />
+                                            ) : (
+                                              <View style={styles.fotoVistoriaSemImagem}>
+                                                <Ionicons name="image-outline" size={26} color="#8995A5" />
+                                              </View>
+                                            )}
+                                          </View>
+                                        ))}
+                                      </View>
+                                    </View>
+                                  );
+                                })}
+                                {fotosVistoriaSalvas.some((foto) => !foto.problema_id) ? (
+                                  <View>
+                                    <Text style={{ color: '#617187', marginBottom: 8 }}>Fotos anteriores sem vínculo individual</Text>
+                                    <View style={styles.fotosVistoriaGrid}>
+                                      {fotosVistoriaSalvas.filter((foto) => !foto.problema_id).map((foto) => (
+                                        <View key={foto.id} style={styles.fotoVistoriaCard}>
+                                          {foto.url ? (
+                                            <Image source={{ uri: foto.url }} style={styles.fotoVistoriaImagem} resizeMode="cover" />
+                                          ) : (
+                                            <View style={styles.fotoVistoriaSemImagem}>
+                                              <Ionicons name="image-outline" size={26} color="#8995A5" />
+                                            </View>
+                                          )}
+                                        </View>
+                                      ))}
+                                    </View>
+                                  </View>
+                                ) : null}
+                              </View>
+                            ) : null}
+                          </View>
+                        ) : null}
+                      </View>
+                    ) : null}
+
+
+                    {/* =====================================================
+                        ANÁLISE DA GARANTIA — SOMENTE DEPOIS DA VISITA
+                    ===================================================== */}
+                    {!!vistoriaTecnica?.finalizada_em ? (
+                      <>
+                        <View style={{ padding: 14, backgroundColor: '#EDF5FF', borderRadius: 10, marginBottom: 18 }}>
+                          <Text style={{ fontSize: 16, color: '#0B2447', fontWeight: '700' }}>
+                            Etapa seguinte: calcular a garantia
+                          </Text>
+                          <Text style={{ color: '#42566D', marginTop: 6 }}>
+                            A visita técnica já foi realizada. Classifique agora cada problema segundo o manual do imóvel. Somente os problemas procedentes e dentro da garantia poderão seguir para execução.
+                          </Text>
+                        </View>
+              {/* ==============================================
+                  ANÁLISE TÉCNICA
+              ============================================== */}
+
+
+              <Text
+                style={
+                  styles.sectionTitle
+                }
+              >
+                Análise da garantia (após a vistoria)
+              </Text>
+
+
+              <View
+                style={
+                  styles.analysisCard
+                }
+              >
+                <View
+                  style={
+                    styles.analysisIntro
+                  }
+                >
+                  <Ionicons
+                    name="construct-outline"
+                    size={22}
+                    color="#0B2447"
+                  />
+
+
+                  <View
+                    style={{
+                      flex: 1,
+                    }}
+                  >
+                    <Text
+                      style={
+                        styles.analysisIntroTitle
+                      }
+                    >
+                      Seleção do item de garantia
+                    </Text>
+
+
+                    <Text
+                      style={
+                        styles.analysisIntroText
+                      }
+                    >
+                      {problemasSolicitacao.length > 1
+                        ? 'Após a vistoria, analise a cobertura de cada problema individualmente. Todos permanecem no mesmo protocolo.'
+                        : analiseConfirmada
+                        ? 'A análise técnica deste problema já foi confirmada.'
+                        : 'Classifique o problema utilizando o modelo de garantia vinculado ao imóvel.'}
+                    </Text>
+                  </View>
+                </View>
+
+
+                {/* PROBLEMA DO PROTOCOLO */}
+
+
+                <Text
+                  style={
+                    styles.fieldNumber
+                  }
+                >
+                  Problema do protocolo
+                </Text>
+
+
+                {carregandoProblemasSolicitacao ? (
+                  <View
+                    style={
+                      styles.loadingInline
+                    }
+                  >
+                    <ActivityIndicator
+                      size="small"
+                      color="#0B2447"
+                    />
+                    <Text
+                      style={
+                        styles.loadingInlineText
+                      }
+                    >
+                      Carregando problemas...
+                    </Text>
+                  </View>
+                ) : (
+                  <View
+                    style={
+                      styles.protocolProblemsList
+                    }
+                  >
+                    {problemasSolicitacao.map(
+                      (problema) => {
+                        const ativo =
+                          problema.id ===
+                          problemaSelecionadoId;
+                        const analisado =
+                          !!problema.item_garantia_id;
+
+
+                        return (
+                          <TouchableOpacity
+                            key={problema.id}
+                            activeOpacity={0.85}
+                            onPress={() =>
+                              selecionarProblemaDoProtocolo(
+                                problema
+                              )
+                            }
+                            style={[
+                              styles.protocolProblemCard,
+                              ativo &&
+                                styles.protocolProblemCardActive,
+                            ]}
+                          >
+                            <View
+                              style={[
+                                styles.protocolProblemNumber,
+                                ativo &&
+                                  styles.protocolProblemNumberActive,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.protocolProblemNumberText,
+                                  ativo &&
+                                    styles.protocolProblemNumberTextActive,
+                                ]}
+                              >
+                                {problema.numero}
+                              </Text>
+                            </View>
+
+
+                            <View
+                              style={{
+                                flex: 1,
+                              }}
+                            >
+                              <Text
+                                style={[
+                                  styles.protocolProblemTitle,
+                                  ativo &&
+                                    styles.protocolProblemTitleActive,
+                                ]}
+                              >
+                                Problema {problema.numero}
+                                {problema.comodo
+                                  ? ` • ${problema.comodo}`
+                                  : ''}
+                              </Text>
+
+
+                              <Text
+                                numberOfLines={2}
+                                style={[
+                                  styles.protocolProblemDescription,
+                                  ativo &&
+                                    styles.protocolProblemDescriptionActive,
+                                ]}
+                              >
+                                {problema.descricao_problema}
+                              </Text>
+
+
+                              <Text
+                                style={[
+                                  styles.protocolProblemStatus,
+                                  analisado &&
+                                    styles.protocolProblemStatusDone,
+                                ]}
+                              >
+                                {analisado
+                                  ? `Garantia: ${textoGarantia(
+                                      problema.status_garantia
+                                    )}`
+                                  : 'Garantia: aguardando análise'}
+                              </Text>
+                            </View>
+
+
+                            <Ionicons
+                              name={
+                                ativo
+                                  ? 'checkmark-circle'
+                                  : analisado
+                                  ? 'shield-checkmark-outline'
+                                  : 'chevron-forward'
+                              }
+                              size={21}
+                              color={
+                                ativo
+                                  ? '#FFFFFF'
+                                  : analisado
+                                  ? '#287A46'
+                                  : '#8995A5'
+                              }
+                            />
+                          </TouchableOpacity>
+                        );
+                      }
+                    )}
+                  </View>
+                )}
+
+
+                {problemaSelecionado ? (
+                  <View
+                    style={
+                      styles.selectedProblemSummary
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.selectedProblemSummaryLabel
+                      }
+                    >
+                      PROBLEMA SELECIONADO
+                    </Text>
+                    <Text
+                      style={
+                        styles.selectedProblemSummaryTitle
+                      }
+                    >
+                      Problema {problemaSelecionado.numero}
+                      {problemaSelecionado.comodo
+                        ? ` • ${problemaSelecionado.comodo}`
+                        : ''}
+                    </Text>
+                    <Text
+                      style={
+                        styles.selectedProblemSummaryText
+                      }
+                    >
+                      {problemaSelecionado.descricao_problema}
                     </Text>
                   </View>
                 ) : null}
@@ -10669,2006 +12705,30 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               ) : null}
 
 
-              {/* =================================================
-                  VISTORIA
-              ================================================= */}
 
-
-              {todosProblemasAnalisados &&
-              algumProblemaDentroGarantia ? (
-                <>
-                  <Text
-                    style={
-                      styles.sectionTitle
-                    }
-                  >
-                    Vistoria
-                  </Text>
-
-
-                  <View
-                    style={
-                      styles.vistoriaCard
-                    }
-                  >
-                    {/* ===========================================
-                        AGENDAMENTO ATUAL
-                    =========================================== */}
-
-
-                    {agendamento ? (
-                      <View
-                        style={
-                          styles.agendamentoAtual
-                        }
-                      >
-                        <View
-                          style={
-                            styles.agendamentoTituloLinha
-                          }
-                        >
-                          <View
-                            style={
-                              styles.agendamentoCheckIcon
-                            }
-                          >
-                            <Ionicons
-                              name="checkmark"
-                              size={18}
-                              color="#FFFFFF"
-                            />
-                          </View>
-
-
-                          <View
-                            style={{
-                              flex: 1,
-                            }}
-                          >
-                            <Text
-                              style={
-                                styles.agendamentoTitulo
-                              }
-                            >
-                              Vistoria agendada
+                        {solicitacao.status === 'em_analise' ? (
+                          <View style={{ padding: 16, backgroundColor: '#F3F7FB', borderRadius: 12, marginBottom: 20 }}>
+                            <Text style={{ color: '#0B2447', fontSize: 16, fontWeight: '700', marginBottom: 8 }}>
+                              Finalizar análise após vistoria
                             </Text>
-
-
-                            <Text
-                              style={
-                                styles.agendamentoSubtitulo
-                              }
-                            >
-                              Este agendamento já está registrado no protocolo.
+                            <Text style={{ color: '#42566D', marginBottom: 12 }}>
+                              {todosProblemasAnalisados
+                                ? 'Todas as garantias foram calculadas. Confirme a decisão para liberar os serviços cobertos e procedentes.'
+                                : 'Calcule e confirme o item de garantia de cada problema para habilitar a decisão.'}
                             </Text>
-                          </View>
-                        </View>
-
-
-                        <View
-                          style={
-                            styles.agendamentoInfoGrid
-                          }
-                        >
-                          <WarrantyInfo
-                            label="Data"
-                            value={
-                              formatarData(
-                                agendamento.data_vistoria
-                              )
-                            }
-                          />
-
-
-                          <WarrantyInfo
-                            label="Horário"
-                            value={`${formatarHora(
-                              agendamento.hora_inicio
-                            )} às ${formatarHora(
-                              agendamento.hora_fim
-                            )}`}
-                          />
-
-
-                          <WarrantyInfo
-                            label="Agendado por"
-                            value={
-                              agendamento.agendado_por_nome ||
-                              agendamento.agendado_por_tipo ||
-                              '-'
-                            }
-                          />
-                        </View>
-
-
-                        <TouchableOpacity
-                          style={
-                            styles.whatsAppVistoriaButton
-                          }
-                          onPress={
-                            avisarClienteWhatsAppVistoria
-                          }
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons
-                            name="logo-whatsapp"
-                            size={20}
-                            color="#FFFFFF"
-                          />
-
-
-                          <View
-                            style={{
-                              flex: 1,
-                            }}
-                          >
-                            <Text
-                              style={
-                                styles.whatsAppVistoriaButtonText
-                              }
-                            >
-                              Avisar cliente no WhatsApp
-                            </Text>
-
-
-                            <Text
-                              style={
-                                styles.whatsAppVistoriaButtonSubtext
-                              }
-                            >
-                              Abre a conversa com a mensagem da vistoria pronta para enviar.
-                            </Text>
-                          </View>
-
-
-                          <Ionicons
-                            name="open-outline"
-                            size={18}
-                            color="#FFFFFF"
-                          />
-                        </TouchableOpacity>
-                      </View>
-                    ) : null}
-
-
-                    {/* ===========================================
-                        INICIAR VISTORIA
-                    =========================================== */}
-
-
-                    {solicitacao.status ===
-                    'vistoria_agendada' &&
-                    agendamento ? (
-                      <View
-                        style={
-                          styles.iniciarVistoriaBox
-                        }
-                      >
-                        <View
-                          style={
-                            styles.iniciarVistoriaHeader
-                          }
-                        >
-                          <Ionicons
-                            name="clipboard-outline"
-                            size={22}
-                            color="#0B2447"
-                          />
-
-
-                          <View
-                            style={{
-                              flex: 1,
-                            }}
-                          >
-                            <Text
-                              style={
-                                styles.iniciarVistoriaTitle
-                              }
-                            >
-                              Realizar vistoria
-                            </Text>
-
-
-                            <Text
-                              style={
-                                styles.iniciarVistoriaText
-                              }
-                            >
-                              Quando a equipe estiver no imóvel, inicie a vistoria para registrar a avaliação técnica.
-                            </Text>
-                          </View>
-                        </View>
-
-
-                        {erroInicioVistoria ? (
-                          <View
-                            style={
-                              styles.messageError
-                            }
-                          >
-                            <Ionicons
-                              name="alert-circle-outline"
-                              size={19}
-                              color="#9A3232"
-                            />
-
-
-                            <Text
-                              style={
-                                styles.messageErrorText
-                              }
-                            >
-                              {
-                                erroInicioVistoria
-                              }
-                            </Text>
-                          </View>
-                        ) : null}
-
-
-                        <View
-                          style={
-                            styles.iniciarVistoriaAcoes
-                          }
-                        >
-                          <TouchableOpacity
-                            style={[
-                              styles.iniciarVistoriaButton,
-
-
-                              (iniciandoVistoria ||
-                                preparandoAusenciaCliente ||
-                                ausenciaClienteAberta) &&
-                                styles.buttonDisabled,
-                            ]}
-                            disabled={
-                              iniciandoVistoria ||
-                              preparandoAusenciaCliente ||
-                              ausenciaClienteAberta
-                            }
-                            onPress={
-                              iniciarVistoria
-                            }
-                          >
-                            {iniciandoVistoria ? (
-                              <ActivityIndicator
-                                size="small"
-                                color="#FFFFFF"
-                              />
-                            ) : (
-                              <Ionicons
-                                name="play-circle-outline"
-                                size={22}
-                                color="#FFFFFF"
-                              />
-                            )}
-
-
-                            <Text
-                              style={
-                                styles.iniciarVistoriaButtonText
-                              }
-                            >
-                              {iniciandoVistoria
-                                ? 'Iniciando...'
-                                : 'Iniciar vistoria'}
-                            </Text>
-                          </TouchableOpacity>
-
-
-                          <TouchableOpacity
-                            style={[
-                              styles.clienteAusenteAntesButton,
-
-
-                              preparandoAusenciaCliente &&
-                                styles.buttonDisabled,
-                            ]}
-                            disabled={
-                              iniciandoVistoria ||
-                              preparandoAusenciaCliente ||
-                              ausenciaClienteAberta
-                            }
-                            onPress={
-                              abrirAusenciaCliente
-                            }
-                          >
-                            {preparandoAusenciaCliente ? (
-                              <ActivityIndicator
-                                size="small"
-                                color="#A76500"
-                              />
-                            ) : (
-                              <Ionicons
-                                name="person-remove-outline"
-                                size={21}
-                                color="#A76500"
-                              />
-                            )}
-
-
-                            <Text
-                              style={
-                                styles.clienteAusenteAntesButtonText
-                              }
-                            >
-                              {preparandoAusenciaCliente
-                                ? 'Preparando...'
-                                : 'Cliente ausente'}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-
-
-                        {ausenciaClienteAberta ? (
-                          <View
-                            style={
-                              styles.ausenciaClienteBox
-                            }
-                          >
-                            <View
-                              style={
-                                styles.ausenciaClienteHeader
-                              }
-                            >
-                              <Ionicons
-                                name="warning-outline"
-                                size={22}
-                                color="#A76500"
-                              />
-
-
-                              <View
-                                style={{
-                                  flex: 1,
-                                }}
-                              >
-                                <Text
-                                  style={
-                                    styles.ausenciaClienteTitle
-                                  }
-                                >
-                                  Comprovação da visita
-                                </Text>
-
-
-                                <Text
-                                  style={
-                                    styles.ausenciaClienteText
-                                  }
-                                >
-                                  O cliente não está presente. Tire ou anexe pelo menos uma foto para comprovar que a equipe esteve no local.
-                                </Text>
-                              </View>
-                            </View>
-
-
-                            <View
-                              style={
-                                styles.ausenciaClienteAcoes
-                              }
-                            >
-                              <TouchableOpacity
-                                style={
-                                  styles.ausenciaClienteFotoButton
-                                }
-                                onPress={
-                                  tirarFotoVistoria
-                                }
-                                disabled={
-                                  finalizandoVistoria
-                                }
-                              >
-                                <Ionicons
-                                  name="camera-outline"
-                                  size={20}
-                                  color="#0B5EA8"
-                                />
-
-
-                                <Text
-                                  style={
-                                    styles.ausenciaClienteFotoButtonText
-                                  }
-                                >
-                                  Tirar foto
-                                </Text>
-                              </TouchableOpacity>
-
-
-                              <TouchableOpacity
-                                style={
-                                  styles.ausenciaClienteFotoButton
-                                }
-                                onPress={
-                                  selecionarFotosVistoria
-                                }
-                                disabled={
-                                  finalizandoVistoria
-                                }
-                              >
-                                <Ionicons
-                                  name="images-outline"
-                                  size={20}
-                                  color="#0B5EA8"
-                                />
-
-
-                                <Text
-                                  style={
-                                    styles.ausenciaClienteFotoButtonText
-                                  }
-                                >
-                                  Anexar foto
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
-
-
-                            <Text
-                              style={
-                                styles.ausenciaClienteContagem
-                              }
-                            >
-                              Fotos registradas: {
-                                fotosVistoriaSalvas.length +
-                                fotosVistoriaPendentes.length
-                              }
-                            </Text>
-
-
-                            {fotosVistoriaPendentes.length >
-                            0 ? (
-                              <View
-                                style={
-                                  styles.fotosVistoriaGrid
-                                }
-                              >
-                                {fotosVistoriaPendentes.map(
-                                  (foto) => (
-                                    <View
-                                      key={
-                                        foto.uri
-                                      }
-                                      style={
-                                        styles.fotoVistoriaCard
-                                      }
-                                    >
-                                      <Image
-                                        source={{
-                                          uri:
-                                            foto.uri,
-                                        }}
-                                        style={
-                                          styles.fotoVistoriaImagem
-                                        }
-                                        resizeMode="cover"
-                                      />
-
-
-                                      <TouchableOpacity
-                                        style={
-                                          styles.removerFotoVistoriaButton
-                                        }
-                                        onPress={() =>
-                                          removerFotoVistoriaPendente(
-                                            foto.uri
-                                          )
-                                        }
-                                      >
-                                        <Ionicons
-                                          name="close"
-                                          size={17}
-                                          color="#FFFFFF"
-                                        />
-                                      </TouchableOpacity>
-                                    </View>
-                                  )
-                                )}
-                              </View>
-                            ) : null}
-
-
-                            <Text
-                              style={
-                                styles.inputLabel
-                              }
-                            >
-                              OBSERVAÇÃO *
-                            </Text>
-
-
-                            <TextInput
-                              style={[
-                                styles.input,
-                                styles.textArea,
-                              ]}
-                              value={
-                                justificativaResultado
-                              }
-                              placeholder="Informe que o cliente não estava presente no local."
-                              placeholderTextColor="#9AA6B4"
-                              multiline
-                              numberOfLines={4}
-                              textAlignVertical="top"
-                              onChangeText={(
-                                texto
-                              ) => {
-                                setJustificativaResultado(
-                                  texto
-                                );
-
-
-                                setErroFinalizacaoVistoria(
-                                  ''
-                                );
-                              }}
-                            />
-
-
-                            {erroFinalizacaoVistoria ? (
-                              <View
-                                style={
-                                  styles.messageError
-                                }
-                              >
-                                <Ionicons
-                                  name="alert-circle-outline"
-                                  size={19}
-                                  color="#9A3232"
-                                />
-
-
-                                <Text
-                                  style={
-                                    styles.messageErrorText
-                                  }
-                                >
-                                  {
-                                    erroFinalizacaoVistoria
-                                  }
-                                </Text>
-                              </View>
-                            ) : null}
-
-
                             <TouchableOpacity
-                              style={[
-                                styles.encerrarAusenciaButton,
-
-
-                                finalizandoVistoria &&
-                                  styles.buttonDisabled,
-                              ]}
-                              disabled={
-                                finalizandoVistoria
-                              }
-                              onPress={
-                                encerrarPorAusenciaCliente
-                              }
+                              style={[styles.finalizarVistoriaButton, (!todosProblemasAnalisados || finalizandoVistoria) && styles.buttonDisabled]}
+                              disabled={!todosProblemasAnalisados || finalizandoVistoria}
+                              onPress={finalizarAnaliseAposVistoria}
                             >
-                              {finalizandoVistoria ? (
-                                <ActivityIndicator
-                                  size="small"
-                                  color="#FFFFFF"
-                                />
-                              ) : (
-                                <Ionicons
-                                  name="close-circle-outline"
-                                  size={21}
-                                  color="#FFFFFF"
-                                />
-                              )}
-
-
-                              <Text
-                                style={
-                                  styles.encerrarAusenciaButtonText
-                                }
-                              >
-                                {finalizandoVistoria
-                                  ? 'Encerrando...'
-                                  : 'Encerrar chamado por ausência'}
+                              {finalizandoVistoria ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="shield-checkmark-outline" size={20} color="#FFFFFF" />}
+                              <Text style={styles.finalizarVistoriaButtonText}>
+                                {finalizandoVistoria ? 'Finalizando análise...' : 'Concluir análise da garantia'}
                               </Text>
                             </TouchableOpacity>
                           </View>
                         ) : null}
-                      </View>
-                    ) : null}
-
-
-                    {/* ===========================================
-                        FORMULÁRIO DA VISTORIA EM ANDAMENTO
-                    =========================================== */}
-
-
-                    {solicitacao.status ===
-                    'em_vistoria' ? (
-                      <View
-                        style={
-                          styles.formularioVistoriaBox
-                        }
-                      >
-                        <View
-                          style={
-                            styles.formularioVistoriaHeader
-                          }
-                        >
-                          <View
-                            style={
-                              styles.formularioVistoriaIcon
-                            }
-                          >
-                            <Ionicons
-                              name="clipboard-outline"
-                              size={22}
-                              color="#FFFFFF"
-                            />
-                          </View>
-
-
-                          <View
-                            style={{
-                              flex: 1,
-                            }}
-                          >
-                            <Text
-                              style={
-                                styles.formularioVistoriaTitle
-                              }
-                            >
-                              Vistoria em andamento
-                            </Text>
-
-
-                            <Text
-                              style={
-                                styles.formularioVistoriaText
-                              }
-                            >
-                              Registre abaixo o que foi constatado durante a visita técnica.
-                            </Text>
-
-
-                            {vistoriaTecnica ? (
-                              <Text
-                                style={
-                                  styles.formularioVistoriaMeta
-                                }
-                              >
-                                Iniciada em{' '}
-                                {formatarDataHora(
-                                  vistoriaTecnica.iniciada_em
-                                )}
-                                {' • Registrada por '}
-                                {
-                                  vistoriaTecnica.funcionario_nome
-                                }
-                              </Text>
-                            ) : null}
-                          </View>
-                        </View>
-
-
-                        {/* =================================================
-                            AVALIAÇÃO INDIVIDUAL POR PROBLEMA
-                        ================================================= */}
-                        <View style={{ borderWidth: 1, borderColor: '#D4DFEA', borderRadius: 12, padding: 14, marginBottom: 20, backgroundColor: '#F7FAFD' }}>
-                          <Text style={{ fontSize: 18, fontWeight: '700', color: '#0B2447', marginBottom: 8 }}>
-                            Avaliação técnica de cada problema
-                          </Text>
-                          <Text style={{ color: '#42566D', marginBottom: 14 }}>
-                            Avalie individualmente cada problema dentro da garantia. Problemas fora da garantia não seguem para execução.
-                          </Text>
-
-
-                          {problemasSolicitacao.map((item) => {
-                            const coberto = ['dentro_da_garantia', 'dentro_garantia'].includes(item.status_garantia ?? '');
-                            const salvo = avaliacoesIndividuais.find((a) => a.problema_id === item.id);
-                            const selecionado = problemaEmVistoria?.id === item.id;
-                            return (
-                              <TouchableOpacity
-                                key={item.id}
-                                disabled={!coberto}
-                                onPress={() => {
-                                  setProblemaEmVistoriaId(item.id);
-                                  setErroAvaliacaoIndividual('');
-                                  setSucessoAvaliacaoIndividual('');
-                                }}
-                                style={{ borderWidth: selecionado ? 2 : 1, borderColor: selecionado ? '#0B5EA8' : '#D4DFEA', borderRadius: 10, padding: 12, marginBottom: 9, backgroundColor: selecionado ? '#EDF5FF' : '#FFFFFF' }}
-                              >
-                                <Text style={{ color: '#0B2447', fontWeight: '700' }}>
-                                  Problema {item.numero}{item.comodo ? ` • ${item.comodo}` : ''}
-                                </Text>
-                                <Text style={{ color: '#42566D', marginTop: 4 }}>
-                                  {item.descricao_problema}
-                                </Text>
-                                <Text style={{ color: !coberto ? '#9A3232' : salvo?.resultado === 'procedente' ? '#287A46' : salvo?.resultado === 'improcedente' ? '#9A3232' : '#0B5EA8', fontWeight: '700', marginTop: 6 }}>
-                                  {!coberto ? 'Fora da garantia — não executável' : salvo?.resultado === 'procedente' ? '● Procedente' : salvo?.resultado === 'improcedente' ? '● Improcedente' : 'Aguardando avaliação'}
-                                </Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-
-
-                          {problemaEmVistoria ? (
-                            <View style={{ marginTop: 10 }}>
-                              <Text style={{ fontSize: 16, fontWeight: '700', color: '#0B2447', marginBottom: 12 }}>
-                                Avaliar problema {problemaEmVistoria.numero}
-                              </Text>
-                              <Text style={styles.inputLabel}>O PROBLEMA FOI CONSTATADO? *</Text>
-                              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
-                                {([true, false] as const).map((valor) => (
-                                  <TouchableOpacity
-                                    key={String(valor)}
-                                    onPress={() => atualizarRascunhoAvaliacao(problemaEmVistoria.id, { problemaConstatado: valor, ...(valor ? {} : { resultado: 'improcedente' as const }) })}
-                                    style={{ flex: 1, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: rascunhoAtual.problemaConstatado === valor ? '#0B5EA8' : '#D4DFEA', backgroundColor: rascunhoAtual.problemaConstatado === valor ? '#E6F1FF' : '#FFFFFF', alignItems: 'center' }}
-                                  >
-                                    <Text style={{ color: '#0B2447', fontWeight: '600' }}>{valor ? 'Sim' : 'Não'}</Text>
-                                  </TouchableOpacity>
-                                ))}
-                              </View>
-                              <Text style={styles.inputLabel}>CLASSIFICAÇÃO *</Text>
-                              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
-                                {(['procedente', 'improcedente'] as const).map((resultado) => {
-                                  const ativo = rascunhoAtual.resultado === resultado;
-                                  const verde = resultado === 'procedente';
-                                  return (
-                                    <TouchableOpacity
-                                      key={resultado}
-                                      disabled={verde && rascunhoAtual.problemaConstatado !== true}
-                                      onPress={() => atualizarRascunhoAvaliacao(problemaEmVistoria.id, { resultado })}
-                                      style={{ flex: 1, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: verde ? '#287A46' : '#9A3232', backgroundColor: ativo ? (verde ? '#287A46' : '#9A3232') : '#FFFFFF', opacity: verde && rascunhoAtual.problemaConstatado !== true ? 0.45 : 1, alignItems: 'center' }}
-                                    >
-                                      <Text style={{ color: ativo ? '#FFFFFF' : verde ? '#287A46' : '#9A3232', fontWeight: '700' }}>
-                                        {verde ? 'Procedente' : 'Improcedente'}
-                                      </Text>
-                                    </TouchableOpacity>
-                                  );
-                                })}
-                              </View>
-                              <Text style={styles.inputLabel}>PARECER TÉCNICO INDIVIDUAL *</Text>
-                              <TextInput
-                                style={[styles.input, styles.textArea]}
-                                value={rascunhoAtual.parecer}
-                                placeholder="Descreva a avaliação técnica deste problema"
-                                placeholderTextColor="#9AA6B4"
-                                multiline
-                                onChangeText={(parecer) => atualizarRascunhoAvaliacao(problemaEmVistoria.id, { parecer })}
-                              />
-                              {rascunhoAtual.resultado === 'improcedente' ? (
-                                <>
-                                  <Text style={styles.inputLabel}>JUSTIFICATIVA DA IMPROCEDÊNCIA *</Text>
-                                  <TextInput
-                                    style={[styles.input, styles.textArea]}
-                                    value={rascunhoAtual.justificativa}
-                                    placeholder="Explique por que este problema não é procedente"
-                                    placeholderTextColor="#9AA6B4"
-                                    multiline
-                                    onChangeText={(justificativa) => atualizarRascunhoAvaliacao(problemaEmVistoria.id, { justificativa })}
-                                  />
-                                </>
-                              ) : null}
-                              {erroAvaliacaoIndividual ? (
-                                <Text style={{ color: '#9A3232', marginBottom: 10 }}>{erroAvaliacaoIndividual}</Text>
-                              ) : null}
-                              {sucessoAvaliacaoIndividual ? (
-                                <Text style={{ color: '#287A46', marginBottom: 10 }}>{sucessoAvaliacaoIndividual}</Text>
-                              ) : null}
-                              <TouchableOpacity
-                                style={[styles.salvarFormularioVistoriaButton, salvandoAvaliacaoIndividual && styles.buttonDisabled]}
-                                disabled={salvandoAvaliacaoIndividual || !avaliacoesCarregadas}
-                                onPress={() => salvarAvaliacaoIndividual(problemaEmVistoria.id)}
-                              >
-                                {salvandoAvaliacaoIndividual ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons name="save-outline" size={20} color="#FFFFFF" />}
-                                <Text style={styles.salvarFormularioVistoriaButtonText}>
-                                  {salvandoAvaliacaoIndividual ? 'Salvando...' : avaliacaoAtual ? 'Atualizar avaliação deste problema' : 'Salvar avaliação deste problema'}
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
-                          ) : null}
-                          <Text style={{ color: todosProblemasCobertosAvaliados ? '#287A46' : '#9A6320', fontWeight: '600', marginTop: 14 }}>
-                            {todosProblemasCobertosAvaliados ? 'Todos os problemas cobertos já foram avaliados.' : 'Finalize a avaliação de todos os problemas dentro da garantia para concluir a vistoria.'}
-                          </Text>
-                        </View>
-
-
-                        <Text
-                          style={
-                            styles.inputLabel
-                          }
-                        >
-                          RESPONSÁVEL PELA VISTORIA *
-                        </Text>
-
-
-                        <View
-                          style={
-                            styles.responsavelModoRow
-                          }
-                        >
-                          <TouchableOpacity
-                            style={[
-                              styles.responsavelModoButton,
-
-
-                              modoResponsavelVistoria ===
-                                'funcionario' &&
-                                styles.responsavelModoButtonActive,
-                            ]}
-                            onPress={() => {
-                              setModoResponsavelVistoria(
-                                'funcionario'
-                              );
-
-
-                              setResponsavelVistoriaNomeManual(
-                                ''
-                              );
-
-
-                              setDropdownResponsavelVistoriaAberto(
-                                false
-                              );
-
-
-                              setErroFormularioVistoria(
-                                ''
-                              );
-                            }}
-                          >
-                            <Ionicons
-                              name="person-outline"
-                              size={17}
-                              color={
-                                modoResponsavelVistoria ===
-                                'funcionario'
-                                  ? '#FFFFFF'
-                                  : '#0B5EA8'
-                              }
-                            />
-
-
-                            <Text
-                              style={[
-                                styles.responsavelModoText,
-
-
-                                modoResponsavelVistoria ===
-                                  'funcionario' &&
-                                  styles.responsavelModoTextActive,
-                              ]}
-                            >
-                              Funcionário cadastrado
-                            </Text>
-                          </TouchableOpacity>
-
-
-                          <TouchableOpacity
-                            style={[
-                              styles.responsavelModoButton,
-
-
-                              modoResponsavelVistoria ===
-                                'outro' &&
-                                styles.responsavelModoButtonActive,
-                            ]}
-                            onPress={() => {
-                              setModoResponsavelVistoria(
-                                'outro'
-                              );
-
-
-                              setResponsavelVistoriaId(
-                                ''
-                              );
-
-
-                              setDropdownResponsavelVistoriaAberto(
-                                false
-                              );
-
-
-                              setErroFormularioVistoria(
-                                ''
-                              );
-                            }}
-                          >
-                            <Ionicons
-                              name="create-outline"
-                              size={17}
-                              color={
-                                modoResponsavelVistoria ===
-                                'outro'
-                                  ? '#FFFFFF'
-                                  : '#0B5EA8'
-                              }
-                            />
-
-
-                            <Text
-                              style={[
-                                styles.responsavelModoText,
-
-
-                                modoResponsavelVistoria ===
-                                  'outro' &&
-                                  styles.responsavelModoTextActive,
-                              ]}
-                            >
-                              Outro responsável
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-
-
-                        {modoResponsavelVistoria ===
-                        'funcionario' ? (
-                          <>
-                            <TouchableOpacity
-                              activeOpacity={
-                                0.85
-                              }
-                              onPress={() =>
-                                setDropdownResponsavelVistoriaAberto(
-                                  (aberto) =>
-                                    !aberto
-                                )
-                              }
-                              style={
-                                styles.categorySelectButton
-                              }
-                            >
-                              <Text
-                                style={[
-                                  styles.categorySelectText,
-
-
-                                  !responsavelVistoriaId &&
-                                    styles.categoryPlaceholder,
-                                ]}
-                                numberOfLines={
-                                  1
-                                }
-                              >
-                                {responsaveisFuncionarios.find(
-                                  (item) =>
-                                    item.responsavel_id ===
-                                    responsavelVistoriaId
-                                )?.nome ||
-                                  'Selecione o funcionário'}
-                              </Text>
-
-
-                              <Ionicons
-                                name={
-                                  dropdownResponsavelVistoriaAberto
-                                    ? 'chevron-up'
-                                    : 'chevron-down'
-                                }
-                                size={20}
-                                color="#42566D"
-                              />
-                            </TouchableOpacity>
-
-
-                            {dropdownResponsavelVistoriaAberto ? (
-                              <View
-                                style={
-                                  styles.categoryDropdownPanel
-                                }
-                              >
-                                {responsaveisFuncionarios.length >
-                                0 ? (
-                                  responsaveisFuncionarios.map(
-                                    (item) => {
-                                      const ativo =
-                                        responsavelVistoriaId ===
-                                        item.responsavel_id;
-
-
-                                      return (
-                                        <TouchableOpacity
-                                          key={
-                                            item.responsavel_id
-                                          }
-                                          activeOpacity={
-                                            0.8
-                                          }
-                                          onPress={() => {
-                                            setResponsavelVistoriaId(
-                                              item.responsavel_id
-                                            );
-
-
-                                            setResponsavelVistoriaNomeManual(
-                                              ''
-                                            );
-
-
-                                            setDropdownResponsavelVistoriaAberto(
-                                              false
-                                            );
-
-
-                                            setErroFormularioVistoria(
-                                              ''
-                                            );
-                                          }}
-                                          style={[
-                                            styles.categoryOption,
-
-
-                                            ativo &&
-                                              styles.categoryOptionActive,
-                                          ]}
-                                        >
-                                          <Text
-                                            style={[
-                                              styles.categoryOptionText,
-
-
-                                              ativo &&
-                                                styles.categoryOptionTextActive,
-                                            ]}
-                                          >
-                                            {
-                                              item.nome
-                                            }
-                                          </Text>
-
-
-                                          {ativo ? (
-                                            <Ionicons
-                                              name="checkmark"
-                                              size={18}
-                                              color="#FFFFFF"
-                                            />
-                                          ) : null}
-                                        </TouchableOpacity>
-                                      );
-                                    }
-                                  )
-                                ) : (
-                                  <Text
-                                    style={
-                                      styles.categoryEmptyText
-                                    }
-                                  >
-                                    Nenhum funcionário cadastrado disponível.
-                                  </Text>
-                                )}
-                              </View>
-                            ) : null}
-                          </>
-                        ) : (
-                          <TextInput
-                            style={
-                              styles.input
-                            }
-                            value={
-                              responsavelVistoriaNomeManual
-                            }
-                            onChangeText={(
-                              texto
-                            ) => {
-                              setResponsavelVistoriaNomeManual(
-                                texto
-                              );
-
-
-                              setErroFormularioVistoria(
-                                ''
-                              );
-                            }}
-                            placeholder="Digite o nome do responsável pela vistoria"
-                            placeholderTextColor="#8995A5"
-                          />
-                        )}
-
-
-                        <Text
-                          style={
-                            styles.inputLabel
-                          }
-                        >
-                          O PROBLEMA RELATADO FOI CONSTATADO?
-                        </Text>
-
-
-                        <View
-                          style={
-                            styles.constatacaoRow
-                          }
-                        >
-                          <TouchableOpacity
-                            style={[
-                              styles.constatacaoButton,
-
-
-                              problemaConstatado ===
-                                true &&
-                                styles.constatacaoButtonActive,
-                            ]}
-                            onPress={() => {
-                              setProblemaConstatado(
-                                true
-                              );
-
-
-                              setErroFormularioVistoria(
-                                ''
-                              );
-
-
-                              setSucessoFormularioVistoria(
-                                ''
-                              );
-                            }}
-                          >
-                            <Ionicons
-                              name="checkmark-circle-outline"
-                              size={19}
-                              color={
-                                problemaConstatado ===
-                                true
-                                  ? '#FFFFFF'
-                                  : '#287A46'
-                              }
-                            />
-
-
-                            <Text
-                              style={[
-                                styles.constatacaoButtonText,
-
-
-                                problemaConstatado ===
-                                  true &&
-                                  styles.constatacaoButtonTextActive,
-                              ]}
-                            >
-                              Sim
-                            </Text>
-                          </TouchableOpacity>
-
-
-                          <TouchableOpacity
-                            style={[
-                              styles.constatacaoButton,
-
-
-                              problemaConstatado ===
-                                false &&
-                                styles.constatacaoButtonActive,
-                            ]}
-                            onPress={() => {
-                              setProblemaConstatado(
-                                false
-                              );
-
-
-                              setErroFormularioVistoria(
-                                ''
-                              );
-
-
-                              setSucessoFormularioVistoria(
-                                ''
-                              );
-                            }}
-                          >
-                            <Ionicons
-                              name="close-circle-outline"
-                              size={19}
-                              color={
-                                problemaConstatado ===
-                                false
-                                  ? '#FFFFFF'
-                                  : '#9A3232'
-                              }
-                            />
-
-
-                            <Text
-                              style={[
-                                styles.constatacaoButtonText,
-
-
-                                problemaConstatado ===
-                                  false &&
-                                  styles.constatacaoButtonTextActive,
-                              ]}
-                            >
-                              Não
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-
-
-                        <Text
-                          style={
-                            styles.inputLabel
-                          }
-                        >
-                          OBSERVAÇÕES DA VISTORIA
-                        </Text>
-
-
-                        <TextInput
-                          style={[
-                            styles.input,
-                            styles.textArea,
-                          ]}
-                          value={
-                            observacoesTecnicas
-                          }
-                          placeholder="Inclua informações adicionais, se necessário."
-                          placeholderTextColor="#9AA6B4"
-                          multiline
-                          numberOfLines={4}
-                          textAlignVertical="top"
-                          onChangeText={(
-                            texto
-                          ) => {
-                            setObservacoesTecnicas(
-                              texto
-                            );
-
-
-                            setErroFormularioVistoria(
-                              ''
-                            );
-
-
-                            setSucessoFormularioVistoria(
-                              ''
-                            );
-                          }}
-                        />
-
-
-                        <Text
-                          style={
-                            styles.inputLabel
-                          }
-                        >
-                          FOTOS DA VISTORIA
-                        </Text>
-
-
-                        <Text
-                          style={
-                            styles.fotosVistoriaAjuda
-                          }
-                        >
-                          Adicione fotos do que foi constatado no imóvel. Você pode selecionar até 10 imagens.
-                        </Text>
-
-
-                        <TouchableOpacity
-                          style={
-                            styles.adicionarFotosVistoriaButton
-                          }
-                          onPress={
-                            selecionarFotosVistoria
-                          }
-                          disabled={
-                            salvandoFormularioVistoria
-                          }
-                        >
-                          <Ionicons
-                            name="images-outline"
-                            size={20}
-                            color="#0B5EA8"
-                          />
-
-
-                          <Text
-                            style={
-                              styles.adicionarFotosVistoriaButtonText
-                            }
-                          >
-                            + Adicionar fotos
-                          </Text>
-                        </TouchableOpacity>
-
-
-                        {fotosVistoriaPendentes.length >
-                        0 ? (
-                          <View
-                            style={
-                              styles.fotosVistoriaSection
-                            }
-                          >
-                            <Text
-                              style={
-                                styles.fotosVistoriaSubtitulo
-                              }
-                            >
-                              Fotos aguardando salvamento
-                            </Text>
-
-
-                            <View
-                              style={
-                                styles.fotosVistoriaGrid
-                              }
-                            >
-                              {fotosVistoriaPendentes.map(
-                                (
-                                  foto,
-                                  indice
-                                ) => (
-                                  <View
-                                    key={`${foto.uri}-${indice}`}
-                                    style={
-                                      styles.fotoVistoriaCard
-                                    }
-                                  >
-                                    <Image
-                                      source={{
-                                        uri:
-                                          foto.uri,
-                                      }}
-                                      style={
-                                        styles.fotoVistoriaImagem
-                                      }
-                                      resizeMode="cover"
-                                    />
-
-
-                                    <TouchableOpacity
-                                      style={
-                                        styles.removerFotoVistoriaButton
-                                      }
-                                      onPress={() =>
-                                        removerFotoVistoriaPendente(
-                                          foto.uri
-                                        )
-                                      }
-                                    >
-                                      <Ionicons
-                                        name="close"
-                                        size={17}
-                                        color="#FFFFFF"
-                                      />
-                                    </TouchableOpacity>
-
-
-                                    <View
-                                      style={
-                                        styles.fotoVistoriaPendenteBadge
-                                      }
-                                    >
-                                      <Text
-                                        style={
-                                          styles.fotoVistoriaPendenteText
-                                        }
-                                      >
-                                        Aguardando salvar
-                                      </Text>
-                                    </View>
-                                  </View>
-                                )
-                              )}
-                            </View>
-                          </View>
-                        ) : null}
-
-
-                        {carregandoFotosVistoria ? (
-                          <View
-                            style={
-                              styles.fotosVistoriaLoading
-                            }
-                          >
-                            <ActivityIndicator
-                              size="small"
-                              color="#0B5EA8"
-                            />
-
-
-                            <Text
-                              style={
-                                styles.fotosVistoriaLoadingText
-                              }
-                            >
-                              Carregando fotos...
-                            </Text>
-                          </View>
-                        ) : null}
-
-
-                        {!carregandoFotosVistoria &&
-                        fotosVistoriaSalvas.length >
-                          0 ? (
-                          <View
-                            style={
-                              styles.fotosVistoriaSection
-                            }
-                          >
-                            <Text
-                              style={
-                                styles.fotosVistoriaSubtitulo
-                              }
-                            >
-                              Fotos já salvas
-                            </Text>
-
-
-                            <View
-                              style={
-                                styles.fotosVistoriaGrid
-                              }
-                            >
-                              {fotosVistoriaSalvas.map(
-                                (
-                                  foto
-                                ) => (
-                                  <View
-                                    key={
-                                      foto.id
-                                    }
-                                    style={
-                                      styles.fotoVistoriaCard
-                                    }
-                                  >
-                                    {foto.url ? (
-                                      <Image
-                                        source={{
-                                          uri:
-                                            foto.url,
-                                        }}
-                                        style={
-                                          styles.fotoVistoriaImagem
-                                        }
-                                        resizeMode="cover"
-                                      />
-                                    ) : (
-                                      <View
-                                        style={
-                                          styles.fotoVistoriaSemImagem
-                                        }
-                                      >
-                                        <Ionicons
-                                          name="image-outline"
-                                          size={26}
-                                          color="#8995A5"
-                                        />
-                                      </View>
-                                    )}
-
-
-                                    <View
-                                      style={
-                                        styles.fotoVistoriaSalvaBadge
-                                      }
-                                    >
-                                      <Ionicons
-                                        name="checkmark-circle"
-                                        size={13}
-                                        color="#287A46"
-                                      />
-
-
-                                      <Text
-                                        style={
-                                          styles.fotoVistoriaSalvaText
-                                        }
-                                      >
-                                        Salva
-                                      </Text>
-                                    </View>
-                                  </View>
-                                )
-                              )}
-                            </View>
-                          </View>
-                        ) : null}
-
-
-                        {erroFormularioVistoria ? (
-                          <View
-                            style={
-                              styles.messageError
-                            }
-                          >
-                            <Ionicons
-                              name="alert-circle-outline"
-                              size={19}
-                              color="#9A3232"
-                            />
-
-
-                            <Text
-                              style={
-                                styles.messageErrorText
-                              }
-                            >
-                              {
-                                erroFormularioVistoria
-                              }
-                            </Text>
-                          </View>
-                        ) : null}
-
-
-                        {sucessoFormularioVistoria ? (
-                          <View
-                            style={
-                              styles.messageSuccess
-                            }
-                          >
-                            <Ionicons
-                              name="checkmark-circle-outline"
-                              size={20}
-                              color="#287A46"
-                            />
-
-
-                            <Text
-                              style={
-                                styles.messageSuccessText
-                              }
-                            >
-                              {
-                                sucessoFormularioVistoria
-                              }
-                            </Text>
-                          </View>
-                        ) : null}
-
-
-                        <TouchableOpacity
-                          style={[
-                            styles.salvarFormularioVistoriaButton,
-
-
-                            salvandoFormularioVistoria &&
-                              styles.buttonDisabled,
-                          ]}
-                          disabled={
-                            salvandoFormularioVistoria
-                          }
-                          onPress={
-                            salvarFormularioVistoria
-                          }
-                        >
-                          {salvandoFormularioVistoria ? (
-                            <ActivityIndicator
-                              size="small"
-                              color="#FFFFFF"
-                            />
-                          ) : (
-                            <Ionicons
-                              name="save-outline"
-                              size={20}
-                              color="#FFFFFF"
-                            />
-                          )}
-
-
-                          <Text
-                            style={
-                              styles.salvarFormularioVistoriaButtonText
-                            }
-                          >
-                            {salvandoFormularioVistoria
-                              ? 'Salvando...'
-                              : fotosVistoriaPendentes.length >
-                                  0
-                                ? 'Salvar vistoria e fotos'
-                                : 'Salvar vistoria'}
-                          </Text>
-                        </TouchableOpacity>
-
-
-                        <View
-                          style={
-                            styles.finalizarVistoriaBox
-                          }
-                        >
-                          <View
-                            style={
-                              styles.finalizarVistoriaHeader
-                            }
-                          >
-                            <Ionicons
-                              name="flag-outline"
-                              size={22}
-                              color="#0B2447"
-                            />
-
-
-                            <View
-                              style={{
-                                flex: 1,
-                              }}
-                            >
-                              <Text
-                                style={
-                                  styles.finalizarVistoriaTitle
-                                }
-                              >
-                                Finalizar vistoria
-                              </Text>
-
-
-                              <Text
-                                style={
-                                  styles.finalizarVistoriaText
-                                }
-                              >
-                                Selecione o resultado final. Ao finalizar, os dados atuais e as fotos pendentes também serão salvos.
-                              </Text>
-                            </View>
-                          </View>
-
-
-                          <View style={{ padding: 12, backgroundColor: '#F0F5FA', borderRadius: 9, marginBottom: 12 }}>
-                            <Text style={{ color: '#0B2447', fontWeight: '700', marginBottom: 6 }}>
-                              Resultado geral calculado pelas avaliações individuais
-                            </Text>
-                            <Text style={{ color: '#42566D' }}>
-                              {!todosProblemasCobertosAvaliados
-                                ? 'Pendente: avalie todos os problemas dentro da garantia.'
-                                : existeProblemaProcedente
-                                  ? 'Aprovada para os serviços procedentes. Os improcedentes não devem ser executados.'
-                                  : 'Não aprovada: nenhum problema coberto foi considerado procedente.'}
-                            </Text>
-                            <Text style={{ color: '#42566D', marginTop: 6 }}>
-                              O agendamento independente de execução por serviço será habilitado na próxima etapa.
-                            </Text>
-                          </View>
-
-
-                          {erroFinalizacaoVistoria ? (
-                            <View
-                              style={
-                                styles.messageError
-                              }
-                            >
-                              <Ionicons
-                                name="alert-circle-outline"
-                                size={19}
-                                color="#9A3232"
-                              />
-
-
-                              <Text
-                                style={
-                                  styles.messageErrorText
-                                }
-                              >
-                                {
-                                  erroFinalizacaoVistoria
-                                }
-                              </Text>
-                            </View>
-                          ) : null}
-
-
-                          <TouchableOpacity
-                            style={[
-                              styles.finalizarVistoriaButton,
-
-
-                              finalizandoVistoria &&
-                                styles.buttonDisabled,
-                            ]}
-                            disabled={
-                              finalizandoVistoria
-                            }
-                            onPress={
-                              finalizarVistoria
-                            }
-                          >
-                            {finalizandoVistoria ? (
-                              <ActivityIndicator
-                                size="small"
-                                color="#FFFFFF"
-                              />
-                            ) : (
-                              <Ionicons
-                                name="checkmark-done-outline"
-                                size={21}
-                                color="#FFFFFF"
-                              />
-                            )}
-
-
-                            <Text
-                              style={
-                                styles.finalizarVistoriaButtonText
-                              }
-                            >
-                              {finalizandoVistoria
-                                ? 'Finalizando...'
-                                : 'Finalizar vistoria'}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    ) : null}
-
-
-                    {vistoriaTecnica?.finalizada_em ? (
-                      <View
-                        style={
-                          styles.vistoriaHistoricoWrapper
-                        }
-                      >
-                        <TouchableOpacity
-                          activeOpacity={
-                            0.85
-                          }
-                          onPress={() =>
-                            setMostrarDetalhesVistoriaFinalizada(
-                              (aberto) =>
-                                !aberto
-                            )
-                          }
-                          style={[
-                            styles.vistoriaFinalizadaBox,
-
-
-                            solicitacao.status ===
-                              'nao_aprovada'
-                              ? styles.vistoriaFinalizadaNaoAprovada
-                              : styles.vistoriaFinalizadaAprovada,
-                          ]}
-                        >
-                          <Ionicons
-                            name={
-                              solicitacao.status ===
-                              'nao_aprovada'
-                                ? 'close-circle'
-                                : 'checkmark-circle'
-                            }
-                            size={24}
-                            color={
-                              solicitacao.status ===
-                              'nao_aprovada'
-                                ? '#9A3232'
-                                : '#287A46'
-                            }
-                          />
-
-
-                          <View
-                            style={{
-                              flex: 1,
-                            }}
-                          >
-                            <Text
-                              style={
-                                styles.vistoriaFinalizadaTitle
-                              }
-                            >
-                              Vistoria finalizada
-                            </Text>
-
-
-                            <Text
-                              style={
-                                styles.vistoriaFinalizadaText
-                              }
-                            >
-                              {mostrarDetalhesVistoriaFinalizada
-                                ? 'Clique para minimizar os dados da vistoria.'
-                                : 'Clique para visualizar os dados preenchidos na vistoria.'}
-                            </Text>
-                          </View>
-
-
-                          <Ionicons
-                            name={
-                              mostrarDetalhesVistoriaFinalizada
-                                ? 'chevron-up'
-                                : 'chevron-down'
-                            }
-                            size={21}
-                            color="#42566D"
-                          />
-                        </TouchableOpacity>
-
-
-                        {mostrarDetalhesVistoriaFinalizada ? (
-                          <View
-                            style={
-                              styles.vistoriaHistoricoConteudo
-                            }
-                          >
-                            <View
-                              style={
-                                styles.vistoriaHistoricoGrid
-                              }
-                            >
-                              <WarrantyInfo
-                                label="Responsável pela vistoria"
-                                value={
-                                  nomeResponsavelVistoriaExibicao
-                                }
-                              />
-
-
-                              <WarrantyInfo
-                                label="Registrada por"
-                                value={
-                                  vistoriaTecnica.funcionario_nome ||
-                                  '-'
-                                }
-                              />
-
-
-                              <WarrantyInfo
-                                label="Início"
-                                value={
-                                  formatarDataHora(
-                                    vistoriaTecnica.iniciada_em
-                                  )
-                                }
-                              />
-
-
-                              <WarrantyInfo
-                                label="Finalização"
-                                value={
-                                  formatarDataHora(
-                                    vistoriaTecnica.finalizada_em
-                                  )
-                                }
-                              />
-
-
-                              <WarrantyInfo
-                                label="Problema constatado"
-                                value={
-                                  vistoriaTecnica.problema_constatado ===
-                                  true
-                                    ? 'Sim'
-                                    : vistoriaTecnica.problema_constatado ===
-                                        false
-                                      ? 'Não'
-                                      : '-'
-                                }
-                              />
-
-
-                              <WarrantyInfo
-                                label="Resultado"
-                                value={
-                                  solicitacao.status ===
-                                  'encerrada_ausencia'
-                                    ? 'Encerrada por ausência do cliente'
-                                    : solicitacao.status ===
-                                        'nao_aprovada'
-                                      ? 'Não aprovada'
-                                      : 'Aprovada para execução'
-                                }
-                              />
-                            </View>
-
-
-                            <View
-                              style={
-                                styles.vistoriaHistoricoBloco
-                              }
-                            >
-                              <Text
-                                style={
-                                  styles.vistoriaHistoricoLabel
-                                }
-                              >
-                                PARECER TÉCNICO
-                              </Text>
-
-
-                              <Text
-                                style={
-                                  styles.vistoriaHistoricoTexto
-                                }
-                              >
-                                {vistoriaTecnica.parecer_tecnico ||
-                                  '-'}
-                              </Text>
-                            </View>
-
-
-                            {vistoriaTecnica.observacoes ? (
-                              <View
-                                style={
-                                  styles.vistoriaHistoricoBloco
-                                }
-                              >
-                                <Text
-                                  style={
-                                    styles.vistoriaHistoricoLabel
-                                  }
-                                >
-                                  OBSERVAÇÕES DA VISTORIA
-                                </Text>
-
-
-                                <Text
-                                  style={
-                                    styles.vistoriaHistoricoTexto
-                                  }
-                                >
-                                  {
-                                    vistoriaTecnica.observacoes
-                                  }
-                                </Text>
-                              </View>
-                            ) : null}
-
-
-                            {fotosVistoriaSalvas.length >
-                            0 ? (
-                              <View
-                                style={
-                                  styles.vistoriaHistoricoBloco
-                                }
-                              >
-                                <Text
-                                  style={
-                                    styles.vistoriaHistoricoLabel
-                                  }
-                                >
-                                  FOTOS DA VISTORIA
-                                </Text>
-
-
-                                <View
-                                  style={
-                                    styles.fotosVistoriaGrid
-                                  }
-                                >
-                                  {fotosVistoriaSalvas.map(
-                                    (foto) => (
-                                      <View
-                                        key={
-                                          foto.id
-                                        }
-                                        style={
-                                          styles.fotoVistoriaCard
-                                        }
-                                      >
-                                        {foto.url ? (
-                                          <Image
-                                            source={{
-                                              uri:
-                                                foto.url,
-                                            }}
-                                            style={
-                                              styles.fotoVistoriaImagem
-                                            }
-                                            resizeMode="cover"
-                                          />
-                                        ) : (
-                                          <View
-                                            style={
-                                              styles.fotoVistoriaSemImagem
-                                            }
-                                          >
-                                            <Ionicons
-                                              name="image-outline"
-                                              size={26}
-                                              color="#8995A5"
-                                            />
-                                          </View>
-                                        )}
-                                      </View>
-                                    )
-                                  )}
-                                </View>
-                              </View>
-                            ) : null}
-                          </View>
-                        ) : null}
-                      </View>
+                      </>
                     ) : null}
 
 
@@ -16938,6 +16998,31 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                             ) : null}
 
 
+                            {agendamento ? (
+                              <View style={{ marginTop: 14 }}>
+                                <Text style={styles.textoGerenciarAgendaFuncionario}>
+                                  Motivo do reagendamento (obrigatório)
+                                </Text>
+                                <TextInput
+                                  style={[styles.input, styles.textArea]}
+                                  value={motivoReagendamentoVistoria}
+                                  placeholder="Informe por que a EMAFE precisa alterar a data da vistoria"
+                                  placeholderTextColor="#9AA6B4"
+                                  multiline
+                                  numberOfLines={3}
+                                  maxLength={500}
+                                  textAlignVertical="top"
+                                  onChangeText={(texto) => {
+                                    setMotivoReagendamentoVistoria(texto);
+                                    setErroVistoria('');
+                                  }}
+                                />
+                                <Text style={styles.textoGerenciarAgendaFuncionario}>
+                                  O cliente verá este motivo e a nova data no histórico do protocolo.
+                                </Text>
+                              </View>
+                            ) : null}
+
                             <View
                               style={
                                 styles.acoesConfirmacaoAgendaFuncionario
@@ -16970,6 +17055,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
                                   (!novaDataVistoria ||
                                     !novoHorarioVistoriaId ||
+                                    (agendamento && motivoReagendamentoVistoria.trim().length < 5) ||
                                     salvandoVistoria) &&
                                     styles.buttonDisabled,
                                 ]}
@@ -16979,6 +17065,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 disabled={
                                   !novaDataVistoria ||
                                   !novoHorarioVistoriaId ||
+                                  (Boolean(agendamento) && motivoReagendamentoVistoria.trim().length < 5) ||
                                   salvandoVistoria
                                 }
                               >
@@ -17057,7 +17144,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
               ) : null}
 
 
-              {todosProblemasAnalisados &&
+              {vistoriaTecnica?.finalizada_em && solicitacao.status === 'em_analise' && todosProblemasAnalisados &&
               !algumProblemaDentroGarantia ? (
                 <>
                   <Text
@@ -17100,7 +17187,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                           styles.foraGarantiaTexto
                         }
                       >
-                        Todos os problemas deste protocolo foram analisados e nenhum possui cobertura de garantia vigente. O atendimento de garantia não seguirá para vistoria.
+                        A visita técnica já foi realizada. Nenhum problema possui cobertura; conclua a análise para registrar o encerramento justificado, sem execução.
                       </Text>
                     </View>
                   </View>
@@ -21345,6 +21432,21 @@ const styles = StyleSheet.create({
     flexBasis: 220,
   },
 
+
+  clienteAusenteCompactButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-start',
+    minHeight: 42,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#E0B567',
+    borderRadius: 10,
+    backgroundColor: '#FFF7E8',
+    gap: 8,
+  },
 
   clienteAusenteAntesButtonText: {
     color: '#A76500',
