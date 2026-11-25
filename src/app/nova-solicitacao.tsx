@@ -19,7 +19,9 @@ import {
 
 import { supabase } from '../lib/supabase';
 
-const MAXIMO_FOTOS = 2; // Fotos opcionais: de 0 a 2 por problema.
+const MINIMO_FOTOS = 1; // Uma foto obrigatória por problema.
+const MAXIMO_FOTOS = 2; // A segunda foto é opcional.
+const MAXIMO_PROBLEMAS = 3;
 
 const CIDADES = [
   'São Luís',
@@ -848,8 +850,9 @@ export default function NovaSolicitacaoScreen() {
   }
 
   function adicionarOutroProblema() {
+    if (problemasAdicionais.length >= MAXIMO_PROBLEMAS - 1) return;
     setProblemasAdicionais(
-      (atuais) => [
+      (atuais) => atuais.length >= MAXIMO_PROBLEMAS - 1 ? atuais : [
         ...atuais,
         {
           id: `${Date.now()}-${Math.random()
@@ -1632,6 +1635,7 @@ export default function NovaSolicitacaoScreen() {
         problema.descricaoProblema
           .trim()
           .length > 0 &&
+        problema.fotos.length >= MINIMO_FOTOS &&
         problema.fotos.length <= MAXIMO_FOTOS
     );
 
@@ -1642,7 +1646,9 @@ export default function NovaSolicitacaoScreen() {
     descricaoProblema
       .trim()
       .length > 0 &&
+    fotos.length >= MINIMO_FOTOS &&
     fotos.length <= MAXIMO_FOTOS &&
+    problemasAdicionais.length < MAXIMO_PROBLEMAS &&
     problemasAdicionaisValidos &&
     telefoneContato
       .trim()
@@ -1697,8 +1703,18 @@ export default function NovaSolicitacaoScreen() {
       return;
     }
 
+    if (fotos.length < MINIMO_FOTOS) {
+      setErro('Anexe pelo menos uma foto do problema 1.');
+      return;
+    }
+
     if (fotos.length > MAXIMO_FOTOS) {
       setErro(`O limite é de ${MAXIMO_FOTOS} fotos por problema.`);
+      return;
+    }
+
+    if (problemasAdicionais.length >= MAXIMO_PROBLEMAS) {
+      setErro('Cada protocolo permite no máximo 3 problemas.');
       return;
     }
 
@@ -1735,6 +1751,11 @@ export default function NovaSolicitacaoScreen() {
           `Descreva o problema ${numeroProblema}.`
         );
 
+        return;
+      }
+
+      if (problema.fotos.length < MINIMO_FOTOS) {
+        setErro(`Anexe pelo menos uma foto do problema ${numeroProblema}.`);
         return;
       }
 
@@ -1891,15 +1912,6 @@ export default function NovaSolicitacaoScreen() {
         return;
       }
 
-      // Fotos são opcionais. Sem anexos, não é necessário consultar o Storage
-      // nem localizar os IDs dos problemas apenas para enviar arquivos.
-      const existemFotosParaEnviar = fotos.length > 0 ||
-        problemasAdicionais.some((p) => p.fotos.length > 0);
-      if (!existemFotosParaEnviar) {
-        await notificarEmpresa(novaSolicitacao.solicitacao_id);
-        setSolicitacaoCriada(novaSolicitacao);
-        return;
-      }
 
       // ------------------------------------------------------
       // 2. IDENTIFICA O CLIENTE
@@ -2061,7 +2073,7 @@ export default function NovaSolicitacaoScreen() {
       setQuantidadeFotosEnviadas(
         enviadas
       );
-      // 4. Fotos opcionais: falha de um anexo não bloqueia a notificação.
+      // 4. Informa eventuais falhas no upload após a abertura do protocolo.
 
       if (
         errosFotos.length > 0
@@ -2074,7 +2086,7 @@ export default function NovaSolicitacaoScreen() {
       // ------------------------------------------------------
       // 5. NOTIFICA AUTOMATICAMENTE A EMAFE
       //
-      // Fotos são opcionais; o protocolo deve ser notificado mesmo sem anexos.
+      // Notifica a equipe sobre o protocolo já registrado, mesmo se houver falha de upload.
       // ------------------------------------------------------
 
       await notificarEmpresa(
@@ -3043,7 +3055,7 @@ export default function NovaSolicitacaoScreen() {
                     styles.warningText
                   }
                 >
-                  Você pode informar vários problemas do mesmo imóvel nesta solicitação. Cada problema será analisado separadamente pela equipe da EMAFE, mas todos ficarão no mesmo protocolo.
+                  Descreva apenas um problema neste campo. Se houver outro problema no mesmo imóvel, clique em “Adicionar outro problema” e preencha os campos separadamente. Você pode registrar até 3 problemas por protocolo.
                 </Text>
               </View>
 
@@ -3086,7 +3098,7 @@ export default function NovaSolicitacaoScreen() {
                   styles.sectionTitle
                 }
               >
-                5. Fotos do problema
+                5. Fotos do problema *
               </Text>
 
               <Text
@@ -3094,7 +3106,7 @@ export default function NovaSolicitacaoScreen() {
                   styles.helperText
                 }
               >
-                Você pode adicionar até 2 fotos para ilustrar o problema (opcional).
+                Anexe pelo menos uma foto do problema. A segunda foto é opcional.
               </Text>
 
               <View
@@ -3103,10 +3115,10 @@ export default function NovaSolicitacaoScreen() {
                 }
               >
                 <Text
-                  style={fotos.length >= MAXIMO_FOTOS ? styles.photoCounterSuccess : styles.photoCounterPending}
+                  style={fotos.length >= MINIMO_FOTOS ? styles.photoCounterSuccess : styles.photoCounterPending}
                 >
                   {fotos.length}/{MAXIMO_FOTOS}{' '}
-                  fotos (opcionais)
+                  fotos (mín. 1)
                 </Text>
 
                 <Text
@@ -3121,18 +3133,18 @@ export default function NovaSolicitacaoScreen() {
                 </Text>
               </View>
 
-              {fotos.length >= MAXIMO_FOTOS ? (
+              {fotos.length >= MINIMO_FOTOS ? (
                 <View style={styles.photoReadyBox}>
                   <Ionicons name="checkmark-circle-outline" size={18} color="#357A4F" />
                   <Text style={styles.photoReadyText}>
-                    Limite de 2 fotos atingido. Remova uma foto para substituir.
+                    {fotos.length >= MAXIMO_FOTOS ? 'Limite de 2 fotos atingido. Remova uma foto para substituir.' : 'Uma foto anexada. Você pode adicionar outra se quiser.'}
                   </Text>
                 </View>
               ) : (
                 <View style={styles.photoRequirementBox}>
                   <Ionicons name="information-circle-outline" size={18} color="#7B5A12" />
                   <Text style={styles.photoRequirementText}>
-                    As fotos são opcionais. Você pode adicionar mais {MAXIMO_FOTOS - fotos.length}.
+                    Anexe pelo menos uma foto para continuar.
                   </Text>
                 </View>
               )}
@@ -3341,18 +3353,18 @@ export default function NovaSolicitacaoScreen() {
                     styles.multiProblemIntroText
                   }
                 >
-                  Adicione quantos problemas forem necessários. Todos ficarão vinculados ao mesmo protocolo e à mesma vistoria.
+                  Adicione até três problemas por protocolo. Todos ficarão vinculados à mesma vistoria.
                 </Text>
 
                 <TouchableOpacity
                   style={
-                    styles.addProblemButton
+                    [styles.addProblemButton, (enviando || problemasAdicionais.length >= MAXIMO_PROBLEMAS - 1) && { opacity: 0.5 }]
                   }
                   onPress={
                     adicionarOutroProblema
                   }
                   disabled={
-                    enviando
+                    enviando || problemasAdicionais.length >= MAXIMO_PROBLEMAS - 1
                   }
                   activeOpacity={
                     0.85
@@ -3369,7 +3381,7 @@ export default function NovaSolicitacaoScreen() {
                       styles.addProblemButtonText
                     }
                   >
-                    Adicionar outro problema
+                    {problemasAdicionais.length >= MAXIMO_PROBLEMAS - 1 ? 'Limite de 3 problemas atingido' : 'Adicionar outro problema'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -3623,22 +3635,22 @@ export default function NovaSolicitacaoScreen() {
                           styles.problemFieldTitle
                         }
                       >
-                        Fotos do problema
+                        Fotos do problema *
                       </Text>
 
                       <Text
-                        style={problema.fotos.length >= MAXIMO_FOTOS ? styles.photoCounterSuccess : styles.photoCounterPending}
+                        style={problema.fotos.length >= MINIMO_FOTOS ? styles.photoCounterSuccess : styles.photoCounterPending}
                       >
-                        {problema.fotos.length}/{MAXIMO_FOTOS}{' '}fotos (opcionais)
+                        {problema.fotos.length}/{MAXIMO_FOTOS}{' '}fotos (mín. 1)
                       </Text>
 
-                      {problema.fotos.length >= MAXIMO_FOTOS ? (
+                      {problema.fotos.length >= MINIMO_FOTOS ? (
                         <Text style={styles.additionalPhotoReady}>
-                          Limite de 2 fotos atingido. Remova uma para substituir.
+                          {problema.fotos.length >= MAXIMO_FOTOS ? 'Limite de 2 fotos atingido. Remova uma para substituir.' : 'Uma foto anexada. A segunda é opcional.'}
                         </Text>
                       ) : (
                         <Text style={styles.additionalPhotoHint}>
-                          Opcional: você pode adicionar mais {MAXIMO_FOTOS - problema.fotos.length} foto(s).
+                          Anexe pelo menos uma foto deste problema.
                         </Text>
                       )}
 
@@ -4417,7 +4429,7 @@ export default function NovaSolicitacaoScreen() {
                     styles.requiredInfo
                   }
                 >
-                  Preencha os campos obrigatórios e escolha a data e o horário da vistoria. As fotos são opcionais (até 2 por problema).
+                  Preencha os campos obrigatórios, anexe de 1 a 2 fotos por problema e escolha a data e o horário da vistoria.
                 </Text>
               ) : null}
             </>

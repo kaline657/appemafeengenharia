@@ -1252,6 +1252,12 @@ type ServicoProblemaResumo = {
   responsavel_id: string | null;
   responsavel_nome_manual: string | null;
   agendamento_status: string | null;
+  confirmacao_origem?: 'cliente_app' | 'funcionario_externo' | null;
+  confirmacao_canal?: string | null;
+  confirmado_em?: string | null;
+  foto_conclusao_storage?: string | null;
+  fotos_conclusao_storage?: string[] | null;
+  fotos_conclusao_urls?: string[];
   execucao_id: string | null;
   execucao_status: string | null;
   responsavel_execucao_id: string | null;
@@ -1277,7 +1283,7 @@ type RascunhoExecucaoProblema = {
   responsavelRealManual: string;
   solucao: string;
   observacoes: string;
-  conclusao: string;
+  fotosConclusao: ImagePicker.ImagePickerAsset[];
 };
 
 
@@ -1285,7 +1291,7 @@ function novoRascunhoExecucaoProblema(): RascunhoExecucaoProblema {
   return { data: '', horarioId: '', inicio: '', fim: '', responsavelId: '',
     responsavelManual: '', dataRealInicio: '', horaRealInicio: '',
     responsavelRealId: '', responsavelRealManual: '',
-    solucao: '', observacoes: '', conclusao: '' };
+    solucao: '', observacoes: '', fotosConclusao: [] };
 }
 
 
@@ -2081,7 +2087,17 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         p_solicitacao_id: solicitacaoId,
       });
       if (error) throw error;
-      const itens = (Array.isArray(data) ? data : []) as ServicoProblemaResumo[];
+      const registros = (Array.isArray(data) ? data : []) as ServicoProblemaResumo[];
+      const itens = await Promise.all(registros.map(async (item) => {
+        const caminhos = item.fotos_conclusao_storage?.length ? item.fotos_conclusao_storage : (item.foto_conclusao_storage ? [item.foto_conclusao_storage] : []);
+        const urls = await Promise.all(caminhos.map(async (caminho) => {
+          try {
+            const { data } = await supabase.storage.from('execucoes-fotos').createSignedUrl(caminho, 3600);
+            return data?.signedUrl ?? null;
+          } catch { return null; }
+        }));
+        return { ...item, fotos_conclusao_urls: urls.filter((url): url is string => !!url) };
+      }));
       setServicosIndividuais(itens);
       setRascunhosExecucao((atual) => {
         const novo = { ...atual };
@@ -2124,7 +2140,38 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
   }
 
 
-  async function executarAcaoServico(id: string, tipo: 'propor' | 'cancelar' | 'iniciar' | 'atualizar_inicio' | 'salvar' | 'finalizar') {
+  async function selecionarFotoConclusaoServico(id: string, camera = false) {
+    setErroServicos('');
+    const faltam = 3 - (rascunhosExecucao[id]?.fotosConclusao.length ?? 0);
+    if (faltam <= 0) return;
+    try {
+      if (camera) {
+        const permissao = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permissao.granted) {
+          setErroServicos('Permita o acesso à câmera para registrar a conclusão.');
+          return;
+        }
+      }
+      const opcoes = { mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 };
+      const resultado = camera
+        ? await ImagePicker.launchCameraAsync(opcoes)
+        : await ImagePicker.launchImageLibraryAsync({ ...opcoes, allowsMultipleSelection: true, selectionLimit: faltam });
+      if (!resultado.canceled && resultado.assets?.length) {
+        setRascunhosExecucao((atuais) => {
+          const r = atuais[id] ?? novoRascunhoExecucaoProblema();
+          const fotos = [...r.fotosConclusao];
+          for (const foto of resultado.assets) {
+            if (fotos.length < 3 && !fotos.some((f) => f.uri === foto.uri)) fotos.push(foto);
+          }
+          return { ...atuais, [id]: { ...r, fotosConclusao: fotos } };
+        });
+      }
+    } catch {
+      setErroServicos('Não foi possível selecionar as fotos da conclusão.');
+    }
+  }
+
+  async function executarAcaoServico(id: string, tipo: 'propor' | 'confirmar_externo' | 'cancelar' | 'iniciar' | 'atualizar_inicio' | 'finalizar') {
     const item = servicosIndividuais.find((s) => s.problema_id === id);
     const r = rascunhosExecucao[id] ?? novoRascunhoExecucaoProblema();
     if (!item) return;
@@ -2149,6 +2196,15 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_problema_id: id, p_data: r.data, p_hora_inicio: r.inicio,
           p_hora_fim: r.fim, p_responsavel_id: r.responsavelId || null,
           p_responsavel_nome_manual: r.responsavelId ? null : r.responsavelManual.trim(),
+        });
+      } else if (tipo === 'confirmar_externo') {
+        if (!item.agendamento_id || item.agendamento_status !== 'aguardando_cliente') {
+          setErroServicos('Este agendamento não está aguardando confirmação.');
+          return;
+        }
+        chamada = await supabase.rpc('confirmar_execucao_problema_funcionario', {
+          p_agendamento_id: item.agendamento_id,
+          p_canal: 'outro', // Confirmação externa, sem exigir o canal do funcionário.
         });
       } else if (tipo === 'cancelar') {
         chamada = await supabase.rpc('cancelar_execucao_problema_funcionario', {
@@ -2200,29 +2256,54 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
           p_responsavel_id: r.responsavelRealId || null,
           p_responsavel_nome_manual: r.responsavelRealId ? null : r.responsavelRealManual.trim(),
         });
-      } else if (tipo === 'salvar') {
-        if (!r.solucao.trim()) {
-          setErroServicos('Informe a solução técnica deste serviço.');
-          return;
-        }
-        chamada = await supabase.rpc('salvar_execucao_problema_funcionario', {
-          p_problema_id: id, p_solucao_tecnica: r.solucao.trim(),
-          p_observacoes: item.observacoes ?? null,
-        });
       } else {
-        if (!r.conclusao.trim()) {
-          setErroServicos('Preencha a conclusão individual do serviço.');
+        if (!item.execucao_id || item.execucao_status !== 'em_execucao') {
+          setErroServicos('A execução deste serviço precisa estar em andamento.');
           return;
         }
-        // A solução técnica deve ser salva antes da conclusão.
-        chamada = await supabase.rpc('finalizar_execucao_problema_funcionario', {
-          p_problema_id: id, p_conclusao: r.conclusao.trim(),
+        if (!r.solucao.trim() || r.fotosConclusao.length < 1 || r.fotosConclusao.length > 3) {
+          setErroServicos('Informe o parecer técnico e anexe de 1 a 3 fotos da conclusão.');
+          return;
+        }
+        const { data: usuarioData, error: usuarioErro } = await supabase.auth.getUser();
+        if (usuarioErro || !usuarioData.user) throw new Error('Não foi possível identificar o funcionário.');
+        const caminhos: string[] = [];
+        try {
+          for (const foto of r.fotosConclusao) {
+            const resposta = await fetch(foto.uri);
+            if (!resposta.ok) throw new Error('Não foi possível ler uma das fotos selecionadas.');
+            const arquivo = await resposta.arrayBuffer();
+            const extensao = extensaoFoto(foto).replace(/[^a-z0-9]/gi, '') || 'jpg';
+            const caminho = `${item.execucao_id}/${usuarioData.user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${extensao}`;
+            const { error: uploadErro } = await supabase.storage.from('execucoes-fotos').upload(caminho, arquivo, {
+              contentType: foto.mimeType || `image/${extensao === 'jpg' ? 'jpeg' : extensao}`,
+              upsert: false,
+            });
+            if (uploadErro) throw uploadErro;
+            caminhos.push(caminho);
+          }
+        } catch (erroUpload) {
+          if (caminhos.length) await supabase.storage.from('execucoes-fotos').remove(caminhos);
+          throw erroUpload;
+        }
+        chamada = await supabase.rpc('finalizar_execucao_problema_com_fotos_funcionario', {
+          p_problema_id: id, p_parecer_tecnico: r.solucao.trim(), p_fotos_storage: caminhos,
         });
+        if (chamada.error) {
+          if (chamada.error.code === 'P0001' || /^23/.test(chamada.error.code ?? '')) {
+            await supabase.storage.from('execucoes-fotos').remove(caminhos);
+          }
+          throw chamada.error;
+        }
+        alterarRascunhoServico(id, { fotosConclusao: [] });
       }
       if (chamada.error) throw chamada.error;
       await carregarServicosIndividuais();
       await carregarSolicitacao();
-      setSucessoServicos(`Problema ${item.numero}: operação realizada com sucesso.`);
+      if (tipo === 'finalizar') await carregarDadosForm03();
+      setSucessoServicos(tipo === 'confirmar_externo'
+        ? `Problema ${item.numero}: confirmação externa registrada. A execução está liberada.`
+        : `Problema ${item.numero}: operação realizada com sucesso.`);
     } catch (error: any) {
       console.error(`Erro de execução individual (${tipo}):`, error);
       setErroServicos(error?.message ?? 'Não foi possível concluir a operação.');
@@ -3841,6 +3922,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
 
   async function calcularGarantia() {
+    if (solicitacao?.status === 'encerrada_ausencia') {
+      return;
+    }
     if (analiseConfirmada) {
       return;
     }
@@ -3959,6 +4043,9 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
 
   async function confirmarAnalise() {
+    if (solicitacao?.status === 'encerrada_ausencia') {
+      return;
+    }
     if (analiseConfirmada) {
       return;
     }
@@ -7069,14 +7156,14 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
       if (error) {
         console.error(
-          'Erro ao salvar assinatura do responsável:',
+          'Erro ao salvar assinatura do funcionário:',
           error
         );
 
 
         setErroForm03(
           error.message ||
-            'Não foi possível salvar a assinatura do responsável.'
+            'Não foi possível salvar a assinatura do funcionário.'
         );
 
 
@@ -7098,20 +7185,20 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
 
       setMensagemAssinaturaForm03(
-        'Assinatura do responsável salva com sucesso.'
+        'Assinatura do funcionário salva com sucesso.'
       );
 
 
       await carregarEstadoAssinaturasForm03();
     } catch (error) {
       console.error(
-        'Erro inesperado ao salvar assinatura do responsável:',
+        'Erro inesperado ao salvar assinatura do funcionário:',
         error
       );
 
 
       setErroForm03(
-        'Ocorreu um erro ao salvar a assinatura do responsável.'
+        'Ocorreu um erro ao salvar a assinatura do funcionário.'
       );
     } finally {
       setSalvandoAssinaturaManual(
@@ -7161,29 +7248,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     }
 
 
-    const fotos = [
-      ...(dadosForm03.fotos_vistoria ??
-        []).map(
-        (foto: any) => ({
-          bucket:
-            'vistorias-fotos',
-          caminho:
-            foto.caminho_storage,
-        })
-      ),
-
-
-      ...(dadosForm03.fotos_execucao ??
-        []).map(
-        (foto: any) => ({
-          bucket:
-            'execucoes-fotos',
-          caminho:
-            foto.caminho_storage,
-        })
-      ),
-    ].slice(0, 3);
-
+    // O FORM 03 contém somente fotos de conclusão da execução.
+    const fotos = (dadosForm03.fotos_execucao ?? []).map((foto: any) => ({
+      bucket: 'execucoes-fotos',
+      caminho: foto.caminho_storage,
+    }));
 
     const urls: string[] = [];
 
@@ -7973,19 +8042,6 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
     </div>
 
 
-    <div class="cell cell-full">
-      <div class="label">
-        Observações
-      </div>
-
-
-      <div class="value">
-        ${escaparHtml(
-          dadosForm03.observacoes_execucao ??
-            '-'
-        )}
-      </div>
-    </div>
   </div>
 
 
@@ -8077,14 +8133,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
         ${escaparHtml(
           estadoAssinaturasForm03
             ?.assinatura_funcionario_nome ??
-            dadosForm03.responsavel_servico ??
             ''
         )}
       </div>
 
 
       <div>
-        Assinatura do responsável pela execução dos serviços
+        Assinatura do funcionário da EMAFE
       </div>
 
 
@@ -8135,7 +8190,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
       estadoAssinaturasForm03.status !== 'assinado'
     ) {
       setErroForm03(
-        'O PDF final só pode ser gerado depois que cliente e responsável da EMAFE assinarem o FORM 03.'
+        'O PDF final só pode ser gerado depois que cliente e funcionário da EMAFE assinarem o FORM 03.'
       );
 
 
@@ -8378,7 +8433,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
 
       setMensagemAssinaturaForm03(
-        'Assinatura no aplicativo ativada. O cliente assina na Área do Cliente e o responsável pela execução assina nesta tela.'
+        'Assinatura no aplicativo ativada. O cliente assina na Área do Cliente e um funcionário ativo da EMAFE assina nesta tela.'
       );
     } catch (error) {
       console.error(
@@ -11818,7 +11873,8 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                     {/* =====================================================
                         ANÁLISE DA GARANTIA — SOMENTE DEPOIS DA VISITA
                     ===================================================== */}
-                    {!!vistoriaTecnica?.finalizada_em ? (
+                    {!!vistoriaTecnica?.finalizada_em &&
+                    solicitacao.status !== 'encerrada_ausencia' ? (
                       <>
                         <View style={{ padding: 14, backgroundColor: '#EDF5FF', borderRadius: 10, marginBottom: 18 }}>
                           <Text style={{ fontSize: 16, color: '#0B2447', fontWeight: '700' }}>
@@ -12788,8 +12844,24 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       <Text>Horário: {servico.hora_inicio?.slice(0,5)} às {servico.hora_fim?.slice(0,5)}</Text>
                                       <Text>Responsável: {responsaveisFuncionarios.find(x => x.responsavel_id === servico.responsavel_id)?.nome ?? servico.responsavel_nome_manual ?? '-'}</Text>
                                       <Text style={{ fontWeight: '700', color: servico.agendamento_status === 'confirmada' ? '#287A46' : '#0B5EA8' }}>
-                                        {servico.agendamento_status === 'confirmada' ? 'Confirmado pelo cliente' : 'Aguardando confirmação do cliente'}
+                                        {servico.agendamento_status === 'confirmada'
+                                          ? servico.confirmacao_origem === 'funcionario_externo'
+                                            ? 'Confirmação externa registrada pela EMAFE'
+                                            : servico.confirmacao_origem === 'cliente_app'
+                                              ? 'Confirmado pelo cliente no aplicativo'
+                                              : 'Agendamento confirmado'
+                                          : 'Aguardando confirmação do cliente'}
                                       </Text>
+                                      {servico.agendamento_status === 'aguardando_cliente' && !servico.execucao_id && solicitacao.status !== 'concluida' ? (
+                                        <TouchableOpacity
+                                          disabled={ocupada}
+                                          onPress={() => executarAcaoServico(problema.id, 'confirmar_externo')}
+                                          style={{ backgroundColor: '#0B5EA8', opacity: ocupada ? 0.5 : 1, borderRadius: 8, padding: 12, marginVertical: 5 }}>
+                                          <Text style={{ color: '#FFFFFF', textAlign: 'center', fontWeight: '700' }}>
+                                            {acaoServicoId === problema.id ? 'Registrando confirmação...' : 'Confirmo que o cliente autorizou este agendamento'}
+                                          </Text>
+                                        </TouchableOpacity>
+                                      ) : null}
                                       {!servico.execucao_id && solicitacao.status !== 'concluida' ? (
                                         <TouchableOpacity disabled={ocupada} style={{ borderColor: '#9A3232', borderWidth: 1, borderRadius: 8, padding: 11 }} onPress={() => executarAcaoServico(problema.id, 'cancelar')}>
                                           <Text style={{ color: '#9A3232', textAlign: 'center', fontWeight: '700' }}>Cancelar este agendamento</Text>
@@ -12914,8 +12986,17 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                           <View style={{ flex: 1, gap: 3 }}>
                                             <Text style={styles.execucaoIndividualConcluidoTitulo}>Serviço concluído</Text>
                                             <Text style={styles.execucaoIndividualResumoTexto}>
-                                              {servico.conclusao || 'Execução finalizada.'}
+                                              {servico.solucao_tecnica || servico.conclusao || 'Execução finalizada.'}
                                             </Text>
+                                            {!!servico.fotos_conclusao_urls?.length && (
+                                              <View style={[styles.fotosExecucaoGrid, { marginTop: 8 }]}>
+                                                {servico.fotos_conclusao_urls.map((url, indice) => (
+                                                  <View key={`${indice}-${url}`} style={styles.fotoExecucaoCard}>
+                                                    <Image source={{ uri: url }} resizeMode="contain" style={styles.fotoExecucaoImagem} />
+                                                  </View>
+                                                ))}
+                                              </View>
+                                            )}
                                           </View>
                                         </View>
                                       ) : (
@@ -13017,44 +13098,48 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                       {servico.execucao_id && servico.execucao_status !== 'concluida' ? (
                                         <View style={styles.execucaoIndividualEtapas}>
                                           <Text style={styles.execucaoIndividualSubtitulo}>Registro do serviço</Text>
-                                          <Text style={styles.execucaoIndividualRotulo}>SOLUÇÃO TÉCNICA *</Text>
+                                          <Text style={styles.execucaoIndividualRotulo}>PARECER TÉCNICO DO SERVIÇO REALIZADO *</Text>
                                           <TextInput
                                             style={styles.execucaoIndividualTextoLongo}
                                             multiline
                                             textAlignVertical="top"
                                             value={r.solucao}
-                                            placeholder="Descreva o serviço realizado"
+                                            placeholder="Descreva o serviço realizado e seu resultado"
                                             placeholderTextColor="#9AA6B4"
                                             editable={!ocupada}
                                             onChangeText={(texto) => alterarRascunhoServico(problema.id, { solucao: texto })}
                                           />
+                                          <Text style={styles.execucaoIndividualRotulo}>FOTOS DA CONCLUSÃO * ({r.fotosConclusao.length}/3)</Text>
+                                          <Text style={styles.execucaoIndividualAjuda}>
+                                            Anexe de 1 a 3 fotos do serviço concluído. Somente as fotos da execução integrarão o FORM 03.
+                                          </Text>
+                                          {r.fotosConclusao.map((foto, indice) => (
+                                            <View key={`${indice}-${foto.uri}`} style={{ gap: 8 }}>
+                                              <Image source={{ uri: foto.uri }} resizeMode="contain" style={{ width: '100%', height: 190, borderRadius: 10, backgroundColor: '#F2F5F8' }} />
+                                              <TouchableOpacity disabled={ocupada} onPress={() => alterarRascunhoServico(problema.id, { fotosConclusao: r.fotosConclusao.filter((_, i) => i !== indice) })} style={{ alignSelf: 'flex-start', padding: 8 }}>
+                                                <Text style={{ color: '#9A3232', fontWeight: '700' }}>Remover foto {indice + 1}</Text>
+                                              </TouchableOpacity>
+                                            </View>
+                                          ))}
+                                          {r.fotosConclusao.length < 3 ? (
+                                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                                              <TouchableOpacity disabled={ocupada} onPress={() => selecionarFotoConclusaoServico(problema.id)} style={[styles.adicionarFotosVistoriaButton, { flex: 1, minWidth: 145 }]}>
+                                                <Ionicons name="images-outline" size={19} color="#0B5EA8" />
+                                                <Text style={styles.adicionarFotosVistoriaButtonText}>Adicionar fotos</Text>
+                                              </TouchableOpacity>
+                                              <TouchableOpacity disabled={ocupada} onPress={() => selecionarFotoConclusaoServico(problema.id, true)} style={[styles.adicionarFotosVistoriaButton, { flex: 1, minWidth: 130 }]}>
+                                                <Ionicons name="camera-outline" size={19} color="#0B5EA8" />
+                                                <Text style={styles.adicionarFotosVistoriaButtonText}>Tirar foto</Text>
+                                              </TouchableOpacity>
+                                            </View>
+                                          ) : null}
                                           <TouchableOpacity
-                                            disabled={ocupada}
-                                            onPress={() => executarAcaoServico(problema.id, 'salvar')}
-                                            style={[styles.execucaoIndividualBotao, ocupada && styles.execucaoIndividualBotaoDesabilitado]}
-                                          >
-                                            <Ionicons name="save-outline" size={17} color="#FFFFFF" />
-                                            <Text style={styles.execucaoIndividualBotaoTexto}>Salvar solução técnica</Text>
-                                          </TouchableOpacity>
-
-                                          <Text style={styles.execucaoIndividualRotulo}>CONCLUSÃO DO SERVIÇO *</Text>
-                                          <TextInput
-                                            style={styles.execucaoIndividualTextoLongo}
-                                            multiline
-                                            textAlignVertical="top"
-                                            value={r.conclusao}
-                                            placeholder="Descreva o resultado do serviço"
-                                            placeholderTextColor="#9AA6B4"
-                                            editable={!ocupada}
-                                            onChangeText={(texto) => alterarRascunhoServico(problema.id, { conclusao: texto })}
-                                          />
-                                          <TouchableOpacity
-                                            disabled={ocupada || !servico.solucao_tecnica}
+                                            disabled={ocupada || !r.solucao.trim() || r.fotosConclusao.length < 1 || r.fotosConclusao.length > 3}
                                             onPress={() => executarAcaoServico(problema.id, 'finalizar')}
                                             style={[
                                               styles.execucaoIndividualBotao,
                                               styles.execucaoIndividualBotaoFinalizar,
-                                              (ocupada || !servico.solucao_tecnica) && styles.execucaoIndividualBotaoDesabilitado,
+                                              (ocupada || !r.solucao.trim() || r.fotosConclusao.length < 1 || r.fotosConclusao.length > 3) && styles.execucaoIndividualBotaoDesabilitado,
                                             ]}
                                           >
                                             <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" />
@@ -15998,29 +16083,6 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                 </View>
 
 
-                                <View
-                                  style={
-                                    styles.form03WideCard
-                                  }
-                                >
-                                  <Text
-                                    style={
-                                      styles.form03Label
-                                    }
-                                  >
-                                    OBSERVAÇÕES DA EXECUÇÃO
-                                  </Text>
-
-
-                                  <Text
-                                    style={
-                                      styles.form03Value
-                                    }
-                                  >
-                                    {dadosForm03.observacoes_execucao ??
-                                      '-'}
-                                  </Text>
-                                </View>
 
 
                                 <Text
@@ -16050,17 +16112,11 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                     }
                                   >
                                     {
-                                      dadosForm03.fotos_vistoria
-                                        ?.length ??
-                                      0
-                                    }{' '}
-                                    foto(s) da vistoria •{' '}
-                                    {
                                       dadosForm03.fotos_execucao
                                         ?.length ??
                                       0
                                     }{' '}
-                                    foto(s) da execução
+                                    foto(s) da conclusão da execução
                                   </Text>
                                 </View>
 
@@ -16106,7 +16162,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                         styles.form03Label
                                       }
                                     >
-                                      ASSINATURA DO RESPONSÁVEL
+                                      ASSINATURA DO FUNCIONÁRIO
                                     </Text>
 
 
@@ -16256,7 +16312,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                               styles.form03ModoButtonTextActive,
                                           ]}
                                         >
-                                          Cliente e responsável assinam manualmente na tela do EMAFE.
+                                          Cliente e funcionário da EMAFE assinam manualmente pelo aplicativo.
                                         </Text>
                                       </View>
                                     </TouchableOpacity>
@@ -16306,7 +16362,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                             styles.assinaturasManuaisText
                                           }
                                         >
-                                          Cada pessoa assina na sua própria área. O cliente assina na Área do Cliente e o responsável pela execução assina aqui na Área do Funcionário.
+                                          O cliente assina na Área do Cliente. Qualquer funcionário ativo da EMAFE pode assinar nesta tela, com sua própria conta.
                                         </Text>
 
 
@@ -16413,7 +16469,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                               styles.assinaturaManualCardTitle
                                             }
                                           >
-                                            Assinatura do responsável pela execução
+                                            Assinatura do funcionário da EMAFE
                                           </Text>
 
 
@@ -16441,7 +16497,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                                     styles.assinaturaSalvaTitle
                                                   }
                                                 >
-                                                  Sua assinatura foi salva
+                                                  Assinatura do funcionário registrada
                                                 </Text>
 
 
@@ -16462,9 +16518,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                                                   styles.assinaturaResponsavelNome
                                                 }
                                               >
-                                                Responsável:{' '}
-                                                {dadosForm03.responsavel_servico ??
-                                                  '-'}
+                                                A assinatura será registrada em nome do funcionário autenticado.
                                               </Text>
 
 
@@ -16641,6 +16695,7 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
 
 
                     {!ausenciaClienteAberta &&
+                    !vistoriaTecnica?.finalizada_em &&
                     [
                       'em_analise',
                       'vistoria_agendada',
@@ -17225,8 +17280,13 @@ export default function DetalhesSolicitacaoFuncionarioScreen() {
                 />
 
 
-                {solicitacao.status !==
-                'aberta' ? (
+                {solicitacao.status === 'encerrada_ausencia' ? (
+                  <TimelineItem
+                    title="Encerrada por ausência"
+                    subtitle="Cliente ausente — protocolo encerrado"
+                    icon="person-remove-outline"
+                  />
+                ) : solicitacao.status !== 'aberta' ? (
                   <TimelineItem
                     title="Em análise"
                     subtitle="Análise técnica registrada"
